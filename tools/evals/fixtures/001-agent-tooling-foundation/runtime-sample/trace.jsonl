@@ -1,0 +1,4 @@
+{"frame":118,"timestampMs":1966,"nodePath":"/root/Main/Ball","position":[12.0,94.0],"velocity":[-220.0,0.0],"collisionState":"overlap","lastCollider":"/root/Main/LeftWall"}
+{"frame":119,"timestampMs":1983,"nodePath":"/root/Main/Ball","position":[12.0,94.0],"velocity":[-220.0,0.0],"collisionState":"overlap","lastCollider":"/root/Main/LeftWall"}
+{"frame":120,"timestampMs":2000,"nodePath":"/root/Main/Ball","position":[12.0,94.0],"velocity":[-220.0,0.0],"collisionState":"overlap","lastCollider":"/root/Main/LeftWall"}
+{"frame":121,"timestampMs":2016,"nodePath":"/root/Main/Ball","position":[12.0,94.0],"velocity":[-220.0,0.0],"collisionState":"overlap","lastCollider":"/root/Main/LeftWall"}

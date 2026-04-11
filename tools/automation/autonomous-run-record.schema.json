@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/tools/automation/autonomous-run-record.schema.json",
+  "title": "Autonomous Run Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordId",
+    "artifactId",
+    "runId",
+    "mode",
+    "status",
+    "requestSummary",
+    "writeBoundaryId",
+    "operations",
+    "validations",
+    "startedAt",
+    "endedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recordId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["autonomous", "simulated"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "stopped", "escalated", "failed"]
+    },
+    "requestSummary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "writeBoundaryId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "editType", "status"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "editType": {
+            "type": "string",
+            "enum": ["create", "update", "delete", "read-only"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["performed", "blocked", "skipped", "failed"]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "stopReasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "escalationReasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "details"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "fail", "info"]
+          },
+          "details": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/tools/evals/agent-eval-result.schema.json",
+  "title": "Agent Evaluation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evaluationId",
+    "storyId",
+    "surface",
+    "executionMode",
+    "status",
+    "artifacts",
+    "summary",
+    "checks",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storyId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["copilot-chat", "copilot-cli", "combined"]
+    },
+    "executionMode": {
+      "type": "string",
+      "enum": ["live", "repo-local", "manual-review"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "error", "not-run"]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixturePaths", "outputPath"],
+      "properties": {
+        "fixturePaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expectedPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guidancePaths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outputPath": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headline", "details"],
+      "properties": {
+        "headline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "details"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "fail", "info"]
+          },
+          "details": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "firstPassRoutingAccurate": {
+          "type": "boolean"
+        },
+        "pluginFirstRespected": {
+          "type": "boolean"
+        },
+        "evidenceFirstRespected": {
+          "type": "boolean"
+        },
+        "writeBoundaryRespected": {
+          "type": "boolean"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

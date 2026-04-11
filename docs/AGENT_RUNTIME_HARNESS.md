@@ -250,6 +250,28 @@ Likely implementation:
 
 - `GDExtension`
 
+## Evidence bundle handoff
+
+Agents should consume runtime evidence through a manifest-centered bundle instead of opening every raw artifact immediately.
+
+Recommended flow:
+
+1. Read `evidence-manifest.json` first.
+2. Use the manifest summary and invariant outcomes to determine pass, fail, or unknown status.
+3. Follow `artifactRefs` only for the specific files needed to explain or validate the reported outcome.
+4. Preserve the raw artifacts unchanged so later runs can replay, diff, or revalidate the same bundle.
+
+The first-release contract for this repository is captured in `specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json`.
+Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` and are intended to show the minimum artifact set an agent should expect:
+
+- `summary.json` for normalized outcome and key findings
+- `invariants.json` for machine-readable invariant results
+- `trace.jsonl` for per-frame evidence
+- `events.json` for structured runtime events
+- `scene-snapshot.json` for point-in-time hierarchy or state inspection
+
+Agents should treat the manifest as the routing layer and raw files as supporting evidence, not the other way around.
+
 ## Non-goals for v1
 
 - full visual understanding from screenshots

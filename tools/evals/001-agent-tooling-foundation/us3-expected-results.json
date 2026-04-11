@@ -1,0 +1,21 @@
+{
+  "classification": {
+    "repoWideGuidance": "instruction",
+    "jsonSchemaValidation": "workflow",
+    "evidenceDiagnosisPrompt": "prompt",
+    "openEndedEvidenceTriage": "agent",
+    "reusableCrossRuntimeCapability": "skill"
+  },
+  "writeBoundary": {
+    "allowedRequest": {
+      "path": "tools/evals/001-agent-tooling-foundation/us3-validation-results.json",
+      "editType": "update",
+      "allowed": true
+    },
+    "rejectedRequest": {
+      "path": "addons/agent_runtime_harness/plugin.gd",
+      "editType": "update",
+      "allowed": false
+    }
+  }
+}

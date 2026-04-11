@@ -18,6 +18,17 @@ Use this document when deciding:
 - what information belongs in repo-level guidance versus reusable capability bundles
 - what safety and validation requirements should exist before giving an agent more autonomy
 
+## Adopted guidance stack
+
+This repository now uses the following layers as the primary agent-tooling entry points:
+
+- `.github/copilot-instructions.md` for repo-wide Copilot guidance
+- `AGENTS.md` for agent-facing operating rules
+- `.github/instructions/*.instructions.md` for path-specific constraints
+- `.github/prompts/` and `.github/agents/` for Copilot-native reusable workflows
+
+Use this document to decide when new behavior belongs in one of those layers, not as a replacement for them.
+
 ## Copilot-First Recommendations
 
 Treat GitHub Copilot documentation as the canonical source for file placement and instruction precedence in this repository.

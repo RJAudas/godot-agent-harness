@@ -64,7 +64,18 @@ tools/                     # helper scripts and runner utilities
 - Requirements and implementation direction: `docs/AGENT_RUNTIME_HARNESS.md`
 - Curated Godot extension references: `docs/GODOT_PLUGIN_REFERENCES.md`
 - AI agent tooling guidance: `docs/AI_TOOLING_BEST_PRACTICES.md`
+- Agent tooling overview and manual usage: `docs/AGENT_TOOLING_FOUNDATION.md`
 - Project constitution and delivery rules: `.specify/memory/constitution.md`
+
+## Agent tooling entry points
+
+The repository uses a Copilot-first guidance stack for agent work:
+
+- `.github/copilot-instructions.md` for durable repo-wide guidance
+- `AGENTS.md` for agent-facing workflow rules and validation expectations
+- `.github/instructions/` for subtree-specific constraints
+- `.github/prompts/` and `.github/agents/` for reusable Copilot-native workflows
+- `tools/evals/001-agent-tooling-foundation/` for seeded eval prompts and machine-readable result files
 
 ## Development discipline
 

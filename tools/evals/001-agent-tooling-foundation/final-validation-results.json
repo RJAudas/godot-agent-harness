@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0.0",
+  "evaluationId": "final-agent-tooling-foundation-2026-04-11",
+  "storyId": "FINAL",
+  "surface": "combined",
+  "executionMode": "repo-local",
+  "status": "pass",
+  "artifacts": {
+    "fixturePaths": [
+      "tools/evals/001-agent-tooling-foundation/us1-orientation-results.json",
+      "tools/evals/001-agent-tooling-foundation/us2-bundle-results.json",
+      "tools/evals/001-agent-tooling-foundation/us3-validation-results.json"
+    ],
+    "guidancePaths": [
+      "README.md",
+      ".github/copilot-instructions.md",
+      "AGENTS.md",
+      "specs/001-agent-tooling-foundation/quickstart.md"
+    ],
+    "outputPath": "tools/evals/001-agent-tooling-foundation/final-validation-results.json"
+  },
+  "summary": {
+    "headline": "The agent tooling foundation is fully scaffolded, validated, and recorded in machine-readable outputs.",
+    "details": "Setup directories, shared schemas, evidence tooling, automation boundaries, Copilot guidance assets, and story-level result files are all present and synchronized with the quickstart flow."
+  },
+  "checks": [
+    {
+      "id": "setup-phase-complete",
+      "status": "pass",
+      "details": "The required guidance, eval, evidence, and automation directories plus shared documentation files were created."
+    },
+    {
+      "id": "foundational-contracts-complete",
+      "status": "pass",
+      "details": "Shared eval, write-boundary, and autonomous run-record schemas plus the JSON validator are present."
+    },
+    {
+      "id": "story-results-recorded",
+      "status": "pass",
+      "details": "US1, US2, and US3 each have seeded fixtures and machine-readable result files in `tools/evals/001-agent-tooling-foundation/`."
+    },
+    {
+      "id": "quickstart-synced",
+      "status": "pass",
+      "details": "The quickstart now references the implemented commands, result files, and validation loop used in this repo."
+    }
+  ],
+  "metrics": {
+    "firstPassRoutingAccurate": true,
+    "pluginFirstRespected": true,
+    "evidenceFirstRespected": true,
+    "writeBoundaryRespected": true
+  },
+  "recordedAt": "2026-04-11T00:00:00Z"
+}

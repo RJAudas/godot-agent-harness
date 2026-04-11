@@ -93,10 +93,10 @@ If the answer to the first three is "yes" or "probably", do **not** fork the eng
 
 If a local Godot source checkout exists, it should be treated as a **reference repo**, not as part of this repository.
 
-Current local convention:
+Current local convention relative to the harness repository root:
 
-- `d:\dev\godot` = Godot source checkout for reading/reference
-- `d:\dev\godot-agent-harness` = actual harness repository
+- `../godot` = Godot source checkout for reading/reference
+- `.` = actual harness repository
 
 ## What to keep locally in this repo
 

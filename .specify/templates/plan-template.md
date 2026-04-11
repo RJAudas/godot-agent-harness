@@ -1,3 +1,4 @@
+
 # Implementation Plan: [FEATURE]
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
@@ -7,31 +8,46 @@
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+[Extract from feature spec: primary requirement, targeted Godot integration points,
+and the runtime evidence this feature must produce]
 
 ## Technical Context
 
 <!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
+  ACTION REQUIRED: Replace the content in this section with concrete project details.
+  Plans in this repository are expected to stay Godot/plugin focused.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: [e.g., GDScript for Godot 4.x, optional C++ for GDExtension, or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., EditorPlugin, EditorDebuggerPlugin, EngineDebugger, test framework, or NEEDS CLARIFICATION]  
+**Storage**: [e.g., JSON artifacts in project output directories, fixtures in scenarios/, or N/A]  
+**Testing**: [e.g., headless Godot scenario run, invariant checks, GdUnit4, or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Godot editor on Windows/macOS/Linux, headless CI runner, or NEEDS CLARIFICATION]
+**Project Type**: [e.g., editor addon, runtime addon, debugger integration, GDExtension, or NEEDS CLARIFICATION]  
+**Performance Goals**: [domain-specific, e.g., capture traces without breaking target frame budget]  
+**Constraints**: [e.g., plugin-first, machine-readable outputs required, no engine fork without justification]  
+**Scale/Scope**: [e.g., feature affects addon UI, runtime instrumentation, example Pong scenario]
+
+## Reference Inputs
+
+- **Internal Docs**: [List the repo docs consulted, including docs/GODOT_PLUGIN_REFERENCES.md]
+- **External Docs**: [List the official Godot docs, class refs, or other authoritative references used]
+- **Source References**: [List relevant files or subsystems inspected in ../godot relative to the repository root when engine behavior mattered]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] Plugin-first approach preserved: the plan starts with addon, autoload, debugger,
+      or GDExtension layers and does not escalate to engine changes without written proof.
+- [ ] Reference coverage complete: internal docs, external docs, and source references
+      are cited for each important technical decision.
+- [ ] Runtime evidence defined: the feature names the machine-readable artifacts,
+      summaries, or debugger payloads it will emit for agents.
+- [ ] Test loop defined: each user story has a deterministic scenario, automated test,
+      or invariant-driven validation path.
+- [ ] Reuse justified: any new abstraction explains why existing Godot/plugin behavior
+      was insufficient.
 
 ## Project Structure
 
@@ -48,51 +64,25 @@ specs/[###-feature]/
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+addons/
+└── agent_runtime_harness/
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+docs/
+├── AGENT_RUNTIME_HARNESS.md
+└── GODOT_PLUGIN_REFERENCES.md
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+examples/
+└── pong-testbed/
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
+scenarios/
 
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+tools/
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: [Document which of the existing repository areas this feature
+touches and why those paths are sufficient]
 
 ## Complexity Tracking
 
@@ -100,5 +90,5 @@ directories captured above]
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| [e.g., Introduce GDExtension] | [specific runtime or API limitation] | [why addon/debugger APIs were insufficient] |
+| [e.g., Engine patch investigation] | [verified blocker] | [which supported extension points were tried first] |

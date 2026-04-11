@@ -50,6 +50,11 @@ Recommended order:
 5. **Fork the engine only as a last resort**
    - Reserve engine changes for hooks that truly cannot be implemented through addons, debugger integration, or GDExtension.
 
+Implementation and design work should explicitly cite the relevant local docs,
+official Godot references, and the reference checkout at `../godot` relative to the
+repository root before introducing new abstractions or escalating beyond these
+supported layers.
+
 ## Why plugin-first is the right next step
 
 Benefits:
@@ -276,6 +281,9 @@ V1 should answer:
    - 3-5 invariants
 5. Validate that agents can use the trace artifacts to diagnose a real bug.
 6. Only move deeper into GDExtension or an engine fork if a concrete blocker appears.
+
+Each step above should produce machine-readable outputs that an agent can inspect
+directly, not only UI state or human-written notes.
 
 ## Decision checkpoint
 

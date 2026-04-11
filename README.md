@@ -63,6 +63,16 @@ tools/                     # helper scripts and runner utilities
 
 - Requirements and implementation direction: `docs/AGENT_RUNTIME_HARNESS.md`
 - Curated Godot extension references: `docs/GODOT_PLUGIN_REFERENCES.md`
+- Project constitution and delivery rules: `.specify/memory/constitution.md`
+
+## Development discipline
+
+Feature work in this repository follows a plugin-first constitution:
+
+- consult internal docs and official Godot references before designing or implementing
+- use `../godot` relative to the repository root as the reference checkout when engine behavior needs verification
+- prefer addon, autoload, debugger, and GDExtension layers before considering engine changes
+- require deterministic scenario runs or other automated validation that produces machine-readable runtime evidence for agents
 
 ## Security scanning
 

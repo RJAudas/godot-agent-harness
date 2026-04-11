@@ -1,0 +1,289 @@
+# Godot Agent Runtime Harness
+
+## Problem
+
+Agent-driven game development is bottlenecked by weak runtime feedback. The current loop is:
+
+1. Agent changes code.
+2. Human runs the game.
+3. Human describes behavior in natural language.
+4. Agent guesses at the fix.
+
+This is especially painful for gameplay bugs such as:
+
+- Ball physics that stick to walls instead of bouncing
+- Infinite horizontal bounce loops
+- Missing scene instances
+- Collision behaviors that appear "wrong" but are hard to describe precisely
+
+The goal of this project is to give agents structured runtime observability so they can debug Godot projects from machine-readable evidence instead of vague human summaries.
+
+## Goal
+
+Build a Godot-compatible runtime harness that exposes enough structured state for agents to:
+
+- run deterministic gameplay scenarios
+- inspect the active scene tree / node graph
+- read structured logs and event traces
+- capture per-frame gameplay telemetry
+- evaluate invariants automatically
+- detect likely root causes for runtime failures
+
+## Recommended implementation strategy
+
+### Start plugin-first, not engine-fork-first
+
+The first implementation should avoid modifying the Godot engine source directly.
+
+Recommended order:
+
+1. **Editor plugin / addon**
+   - Use Godot editor extensibility for UI, controls, and debugger integration.
+   - Best for inspector panels, session controls, trace viewing, and export actions.
+2. **Runtime addon + autoload singleton**
+   - Ship a runtime helper that collects telemetry from the running game.
+   - Best for frame traces, event logs, invariant checks, and scenario execution.
+3. **Debugger integration**
+   - Use `EditorDebuggerPlugin` on the editor side and `EngineDebugger` on the running game side for structured messages between the game and the editor.
+4. **GDExtension only if needed**
+   - Use GDExtension if scripting-level access is not enough or performance becomes a problem.
+5. **Fork the engine only as a last resort**
+   - Reserve engine changes for hooks that truly cannot be implemented through addons, debugger integration, or GDExtension.
+
+## Why plugin-first is the right next step
+
+Benefits:
+
+- lower maintenance cost than a long-lived engine fork
+- easier to iterate on quickly
+- easier to keep project-specific
+- can live beside game projects instead of inside the engine
+- still leaves room to graduate pieces into GDExtension later
+
+Risks avoided:
+
+- rebasing a private engine fork forever
+- solving engine-level problems before proving the actual harness design
+- coupling the observability system too tightly to one Godot version
+
+## Core requirements
+
+### 1. Deterministic scenario runner
+
+The harness must support reproducible gameplay runs.
+
+Requirements:
+
+- fixed initial conditions
+- fixed random seed where applicable
+- scripted input playback
+- scenario start / stop control
+- repeatable run IDs
+- headless-friendly execution where possible
+
+Example:
+
+- Run Pong scenario `wall-bounce-left-001`
+- Start ball at known position and velocity
+- Simulate N frames
+- Emit trace and pass/fail result
+
+### 2. Machine-readable frame traces
+
+The harness must emit structured telemetry that agents can read directly.
+
+Preferred output:
+
+- JSON lines or JSON files
+- optional CSV export for quick graphing
+
+Per-frame examples:
+
+- frame number
+- timestamp
+- scene name
+- node path
+- position
+- velocity
+- rotation
+- collision state
+- last collider
+- collision normal
+- current game state
+- score / lives / level
+
+### 3. Scene tree / node graph inspection
+
+The harness must expose the runtime scene tree in a structured form.
+
+Requirements:
+
+- dump active scene tree
+- include node names, types, paths, ownership, groups
+- include selected property snapshots for important nodes
+- detect missing expected instances
+- support point-in-time snapshot and post-run snapshot
+
+Primary use cases:
+
+- verifying nodes actually instanced
+- identifying missing autoloads
+- checking expected hierarchy for gameplay objects
+- comparing scene structure before and after a failure
+
+### 4. Structured event and signal logging
+
+The harness must log gameplay-relevant events, not just generic text output.
+
+Examples:
+
+- collision entered / exited
+- score changed
+- life lost
+- state changed from `playing` to `game_over`
+- node instantiated / freed
+- signal emitted
+- scenario checkpoint reached
+
+Requirements:
+
+- event category
+- event payload
+- source node path
+- frame number
+- timestamp
+
+### 5. Invariant checks
+
+The harness must support automated assertions over runtime behavior.
+
+Examples:
+
+- ball may not remain overlapping a wall for more than 2 frames
+- rally must end in a score within N seconds / frames
+- ball speed must remain within configured bounds
+- after paddle collision, horizontal velocity must move away from the paddle
+- no required gameplay node may be missing after scene startup
+
+Requirements:
+
+- pass/fail result
+- human-readable explanation
+- machine-readable failure payload
+- link to relevant frames/events
+
+### 6. Agent-friendly CLI / run mode
+
+Agents need one stable way to execute the harness.
+
+Requirements:
+
+- run a named scenario
+- write outputs to a known directory
+- emit concise pass/fail summary
+- return non-zero exit code on failed invariants or runtime crashes
+
+Example output contract:
+
+- `trace.jsonl`
+- `events.json`
+- `scene_tree.json`
+- `summary.json`
+- `stdout` summary
+
+### 7. Replay and diagnosis support
+
+The harness should make failures replayable and explainable.
+
+Requirements:
+
+- save scenario input
+- save seed / config
+- save failure window frames
+- optionally persist last successful run for diffing
+
+## Suggested architecture
+
+### A. Editor-side plugin
+
+Responsibilities:
+
+- control scenario execution
+- receive structured debugger messages
+- display traces and failures
+- provide export buttons
+- show runtime tabs or dock panels
+
+Likely implementation:
+
+- `EditorPlugin`
+- `EditorDebuggerPlugin`
+
+### B. Runtime instrumentation addon
+
+Responsibilities:
+
+- collect telemetry from live nodes
+- emit events and frame snapshots
+- run invariant checks
+- send structured messages back to the editor
+
+Likely implementation:
+
+- addon scripts
+- autoload singleton
+- lightweight instrumentation helpers attached to tracked nodes
+
+### C. Optional native layer
+
+Responsibilities:
+
+- optimize hot paths
+- expose lower-level data if scripting proves insufficient
+
+Likely implementation:
+
+- `GDExtension`
+
+## Non-goals for v1
+
+- full visual understanding from screenshots
+- general-purpose AI game playing
+- engine-wide invasive instrumentation
+- replacing standard gameplay tests
+
+## V1 target
+
+Prove the concept on a small physics-driven game such as Pong.
+
+V1 should answer:
+
+- Did the ball collide with the correct object?
+- Did velocity change correctly after collision?
+- Did the ball get stuck in contact?
+- Did a rally resolve into a score?
+- Was the scene tree what we expected?
+
+## Suggested immediate next steps
+
+1. **Do not start by changing the Godot engine itself.**
+2. Create a separate repo or workspace for a Godot addon/plugin prototype.
+3. Implement a tiny Pong testbed project that uses the harness.
+4. Add:
+   - deterministic scenario runner
+   - frame trace output
+   - event logging
+   - 3-5 invariants
+5. Validate that agents can use the trace artifacts to diagnose a real bug.
+6. Only move deeper into GDExtension or an engine fork if a concrete blocker appears.
+
+## Decision checkpoint
+
+Fork the engine only if at least one of these becomes true:
+
+- Godot scripting APIs cannot expose the required runtime information
+- debugger/plugin hooks are insufficient for structured inspection
+- performance overhead makes scripting-based telemetry unusable
+- the harness requires editor/runtime capabilities only available through engine changes
+
+Until then, prefer addon/plugin + debugger integration.

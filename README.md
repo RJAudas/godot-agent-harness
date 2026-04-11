@@ -63,6 +63,7 @@ tools/                     # helper scripts and runner utilities
 
 - Requirements and implementation direction: `docs/AGENT_RUNTIME_HARNESS.md`
 - Curated Godot extension references: `docs/GODOT_PLUGIN_REFERENCES.md`
+- AI agent tooling guidance: `docs/AI_TOOLING_BEST_PRACTICES.md`
 - Project constitution and delivery rules: `.specify/memory/constitution.md`
 
 ## Development discipline

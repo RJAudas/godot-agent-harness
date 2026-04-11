@@ -1,0 +1,30 @@
+.env
+.env.*
+*.local
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Godot generated state
+.godot/
+.import/
+export_presets.cfg
+
+# Common secret and certificate material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# Local credential directories
+.aws/
+.ssh/
+secrets/
+credentials/

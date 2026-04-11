@@ -64,6 +64,22 @@ tools/                     # helper scripts and runner utilities
 - Requirements and implementation direction: `docs/AGENT_RUNTIME_HARNESS.md`
 - Curated Godot extension references: `docs/GODOT_PLUGIN_REFERENCES.md`
 
+## Security scanning
+
+This repository uses Gitleaks in GitHub Actions to scan git history and current changes for committed secrets.
+
+- Workflow: `.github/workflows/gitleaks.yml`
+- Configuration: `.gitleaks.toml`
+- Local hook config: `.pre-commit-config.yaml`
+
+To enable local pre-commit scanning:
+
+1. Install pre-commit using the instructions at https://pre-commit.com/#install
+2. Run `pre-commit install`
+3. Optionally run `pre-commit run --all-files` to scan the repository immediately
+
+If you intentionally need a test secret in the repository, prefer a fake value that does not match real credential formats. If Gitleaks still flags it, use a targeted allowlist approach rather than disabling the scan broadly.
+
 ## Reference strategy
 
 This repository should **not vendor the full Godot documentation**.

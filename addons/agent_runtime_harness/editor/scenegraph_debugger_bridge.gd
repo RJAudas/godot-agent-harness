@@ -29,7 +29,7 @@ func _setup_session(session_id: int) -> void:
 	if session_id not in _known_session_ids:
 		_known_session_ids.append(session_id)
 
-	var session := get_session(session_id)
+	var session = get_session(session_id)
 	if session == null:
 		return
 
@@ -119,7 +119,7 @@ func _configure_active_session() -> void:
 
 
 func _send_request(request_name: String, payload: Array = [], report_missing_session := true) -> void:
-	var session := _get_active_session()
+	var session = _get_active_session()
 	if session == null:
 		if report_missing_session:
 			_emit_transport_error("%s requested before a runtime debugger session was attached." % request_name)

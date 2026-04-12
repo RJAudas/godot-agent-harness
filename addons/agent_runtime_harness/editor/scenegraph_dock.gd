@@ -3,11 +3,13 @@ extends VBoxContainer
 class_name ScenegraphDock
 
 var _bridge = null
+var _agent_asset_deployer = null
 var _status_label: Label
 var _summary_label: RichTextLabel
 var _diagnostics_label: RichTextLabel
 var _capture_button: Button
 var _persist_button: Button
+var _deploy_assets_button: Button
 
 
 func _ready() -> void:
@@ -28,6 +30,10 @@ func bind_bridge(bridge: Object) -> void:
 		_bridge.transport_error.connect(_on_transport_error)
 	if _bridge.has_signal("manifest_persisted"):
 		_bridge.manifest_persisted.connect(_on_manifest_persisted)
+
+
+func bind_agent_asset_deployer(agent_asset_deployer: Object) -> void:
+	_agent_asset_deployer = agent_asset_deployer
 
 
 func _build_ui() -> void:
@@ -51,6 +57,11 @@ func _build_ui() -> void:
 	_persist_button.text = "Persist Bundle"
 	_persist_button.pressed.connect(_on_persist_button_pressed)
 	add_child(_persist_button)
+
+	_deploy_assets_button = Button.new()
+	_deploy_assets_button.text = "Deploy Agent Assets"
+	_deploy_assets_button.pressed.connect(_on_deploy_assets_button_pressed)
+	add_child(_deploy_assets_button)
 
 	var summary_heading := Label.new()
 	summary_heading.text = "Latest Snapshot"
@@ -87,6 +98,23 @@ func _on_persist_button_pressed() -> void:
 
 	_bridge.persist_latest_bundle()
 	_update_status("Persist bundle requested.")
+
+
+func _on_deploy_assets_button_pressed() -> void:
+	if _agent_asset_deployer == null:
+		_update_status("No agent asset deployer is attached.")
+		return
+
+	var result: Dictionary = _agent_asset_deployer.deploy_into_project()
+	if not result.get("ok", false):
+		var errors: Array = result.get("errors", [])
+		if errors.is_empty():
+			_update_status("Agent asset deployment failed.")
+		else:
+			_update_status("Agent asset deployment failed: %s" % String(errors[0]))
+		return
+
+	_update_status("Agent assets deployed to project root.")
 
 
 func _on_session_state_changed(state: String, details: String) -> void:

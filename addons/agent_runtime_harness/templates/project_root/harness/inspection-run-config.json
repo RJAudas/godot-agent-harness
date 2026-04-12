@@ -1,0 +1,12 @@
+{
+  "scenarioId": "runtime-smoke-test",
+  "runId": "runtime-smoke-test-run-01",
+  "outputDirectory": "res://evidence/scenegraph/latest",
+  "artifactRoot": "",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "expectationFiles": []
+}

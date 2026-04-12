@@ -38,6 +38,8 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	if not summary_error.is_empty():
 		return {"error": summary_error}
 
+	var bundle_valid := _has_persisted_bundle(snapshot_path, diagnostics_path, summary_path)
+
 	var manifest := {
 		"schemaVersion": "1.0.0",
 		"manifestId": "scenegraph-%s" % String(session_context.get("run_id", snapshot.get("run_id", "unknown-run"))),
@@ -55,9 +57,9 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 			_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_SUMMARY, artifact_root, "scenegraph-summary.json", "application/json", "Agent-readable scenegraph summary entry point."),
 		],
 		"validation": {
-			"bundleValid": false,
+			"bundleValid": bundle_valid,
 			"notes": [
-				"Validate the persisted bundle with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
+				"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
 			],
 		},
 		"createdAt": Time.get_datetime_string_from_system(true),
@@ -87,6 +89,12 @@ func _write_json(path: String, payload: Variant) -> String:
 	handle.store_string(JSON.stringify(payload, "\t"))
 	handle.close()
 	return ""
+
+
+func _has_persisted_bundle(snapshot_path: String, diagnostics_path: String, summary_path: String) -> bool:
+	return FileAccess.file_exists(snapshot_path) \
+		and FileAccess.file_exists(diagnostics_path) \
+		and FileAccess.file_exists(summary_path)
 
 
 func _resolve_artifact_root(session_context: Dictionary, output_directory: String) -> String:

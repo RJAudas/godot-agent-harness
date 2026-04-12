@@ -67,6 +67,37 @@ tools/                     # helper scripts and runner utilities
 - Agent tooling overview and manual usage: `docs/AGENT_TOOLING_FOUNDATION.md`
 - Project constitution and delivery rules: `.specify/memory/constitution.md`
 
+## Plugin deployment
+
+The harness now supports two deployment paths for a target Godot game project.
+
+### Preferred path: plugin-driven deployment
+
+1. Copy `addons/agent_runtime_harness/` into the target project under `addons/`.
+2. Enable the addon from Godot project plugin settings.
+3. Use the `Deploy Agent Assets` action in the Scenegraph Harness dock.
+
+That plugin action installs the project-level assets the agent needs:
+
+- `.github/copilot-instructions.md` managed runtime-harness block
+- `AGENTS.md` managed runtime-harness block
+- `.github/prompts/godot-evidence-triage.prompt.md`
+- `.github/agents/godot-evidence-triage.agent.md`
+- `harness/inspection-run-config.json`
+- `project.godot` wiring for the harness autoload and config path
+
+The deployable templates live inside the addon under `addons/agent_runtime_harness/templates/project_root/`, so the plugin can install them without depending on the source repository layout.
+
+### Optional path: source-repo deployment script
+
+If you are deploying from this repository into another local game project, you can also use:
+
+```powershell
+pwsh ./tools/deploy-game-harness.ps1 -GameRoot <game-root>
+```
+
+That script copies the addon and installs the same project-level assets from the addon template directory. It is primarily useful for source-driven setup and testing; the plugin-driven path is the intended day-to-day installation flow.
+
 ## Agent tooling entry points
 
 The repository uses a Copilot-first guidance stack for agent work:

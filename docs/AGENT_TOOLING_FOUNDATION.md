@@ -6,6 +6,14 @@ This document explains the agent tooling added to this repository, what it is fo
 
 These are the main scripts and artifact locations a developer can use directly.
 
+### Deploy the harness into another Godot game project
+
+```powershell
+pwsh ./tools/deploy-game-harness.ps1 -GameRoot <game-root>
+```
+
+Use this when you want to install the addon plus the project-level Copilot and harness assets into another local Godot game from this repository checkout.
+
 ### Validate a JSON file against a schema
 
 ```powershell
@@ -102,6 +110,16 @@ Examples:
 
 But developers still have agency and can use the tooling manually when needed.
 
+The current harness also supports plugin-driven asset deployment from inside Godot itself.
+
+Recommended deployment flow for a fresh game project:
+
+1. Copy `addons/agent_runtime_harness/` into the game project.
+2. Enable the addon in Godot.
+3. Click `Deploy Agent Assets` in the Scenegraph Harness dock.
+
+That flow installs the same `.github/`, `AGENTS.md`, `harness/`, and `project.godot` wiring that the PowerShell deployment script installs from the source repository.
+
 Examples:
 
 - run a validator yourself before trusting a generated JSON file
@@ -122,6 +140,13 @@ For example, if you want to expose collision events for agent consumption:
 5. Add or update eval fixtures under `tools/evals/` so another agent can prove it can consume the new event stream.
 
 That means the tooling does not replace plugin implementation. It gives you a contract, validation loop, and eval surface around the plugin feature once you build it.
+
+The deployment feature added to the addon follows the same principle. The addon now carries its own installable agent-asset templates under `addons/agent_runtime_harness/templates/project_root/`, and both deployment paths reuse that same template source:
+
+- the Godot plugin deploys those assets directly into the active game project
+- `tools/deploy-game-harness.ps1` deploys those same assets from the source checkout
+
+That keeps the plugin self-sufficient after it has been copied into another game project while still preserving a deterministic source-driven installer for local development and testing.
 
 ## Recommended manual workflows
 

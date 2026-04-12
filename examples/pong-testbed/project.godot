@@ -1,0 +1,18 @@
+; Engine configuration file.
+; Editor settings are intentionally minimal because this project is used as a deterministic harness fixture.
+
+config_version=5
+
+[application]
+config/name="Pong Testbed"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.4")
+
+[autoload]
+ScenegraphHarness="*res://../../addons/agent_runtime_harness/runtime/scenegraph_autoload.gd"
+
+[editor_plugins]
+enabled=PackedStringArray("res://../../addons/agent_runtime_harness/plugin.cfg")
+
+[harness]
+inspection_run_config="res://harness/inspection-run-config.json"

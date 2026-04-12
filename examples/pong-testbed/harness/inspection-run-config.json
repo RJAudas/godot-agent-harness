@@ -1,0 +1,14 @@
+{
+  "scenarioId": "pong-scenegraph-happy-path",
+  "runId": "pong-scenegraph-happy-path-run-01",
+  "outputDirectory": "res://evidence",
+  "artifactRoot": "examples/pong-testbed/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "expectationFiles": [
+    "res://harness/expectations/common.json"
+  ]
+}

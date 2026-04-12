@@ -136,6 +136,14 @@ Primary use cases:
 - checking expected hierarchy for gameplay objects
 - comparing scene structure before and after a failure
 
+The current editor-first implementation path for scenegraph inspection centers on three persisted artifact kinds:
+
+- `scenegraph-snapshot` for the bounded runtime hierarchy capture
+- `scenegraph-diagnostics` for missing-node, hierarchy-mismatch, and capture-error outcomes
+- `scenegraph-summary` for the agent-readable entry point that points back to the relevant snapshot and diagnostics
+
+These artifacts are intended to flow through the existing manifest-centered bundle so an agent can read the manifest first, identify the latest scenegraph outcome quickly, and then open only the referenced raw files when deeper inspection is required.
+
 ### 4. Structured event and signal logging
 
 The harness must log gameplay-relevant events, not just generic text output.

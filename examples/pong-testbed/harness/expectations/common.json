@@ -1,0 +1,37 @@
+{
+  "scenarioId": "pong-scenegraph-happy-path",
+  "expectations": [
+    {
+      "expectation_id": "main-root",
+      "required": true,
+      "matching_mode": "exact_path",
+      "exact_path": "/root/Main",
+      "failure_message": "The Main scene root must exist in the runtime scenegraph."
+    },
+    {
+      "expectation_id": "ball-node",
+      "required": true,
+      "matching_mode": "hybrid",
+      "exact_path": "/root/Main/Ball",
+      "selectors": [
+        {
+          "selector_type": "name",
+          "value": "Ball"
+        },
+        {
+          "selector_type": "type",
+          "value": "CharacterBody2D"
+        }
+      ],
+      "required_parent": "/root/Main",
+      "failure_message": "The Ball gameplay node must exist under the Main root."
+    },
+    {
+      "expectation_id": "hud-node",
+      "required": true,
+      "matching_mode": "exact_path",
+      "exact_path": "/root/Main/HUD",
+      "failure_message": "The HUD layer must exist for the scenegraph validation fixture."
+    }
+  ]
+}

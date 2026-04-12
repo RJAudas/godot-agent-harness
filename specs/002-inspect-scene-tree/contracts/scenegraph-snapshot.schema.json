@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/002-inspect-scene-tree/contracts/scenegraph-snapshot.schema.json",
+  "title": "Scenegraph Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "session_id",
+    "run_id",
+    "scenario_id",
+    "trigger",
+    "root_scene",
+    "captured_at",
+    "node_count",
+    "nodes",
+    "capture_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trigger_type", "requested_by", "reason", "timestamp"],
+      "properties": {
+        "trigger_type": {
+          "type": "string",
+          "enum": ["startup", "manual", "failure"]
+        },
+        "requested_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "root_scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "frame": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "node_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "type",
+          "parent_path",
+          "owner_path",
+          "groups",
+          "script_class",
+          "visibility_state",
+          "processing_state",
+          "transform_state",
+          "properties"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parent_path": {
+            "type": "string"
+          },
+          "owner_path": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "script_class": {
+            "type": "string"
+          },
+          "visibility_state": {
+            "type": "object"
+          },
+          "processing_state": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["process", "physics_process"],
+            "properties": {
+              "process": {
+                "type": "boolean"
+              },
+              "physics_process": {
+                "type": "boolean"
+              }
+            }
+          },
+          "transform_state": {
+            "type": "object"
+          },
+          "properties": {
+            "type": "object",
+            "required": ["name", "child_count"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "child_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "capture_status": {
+      "type": "string",
+      "enum": ["complete", "partial", "error"]
+    }
+  }
+}

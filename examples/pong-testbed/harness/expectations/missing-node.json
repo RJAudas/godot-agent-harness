@@ -1,0 +1,23 @@
+{
+  "scenarioId": "pong-scenegraph-missing-node",
+  "expectations": [
+    {
+      "expectation_id": "ball-node",
+      "required": true,
+      "matching_mode": "hybrid",
+      "exact_path": "/root/Main/Ball",
+      "selectors": [
+        {
+          "selector_type": "name",
+          "value": "Ball"
+        },
+        {
+          "selector_type": "type",
+          "value": "CharacterBody2D"
+        }
+      ],
+      "required_parent": "/root/Main",
+      "failure_message": "The Ball gameplay node must exist under the Main root."
+    }
+  ]
+}

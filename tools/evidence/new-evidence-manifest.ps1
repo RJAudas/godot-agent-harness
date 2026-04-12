@@ -14,6 +14,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'artifact-registry.ps1')
+
 function Get-RepoRoot {
     return (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 }
@@ -122,13 +124,7 @@ if (Test-Path -LiteralPath $invariantsPath) {
     $invariants = @(Get-Content -LiteralPath $invariantsPath -Raw | ConvertFrom-Json -Depth 100)
 }
 
-$artifactMap = @(
-    @{ kind = 'trace'; file = 'trace.jsonl'; mediaType = 'application/jsonl'; description = 'Per-frame trace data for the runtime sample.' },
-    @{ kind = 'events'; file = 'events.json'; mediaType = 'application/json'; description = 'Structured runtime events for the sample run.' },
-    @{ kind = 'scene_snapshot'; file = 'scene-snapshot.json'; mediaType = 'application/json'; description = 'Scene snapshot captured around the failure window.' },
-    @{ kind = 'stdout_summary'; file = 'summary.json'; mediaType = 'application/json'; description = 'Normalized summary for the sample run.' },
-    @{ kind = 'invariant_report'; file = 'invariants.json'; mediaType = 'application/json'; description = 'Invariant outcomes for the sample run.' }
-)
+$artifactMap = Get-EvidenceArtifactDefinitions
 
 $artifactRefs = foreach ($artifact in $artifactMap) {
     $artifactPath = Join-Path $resolvedArtifactsPath $artifact.file

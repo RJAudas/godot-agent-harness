@@ -2,8 +2,11 @@
 param(
     [string]$RuntimeArtifactsPath = 'tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample',
     [string]$OutputPath = 'tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.generated.json',
+    [ValidateNotNullOrEmpty()]
     [string]$ScenarioId,
+    [ValidateNotNullOrEmpty()]
     [string]$RunId,
+    [ValidateSet('pass', 'fail', 'error', 'unknown')]
     [string]$Status,
     [switch]$PassThru
 )
@@ -51,6 +54,34 @@ function Get-RepoRelativePath {
     return ($relativePath -replace '\\', '/')
 }
 
+function Assert-NonEmptyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [string]$Value,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        throw "$Name must not be null or empty."
+    }
+}
+
+function Assert-ValidStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [string]$Value
+    )
+
+    $allowedStatuses = @('pass', 'fail', 'error', 'unknown')
+    if ($Value -notin $allowedStatuses) {
+        throw "Status must be one of: $($allowedStatuses -join ', ')."
+    }
+}
+
 $resolvedArtifactsPath = Resolve-RepoPath -Path $RuntimeArtifactsPath
 $resolvedOutputPath = Resolve-RepoPath -Path $OutputPath -CreateParent
 
@@ -91,6 +122,17 @@ $resolvedScenarioId = if ($PSBoundParameters.ContainsKey('ScenarioId')) { $Scena
 $resolvedRunId = if ($PSBoundParameters.ContainsKey('RunId')) { $RunId } else { $summary.runId }
 $resolvedStatus = if ($PSBoundParameters.ContainsKey('Status')) { $Status } else { $summary.status }
 
+Assert-NonEmptyValue -Value $resolvedScenarioId -Name 'ScenarioId'
+Assert-NonEmptyValue -Value $resolvedRunId -Name 'RunId'
+Assert-ValidStatus -Value $resolvedStatus
+
+$artifactCount = @($artifactRefs).Count
+$expectedArtifactCount = $artifactMap.Count
+$validationNotes = @(
+    'Manifest generation does not assert bundle validity. Run tools/evidence/validate-evidence-manifest.ps1 to validate schema and artifact presence.',
+    "Generated manifest includes $artifactCount of $expectedArtifactCount expected runtime artifacts."
+)
+
 $manifest = [ordered]@{
     schemaVersion = '1.0.0'
     manifestId = "evidence-$resolvedRunId"
@@ -123,9 +165,8 @@ $manifest = [ordered]@{
         surface = 'repo-local'
     }
     validation = [ordered]@{
-        bundleValid = $true
-        validatorVersion = '1.0.0'
-        notes = @('Generated from a deterministic runtime sample fixture.')
+        bundleValid = $false
+        notes = $validationNotes
     }
     createdAt = [DateTime]::UtcNow.ToString('o')
 }
@@ -134,7 +175,7 @@ $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resolvedOutputP
 
 $result = [ordered]@{
     manifestPath = $resolvedOutputPath
-    artifactCount = @($artifactRefs).Count
+    artifactCount = $artifactCount
     scenarioId = $resolvedScenarioId
     runId = $resolvedRunId
 }

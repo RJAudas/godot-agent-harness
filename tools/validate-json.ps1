@@ -24,20 +24,19 @@ function Resolve-RepoPath {
         return (Resolve-Path -LiteralPath $Path).Path
     }
 
-    $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     return (Resolve-Path -LiteralPath (Join-Path $repoRoot $Path)).Path
 }
 
 $resolvedInputPath = Resolve-RepoPath -Path $InputPath
 $resolvedSchemaPath = Resolve-RepoPath -Path $SchemaPath
 
-$jsonText = Get-Content -LiteralPath $resolvedInputPath -Raw
-[void](ConvertFrom-Json -InputObject $jsonText -Depth 100)
-
 $isValid = $true
 $validationError = $null
 
 try {
+    $jsonText = Get-Content -LiteralPath $resolvedInputPath -Raw
+    [void](ConvertFrom-Json -InputObject $jsonText -Depth 100)
     $isValid = Test-Json -Json $jsonText -SchemaFile $resolvedSchemaPath
 }
 catch {

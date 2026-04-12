@@ -24,14 +24,43 @@ function Resolve-RepoPath {
     return (Resolve-Path -LiteralPath (Join-Path (Get-RepoRoot) $Path)).Path
 }
 
+function Convert-ToRepoChildPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $repoRoot = [System.IO.Path]::GetFullPath((Get-RepoRoot))
+    $repoRootWithSeparator = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+    }
+    else {
+        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+    }
+
+    if ($fullPath -ne $repoRoot -and -not $fullPath.StartsWith($repoRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Artifact path '$Path' resolves outside the repository root."
+    }
+
+    return $fullPath
+}
+
 $resolvedManifestPath = Resolve-RepoPath -Path $ManifestPath
 $schemaResult = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedManifestPath -SchemaPath 'specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json' -PassThru
 $manifest = Get-Content -LiteralPath $resolvedManifestPath -Raw | ConvertFrom-Json -Depth 100
-$repoRoot = Get-RepoRoot
 $missingArtifactPaths = New-Object System.Collections.Generic.List[string]
 
 foreach ($artifactRef in $manifest.artifactRefs) {
-    $artifactPath = Join-Path $repoRoot ($artifactRef.path -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    try {
+        $artifactPath = Convert-ToRepoChildPath -Path $artifactRef.path
+    }
+    catch {
+        [void]$missingArtifactPaths.Add($artifactRef.path)
+        continue
+    }
+
     if (-not (Test-Path -LiteralPath $artifactPath)) {
         [void]$missingArtifactPaths.Add($artifactRef.path)
     }

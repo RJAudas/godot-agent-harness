@@ -36,13 +36,32 @@ function Resolve-RepoPath {
     return (Resolve-Path -LiteralPath (Join-Path (Get-RepoRoot) $Path)).Path
 }
 
-function Normalize-RepoPath {
+function Convert-ToRepoRelativePath {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Path
     )
 
-    return (($Path -replace '\\', '/') -replace '^\./', '').Trim()
+    $repoRoot = [System.IO.Path]::GetFullPath((Get-RepoRoot))
+    $repoRootWithSeparator = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+    }
+    else {
+        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+    }
+
+    if ($fullPath -ne $repoRoot -and -not $fullPath.StartsWith($repoRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path '$Path' resolves outside the repository root."
+    }
+
+    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $fullPath)
+    if ($relativePath -eq '.') {
+        return ''
+    }
+
+    return ($relativePath -replace '\\', '/').Trim()
 }
 
 $resolvedBoundaryPath = Resolve-RepoPath -Path $BoundaryPath
@@ -59,30 +78,43 @@ if ($RequestedEditType.Count -ne 1 -and $RequestedEditType.Count -ne $RequestedP
 }
 
 $violations = New-Object System.Collections.Generic.List[object]
-$normalizedAllowedPaths = @($boundary.allowedPaths | ForEach-Object { Normalize-RepoPath -Path $_ })
+$normalizedAllowedPaths = @($boundary.allowedPaths | ForEach-Object { Convert-ToRepoRelativePath -Path $_ })
 
 for ($index = 0; $index -lt $RequestedPath.Count; $index++) {
-    $normalizedPath = Normalize-RepoPath -Path $RequestedPath[$index]
+    $normalizedPath = (($RequestedPath[$index] -replace '\\', '/') -replace '^\./', '').Trim()
     $editType = if ($RequestedEditType.Count -eq 1) { $RequestedEditType[0] } else { $RequestedEditType[$index] }
     $pathAllowed = $false
+    $pathViolationReason = $null
 
-    foreach ($allowedPath in $normalizedAllowedPaths) {
-        $trimmedAllowedPath = ($allowedPath -replace '/+$', '')
+    try {
+        $normalizedPath = Convert-ToRepoRelativePath -Path $RequestedPath[$index]
+    }
+    catch {
+        $pathViolationReason = $_.Exception.Message
+    }
 
-        if ($normalizedPath -eq $trimmedAllowedPath) {
-            $pathAllowed = $true
-            break
-        }
+    if ($null -eq $pathViolationReason) {
+        foreach ($allowedPath in $normalizedAllowedPaths) {
+            $trimmedAllowedPath = ($allowedPath -replace '/+$', '')
 
-        if ($normalizedPath.StartsWith($trimmedAllowedPath + '/')) {
-            $pathAllowed = $true
-            break
+            if ($normalizedPath -eq $trimmedAllowedPath) {
+                $pathAllowed = $true
+                break
+            }
+
+            if ($normalizedPath.StartsWith($trimmedAllowedPath + '/')) {
+                $pathAllowed = $true
+                break
+            }
         }
     }
 
     $editAllowed = $editType -in $boundary.allowedEditTypes
-    if (-not $pathAllowed -or -not $editAllowed) {
-        $violationReason = if (-not $pathAllowed) {
+    if ($null -ne $pathViolationReason -or -not $pathAllowed -or -not $editAllowed) {
+        $violationReason = if ($null -ne $pathViolationReason) {
+            $pathViolationReason
+        }
+        elseif (-not $pathAllowed) {
             'Requested path is outside the declared write boundary.'
         }
         else {

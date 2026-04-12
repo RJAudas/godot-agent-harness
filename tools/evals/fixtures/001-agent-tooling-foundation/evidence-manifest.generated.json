@@ -66,11 +66,11 @@
     "surface": "repo-local"
   },
   "validation": {
-    "bundleValid": true,
-    "validatorVersion": "1.0.0",
+    "bundleValid": false,
     "notes": [
-      "Generated from a deterministic runtime sample fixture."
+      "Manifest generation does not assert bundle validity. Run tools/evidence/validate-evidence-manifest.ps1 to validate schema and artifact presence.",
+      "Generated manifest includes 5 of 5 expected runtime artifacts."
     ]
   },
-  "createdAt": "2026-04-11T23:14:47.7641961Z"
+  "createdAt": "2026-04-12T00:04:18.2406210Z"
 }

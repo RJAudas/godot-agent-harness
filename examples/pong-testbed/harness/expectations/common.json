@@ -16,13 +16,11 @@
       "selectors": [
         {
           "selector_type": "name",
-          "value": "Ball",
-          "priority": 1
+	      "value": "Ball"
         },
         {
           "selector_type": "type",
-          "value": "CharacterBody2D",
-          "priority": 2
+	      "value": "CharacterBody2D"
         }
       ],
       "required_parent": "/root/Main",

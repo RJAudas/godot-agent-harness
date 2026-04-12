@@ -18,12 +18,19 @@ var _session_context := {}
 var _expectations: Array = []
 var _latest_snapshot := {}
 var _latest_diagnostics: Array = []
+var _identifier_sequence := 0
 
 
 func _ready() -> void:
 	if _session_context.is_empty():
 		configure_session({})
+	_register_debugger_transport()
 	call_deferred("_capture_startup_if_enabled")
+
+
+func _exit_tree() -> void:
+	if EngineDebugger.is_active():
+		EngineDebugger.unregister_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL)
 
 
 func configure_session(session_context: Dictionary) -> void:
@@ -56,8 +63,7 @@ func request_failure_capture(reason: String) -> Dictionary:
 func capture_scenegraph(trigger_type: String, reason: String) -> Dictionary:
 	var root_node := _resolve_root_node()
 	if root_node == null:
-		var error_message := "No active runtime scene is available for capture."
-		emit_signal("runtime_error", error_message)
+		_emit_runtime_error("No active runtime scene is available for capture.")
 		return {}
 
 	_latest_snapshot = _capture_service.capture_snapshot(root_node, _session_context, trigger_type, reason)
@@ -70,6 +76,7 @@ func capture_scenegraph(trigger_type: String, reason: String) -> Dictionary:
 		_latest_snapshot["capture_status"] = InspectionConstants.CAPTURE_STATUS_PARTIAL
 
 	emit_signal("capture_ready", _latest_snapshot, _latest_diagnostics)
+	_send_debugger_message("snapshot", [_latest_snapshot, _latest_diagnostics])
 	return _latest_snapshot
 
 
@@ -81,7 +88,12 @@ func persist_latest_bundle() -> Dictionary:
 		return {}
 
 	var result := _artifact_writer.persist_bundle(_latest_snapshot, _latest_diagnostics, _session_context)
+	if result.has("error"):
+		_emit_runtime_error(String(result.get("error", "Scenegraph bundle persistence failed.")))
+		return result
+
 	emit_signal("persistence_completed", result.get("manifest", {}))
+	_send_debugger_message("persisted", [result.get("manifest", {})])
 	return result
 
 
@@ -135,4 +147,42 @@ func _load_expectations(expectation_path: String) -> Array:
 
 
 func _build_identifier(prefix: String) -> String:
-	return "%s-%s" % [prefix, str(int(Time.get_unix_time_from_system()))]
+	_identifier_sequence += 1
+	return "%s-%s-%s" % [prefix, str(Time.get_ticks_usec()), str(_identifier_sequence)]
+
+
+func _register_debugger_transport() -> void:
+	if EngineDebugger.is_active():
+		EngineDebugger.register_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL, _on_debugger_request)
+
+
+func _on_debugger_request(message: String, data: Array) -> bool:
+	match message:
+		"configure_session":
+			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
+				configure_session(data[0])
+			return true
+		"request_manual_capture":
+			request_manual_capture()
+			return true
+		"request_failure_capture":
+			var reason := "failure_requested"
+			if not data.is_empty():
+				reason = String(data[0])
+			request_failure_capture(reason)
+			return true
+		"persist_latest_bundle":
+			persist_latest_bundle()
+			return true
+		_:
+			return false
+
+
+func _send_debugger_message(message_name: String, data: Array) -> void:
+	if EngineDebugger.is_active():
+		EngineDebugger.send_message("%s:%s" % [InspectionConstants.RUNTIME_TO_EDITOR_CHANNEL, message_name], data)
+
+
+func _emit_runtime_error(message: String) -> void:
+	emit_signal("runtime_error", message)
+	_send_debugger_message("runtime_error", [message])

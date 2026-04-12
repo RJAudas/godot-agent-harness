@@ -82,7 +82,6 @@
 - **Fields**:
   - `selector_type`: `name`, `group`, `type`, or `script_class`.
   - `value`: Selector value.
-  - `priority`: Match precedence when multiple selectors exist.
 
 ### Missing-Node Diagnostic
 

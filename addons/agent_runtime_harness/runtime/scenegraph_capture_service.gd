@@ -4,14 +4,22 @@ class_name ScenegraphCaptureService
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
 const ScenegraphSerializer = preload("res://addons/agent_runtime_harness/shared/scenegraph_serializer.gd")
 
+var _snapshot_sequence: int = 0
+
+
+func _build_snapshot_id(session_context: Dictionary, trigger_type: String) -> String:
+	_snapshot_sequence += 1
+	return "%s-%s-%s-%s" % [
+		String(session_context.get("session_id", "session")),
+		trigger_type,
+		str(Time.get_ticks_usec()),
+		str(_snapshot_sequence),
+	]
+
 
 func capture_snapshot(root_node: Node, session_context: Dictionary, trigger_type: String, reason: String) -> Dictionary:
 	var timestamp := Time.get_datetime_string_from_system(true)
-	var snapshot_id := "%s-%s-%s" % [
-		String(session_context.get("session_id", "session")),
-		trigger_type,
-		str(int(Time.get_unix_time_from_system())),
-	]
+	var snapshot_id := _build_snapshot_id(session_context, trigger_type)
 
 	var root_scene := {
 		"name": String(root_node.name),

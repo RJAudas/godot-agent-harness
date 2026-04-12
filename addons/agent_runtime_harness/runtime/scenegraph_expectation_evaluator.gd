@@ -66,6 +66,7 @@ func _find_match(nodes: Array, expectation: Dictionary) -> Dictionary:
 	if selectors.is_empty():
 		return {"found": false}
 
+	selectors = _normalize_selectors(selectors)
 	var matching_nodes: Array = []
 	for node_value in nodes:
 		var node: Dictionary = node_value
@@ -82,6 +83,14 @@ func _find_match(nodes: Array, expectation: Dictionary) -> Dictionary:
 		"found": true,
 		"node": matching_nodes[0],
 	}
+
+
+func _normalize_selectors(selectors: Array) -> Array:
+	var normalized := selectors.duplicate(true)
+	normalized.sort_custom(func(a, b):
+		return String(a.get("selector_type", "")) < String(b.get("selector_type", ""))
+	)
+	return normalized
 
 
 func _matches_selectors(node: Dictionary, selectors: Array) -> bool:

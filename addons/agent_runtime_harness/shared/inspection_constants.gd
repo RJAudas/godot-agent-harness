@@ -29,7 +29,7 @@ const DIAGNOSTIC_KIND_HIERARCHY_MISMATCH := "hierarchy_mismatch"
 const DIAGNOSTIC_KIND_CAPTURE_ERROR := "capture_error"
 
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"
-const DEFAULT_MANIFEST_ARTIFACT_ROOT := "examples/pong-testbed/evidence"
+const DEFAULT_MANIFEST_ARTIFACT_ROOT := ""
 
 
 static func supported_artifact_kinds() -> PackedStringArray:

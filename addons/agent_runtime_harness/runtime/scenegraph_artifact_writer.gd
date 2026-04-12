@@ -9,7 +9,7 @@ var _summary_builder := ScenegraphSummaryBuilder.new()
 
 func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: Dictionary) -> Dictionary:
 	var output_directory := String(session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
-	var artifact_root := String(session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
+	var artifact_root := _resolve_artifact_root(session_context, output_directory)
 	var summary := _summary_builder.build_summary(snapshot, diagnostics)
 
 	_ensure_directory(output_directory)
@@ -19,8 +19,11 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var summary_path := output_directory.path_join("scenegraph-summary.json")
 	var manifest_path := output_directory.path_join("evidence-manifest.json")
 
-	_write_json(snapshot_path, snapshot)
-	_write_json(diagnostics_path, {
+	var snapshot_error := _write_json(snapshot_path, snapshot)
+	if not snapshot_error.is_empty():
+		return {"error": snapshot_error}
+
+	var diagnostics_error := _write_json(diagnostics_path, {
 		"schema_version": "1.0.0",
 		"snapshot_id": String(snapshot.get("snapshot_id", "")),
 		"session_id": String(session_context.get("session_id", "")),
@@ -28,7 +31,12 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		"scenario_id": String(session_context.get("scenario_id", "")),
 		"diagnostics": diagnostics,
 	})
-	_write_json(summary_path, summary)
+	if not diagnostics_error.is_empty():
+		return {"error": diagnostics_error}
+
+	var summary_error := _write_json(summary_path, summary)
+	if not summary_error.is_empty():
+		return {"error": summary_error}
 
 	var manifest := {
 		"schemaVersion": "1.0.0",
@@ -55,7 +63,10 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		"createdAt": Time.get_datetime_string_from_system(true),
 	}
 
-	_write_json(manifest_path, manifest)
+	var manifest_error := _write_json(manifest_path, manifest)
+	if not manifest_error.is_empty():
+		return {"error": manifest_error}
+
 	return {
 		"manifest": manifest,
 		"output_directory": output_directory,
@@ -68,10 +79,21 @@ func _ensure_directory(output_directory: String) -> void:
 	DirAccess.make_dir_recursive_absolute(absolute_path)
 
 
-func _write_json(path: String, payload: Variant) -> void:
+func _write_json(path: String, payload: Variant) -> String:
 	var handle := FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return "Could not open %s for writing (%s)." % [path, error_string(FileAccess.get_open_error())]
+
 	handle.store_string(JSON.stringify(payload, "\t"))
 	handle.close()
+	return ""
+
+
+func _resolve_artifact_root(session_context: Dictionary, output_directory: String) -> String:
+	var configured_root := String(session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
+	if not configured_root.is_empty():
+		return configured_root
+	return output_directory.trim_prefix("res://")
 
 
 func _build_artifact_ref(kind: String, artifact_root: String, file_name: String, media_type: String, description: String) -> Dictionary:

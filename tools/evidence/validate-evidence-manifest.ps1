@@ -7,6 +7,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'artifact-registry.ps1')
+
 function Get-RepoRoot {
     return (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 }
@@ -47,25 +49,12 @@ function Convert-ToRepoChildPath {
     return $fullPath
 }
 
-function Get-SupportedArtifactKinds {
-    return @(
-        'trace',
-        'events',
-        'scene_snapshot',
-        'scenegraph-snapshot',
-        'scenegraph-diagnostics',
-        'scenegraph-summary',
-        'stdout_summary',
-        'invariant_report'
-    )
-}
-
 $resolvedManifestPath = Resolve-RepoPath -Path $ManifestPath
 $schemaResult = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedManifestPath -SchemaPath 'specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json' -PassThru -AllowInvalid
 $manifest = Get-Content -LiteralPath $resolvedManifestPath -Raw | ConvertFrom-Json -Depth 100
 $missingArtifactPaths = New-Object System.Collections.Generic.List[string]
 $unsupportedArtifactKinds = New-Object System.Collections.Generic.List[string]
-$supportedArtifactKinds = Get-SupportedArtifactKinds
+$supportedArtifactKinds = Get-EvidenceArtifactKinds
 
 foreach ($artifactRef in $manifest.artifactRefs) {
     if ($artifactRef.kind -notin $supportedArtifactKinds) {

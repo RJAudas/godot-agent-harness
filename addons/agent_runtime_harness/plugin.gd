@@ -11,8 +11,10 @@ var _bridge
 func _enter_tree() -> void:
 	_bridge = ScenegraphDebuggerBridge.new()
 	_bridge.set_session_context({
-		"config_path": "res://harness/inspection-run-config.json"
+		"config_path": "res://harness/inspection-run-config.json",
+		"requested_by": "editor_plugin",
 	})
+	add_debugger_plugin(_bridge)
 
 	_dock = ScenegraphDock.new()
 	_dock.bind_bridge(_bridge)
@@ -25,4 +27,6 @@ func _exit_tree() -> void:
 		_dock.queue_free()
 		_dock = null
 
+	if _bridge != null:
+		remove_debugger_plugin(_bridge)
 	_bridge = null

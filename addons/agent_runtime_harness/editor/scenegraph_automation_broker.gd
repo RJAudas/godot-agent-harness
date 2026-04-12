@@ -15,6 +15,7 @@ var _artifact_store := ScenegraphAutomationArtifactStore.new()
 var _run_coordinator := ScenegraphRunCoordinator.new()
 var _config_path := "res://harness/inspection-run-config.json"
 var _poll_timer: Timer
+var _last_capability_signature := ""
 
 
 func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res://harness/inspection-run-config.json") -> void:
@@ -51,8 +52,7 @@ func _on_poll_timer_timeout() -> void:
 
 	_artifact_store.ensure_automation_layout(config)
 	var capability := evaluate_capability(config)
-	_artifact_store.write_capability_result(config, capability)
-	emit_signal("capability_updated", capability)
+	_publish_capability_if_needed(config, capability)
 
 	if _run_coordinator.is_active():
 		_run_coordinator.poll()
@@ -63,7 +63,7 @@ func _on_poll_timer_timeout() -> void:
 		return
 
 	_artifact_store.clear_request(config)
-	_run_coordinator.start_run(config, request, capability)
+	_run_coordinator.start_run(config, request, capability, _config_path)
 
 
 func evaluate_capability(config: Dictionary) -> Dictionary:
@@ -76,7 +76,6 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 	var persistence_available := not String(config.get("outputDirectory", "")).is_empty()
 	var validation_available := persistence_available
 	var shutdown_control_available := true
-	var single_target_ready := true
 
 	if target_scene.is_empty():
 		blocked_reasons.append("target_scene_missing")
@@ -84,8 +83,10 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 		blocked_reasons.append("harness_autoload_missing")
 	if _run_coordinator.is_active():
 		blocked_reasons.append("run_in_progress")
-	if EditorInterface.is_playing_scene() and not _run_coordinator.is_active():
+	if _is_playing_scene() and not _run_coordinator.is_active():
 		blocked_reasons.append("scene_already_running")
+	var deduped_blocked_reasons := _dedupe_strings(blocked_reasons)
+	var single_target_ready := deduped_blocked_reasons.is_empty()
 
 	return {
 		"checkedAt": InspectionConstants.utc_timestamp_now(),
@@ -97,12 +98,24 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 		"persistenceAvailable": persistence_available,
 		"validationAvailable": validation_available,
 		"shutdownControlAvailable": shutdown_control_available,
-		"blockedReasons": _dedupe_strings(blocked_reasons),
+		"blockedReasons": deduped_blocked_reasons,
 		"recommendedControlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 		"notes": [
 			"The preferred v1 control surface is the plugin-owned workspace file broker."
 		],
 	}
+
+
+func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -> void:
+	var signature_payload := capability.duplicate(true)
+	signature_payload.erase("checkedAt")
+	var signature := JSON.stringify(signature_payload)
+	if signature == _last_capability_signature and FileAccess.file_exists(_artifact_store.get_capability_result_path(config)):
+		return
+
+	_last_capability_signature = signature
+	_artifact_store.write_capability_result(config, capability)
+	emit_signal("capability_updated", capability)
 
 
 func _dedupe_strings(values: Array) -> Array:
@@ -113,6 +126,15 @@ func _dedupe_strings(values: Array) -> Array:
 			continue
 		deduped.append(text)
 	return deduped
+
+
+func _is_playing_scene() -> bool:
+	if _plugin == null:
+		return false
+	var editor_interface = _plugin.get_editor_interface()
+	if editor_interface == null:
+		return false
+	return editor_interface.is_playing_scene()
 
 
 func _on_run_completed(result: Dictionary) -> void:

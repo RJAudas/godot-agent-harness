@@ -23,6 +23,7 @@ var _awaiting_manifest := false
 var _awaiting_stop := false
 var _stop_requested := false
 var _launch_started_at_usec := 0
+var _active_config_path := ""
 
 
 func configure(plugin: EditorPlugin, bridge: Object, artifact_store: Object) -> void:
@@ -35,9 +36,10 @@ func is_active() -> bool:
 	return _active
 
 
-func start_run(config: Dictionary, request: Dictionary, capability: Dictionary) -> Dictionary:
+func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, config_path: String = "") -> Dictionary:
 	_active_config = config.duplicate(true)
 	_active_request = _resolve_request(config, request)
+	_active_config_path = config_path
 	_last_manifest = {}
 	_last_validation = _build_validation_result(false, 0, [], false, ["Validation has not completed yet."])
 	_pending_failure_kind = null
@@ -60,7 +62,10 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary) 
 	_awaiting_manifest = false
 
 	_bridge.set_session_context(_build_session_context())
-	EditorInterface.play_custom_scene(String(_active_request.get("targetScene", "")))
+	var editor_interface = _get_editor_interface()
+	if editor_interface == null:
+		return _finish_blocked_run(["editor_interface_unavailable"])
+	editor_interface.play_custom_scene(String(_active_request.get("targetScene", "")))
 	return {
 		"ok": true,
 		"requestId": _active_request.get("requestId", ""),
@@ -78,7 +83,7 @@ func poll() -> void:
 			_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_ATTACHMENT, "Runtime debugger session did not attach before timeout.")
 			return
 
-	if _awaiting_stop and not EditorInterface.is_playing_scene():
+	if _awaiting_stop and not _is_playing_scene():
 		_finalize_after_stop(InspectionConstants.AUTOMATION_TERMINATION_STOPPED_CLEANLY)
 
 
@@ -177,8 +182,10 @@ func _request_stop() -> void:
 	_stop_requested = true
 	_awaiting_stop = true
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_STOPPING, "Stopping the editor play session after validation.")
-	EditorInterface.stop_playing_scene()
-	if not EditorInterface.is_playing_scene():
+	var editor_interface = _get_editor_interface()
+	if editor_interface != null:
+		editor_interface.stop_playing_scene()
+	if not _is_playing_scene():
 		_finalize_after_stop(InspectionConstants.AUTOMATION_TERMINATION_STOPPED_CLEANLY)
 
 
@@ -222,7 +229,7 @@ func _fail_run(failure_kind: String, message: String) -> void:
 		"failureKind": failure_kind,
 	})
 
-	if _should_stop_after_validation() and EditorInterface.is_playing_scene() and not _stop_requested:
+	if _should_stop_after_validation() and _is_playing_scene() and not _stop_requested:
 		_pending_failure_kind = failure_kind
 		_pending_failure_message = message
 		_request_stop()
@@ -235,6 +242,12 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 	var manifest_path = null
 	if not _last_manifest.is_empty():
 		manifest_path = _resolve_manifest_repo_path()
+	var validation_result := _last_validation.duplicate(true)
+	if not note.is_empty():
+		var validation_notes: Array = validation_result.get("notes", []).duplicate(true)
+		if not note in validation_notes:
+			validation_notes.append(note)
+		validation_result["notes"] = validation_notes
 
 	var result := {
 		"requestId": String(_active_request.get("requestId", "")),
@@ -243,14 +256,12 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 		"failureKind": failure_kind,
 		"manifestPath": manifest_path,
 		"outputDirectory": String(_active_request.get("outputDirectory", "")),
-		"validationResult": _last_validation.duplicate(true),
+		"validationResult": validation_result,
 		"terminationStatus": termination_status,
 		"blockedReasons": [],
 		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 		"completedAt": InspectionConstants.utc_timestamp_now(),
 	}
-	if not note.is_empty():
-		result["blockedReasons"] = [note]
 	_artifact_store.write_run_result(_active_config, result)
 	emit_signal("run_completed", result)
 	_reset_state()
@@ -268,9 +279,25 @@ func _emit_status(status: String, details: String, extras := {}) -> void:
 	emit_signal("lifecycle_status_written", payload)
 
 
+func _resolve_active_config_path() -> String:
+	if not _active_config_path.is_empty():
+		return _active_config_path
+
+	for source in [_active_request, _active_config]:
+		var camel_case_path := String(source.get("configPath", ""))
+		if not camel_case_path.is_empty():
+			return camel_case_path
+
+		var snake_case_path := String(source.get("config_path", ""))
+		if not snake_case_path.is_empty():
+			return snake_case_path
+
+	return "res://harness/inspection-run-config.json"
+
+
 func _build_session_context() -> Dictionary:
 	return {
-		"config_path": "res://harness/inspection-run-config.json",
+		"config_path": _resolve_active_config_path(),
 		"session_id": String(_active_request.get("requestId", "")),
 		"request_id": String(_active_request.get("requestId", "")),
 		"run_id": String(_active_request.get("runId", "")),
@@ -279,6 +306,7 @@ func _build_session_context() -> Dictionary:
 		"output_directory": String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)),
 		"artifact_root": String(_active_request.get("artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT)),
 		"capture_policy": _active_request.get("capturePolicy", {}).duplicate(true),
+		"stop_policy": _active_request.get("stopPolicy", {}).duplicate(true),
 	}
 
 
@@ -293,7 +321,7 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 		blocked.append("run_id_missing")
 	if String(_active_request.get("targetScene", "")).is_empty():
 		blocked.append("target_scene_missing")
-	if EditorInterface.is_playing_scene():
+	if _is_playing_scene():
 		blocked.append("scene_already_running")
 
 	var capture_policy: Dictionary = _active_request.get("capturePolicy", {})
@@ -421,7 +449,7 @@ func _build_snapshot_refs(snapshot: Dictionary, diagnostics: Array) -> Array:
 func _derive_failure_termination_status() -> String:
 	if _stop_requested:
 		return InspectionConstants.AUTOMATION_TERMINATION_SHUTDOWN_FAILED
-	if EditorInterface.is_playing_scene():
+	if _is_playing_scene():
 		return InspectionConstants.AUTOMATION_TERMINATION_RUNNING
 	return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
 
@@ -448,6 +476,19 @@ func _dedupe_strings(values: Array) -> Array:
 	return deduped
 
 
+func _get_editor_interface():
+	if _plugin == null:
+		return null
+	return _plugin.get_editor_interface()
+
+
+func _is_playing_scene() -> bool:
+	var editor_interface = _get_editor_interface()
+	if editor_interface == null:
+		return false
+	return editor_interface.is_playing_scene()
+
+
 func _reset_state() -> void:
 	_active = false
 	_awaiting_runtime = false
@@ -462,3 +503,4 @@ func _reset_state() -> void:
 	_last_manifest = {}
 	_last_validation = {}
 	_launch_started_at_usec = 0
+	_active_config_path = ""

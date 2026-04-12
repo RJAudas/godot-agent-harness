@@ -288,4 +288,39 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
             Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
+
+    It 'optionally validates the write boundary and emits an audit record' {
+        $sandboxPath = New-RepoSandboxDirectory
+        $runRecordPath = Join-Path $TestDrive 'editor-evidence-run-request-record.json'
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
+                BoundaryArtifactId = 'editor-evidence-run-request.helper'
+                WriteRunRecord = $true
+                RunRecordArtifactId = 'editor-evidence-run-request.helper'
+                RunRecordBoundaryId = 'editor-evidence-run-request-helper'
+                RunRecordOutputPath = $runRecordPath
+                PassThru = $true
+            }
+
+            $result.writeBoundaryValidated | Should -BeTrue
+            $result.writeBoundaryId | Should -Be 'editor-evidence-run-request-helper'
+            $result.runRecordPath | Should -Be $runRecordPath
+
+            $runRecord = Get-Content -LiteralPath $runRecordPath -Raw | ConvertFrom-Json -Depth 100
+            $runRecord.artifactId | Should -Be 'editor-evidence-run-request.helper'
+            $runRecord.writeBoundaryId | Should -Be 'editor-evidence-run-request-helper'
+            $runRecord.validations.name | Should -Contain 'write-boundary-validation'
+            $runRecord.validations.name | Should -Contain 'request-schema-validation'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
 }

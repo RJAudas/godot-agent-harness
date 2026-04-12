@@ -13,6 +13,15 @@ param(
     [string[]]$ExpectationFiles = @(),
     [string]$RequestedBy = 'vscode-agent',
     [bool]$StopAfterValidation = $true,
+    [string]$BoundaryArtifactId,
+    [string]$BoundaryPath = 'tools/automation/write-boundaries.json',
+    [string]$BoundaryEditType = 'update',
+    [switch]$WriteRunRecord,
+    [string]$RunRecordArtifactId,
+    [string]$RunRecordBoundaryId,
+    [string]$RunRecordOutputPath = 'tools/automation/run-records/latest-editor-evidence-request.json',
+    [ValidateSet('autonomous', 'simulated')]
+    [string]$RunRecordMode = 'simulated',
     [switch]$PassThru
 )
 
@@ -96,6 +105,25 @@ function Convert-ToStringArray {
     return ,@($Value | ForEach-Object { [string]$_ })
 }
 
+function Get-ValidationMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [bool]$Passed,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SuccessMessage,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FailureMessage
+    )
+
+    if ($Passed) {
+        return $SuccessMessage
+    }
+
+    return $FailureMessage
+}
+
 $resolvedProjectRoot = Resolve-RepoPath -Path $ProjectRoot
 $resolvedConfigPath = if ($PSBoundParameters.ContainsKey('ConfigPath')) {
     Resolve-ProjectResourcePath -ProjectRootPath $resolvedProjectRoot -Path $ConfigPath
@@ -138,8 +166,43 @@ else {
     Resolve-ProjectResourcePath -ProjectRootPath $resolvedProjectRoot -Path $config.automation.requestPath -CreateParent
 }
 
+$writeBoundaryValidation = $null
+if ($PSBoundParameters.ContainsKey('BoundaryArtifactId')) {
+    $writeBoundaryValidation = & (Join-Path $PSScriptRoot 'validate-write-boundary.ps1') -ArtifactId $BoundaryArtifactId -RequestedPath $resolvedRequestPath -RequestedEditType $BoundaryEditType -BoundaryPath $BoundaryPath -PassThru -AllowViolation
+    if (-not $writeBoundaryValidation.requestAllowed) {
+        throw "Resolved request path '$resolvedRequestPath' did not pass boundary validation for artifact '$BoundaryArtifactId'."
+    }
+}
+
 $requestDocument | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $resolvedRequestPath
 $validation = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedRequestPath -SchemaPath 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json' -PassThru -AllowInvalid
+
+$runRecordPath = $null
+if ($WriteRunRecord) {
+    $effectiveRunRecordArtifactId = if ($PSBoundParameters.ContainsKey('RunRecordArtifactId')) { $RunRecordArtifactId } else { $BoundaryArtifactId }
+    $effectiveRunRecordBoundaryId = if ($PSBoundParameters.ContainsKey('RunRecordBoundaryId')) { $RunRecordBoundaryId } elseif ($null -ne $writeBoundaryValidation) { $writeBoundaryValidation.boundaryId } else { $null }
+    if ([string]::IsNullOrWhiteSpace($effectiveRunRecordArtifactId)) {
+        throw 'RunRecordArtifactId or BoundaryArtifactId is required when WriteRunRecord is set.'
+    }
+    if ([string]::IsNullOrWhiteSpace($effectiveRunRecordBoundaryId)) {
+        throw 'RunRecordBoundaryId is required when WriteRunRecord is set and no boundary validation was performed.'
+    }
+
+    $validationNames = @('request-schema-validation')
+    $validationStatuses = @(if ($validation.valid) { 'passed' } else { 'failed' })
+    $validationDetails = @(
+        (Get-ValidationMessage -Passed ([bool]$validation.valid) -SuccessMessage 'Generated automation request passed schema validation.' -FailureMessage 'Generated automation request failed schema validation.')
+    )
+
+    if ($null -ne $writeBoundaryValidation) {
+        $validationNames = @('write-boundary-validation') + $validationNames
+        $validationStatuses = @('passed') + $validationStatuses
+        $validationDetails = @('Resolved request path passed declared write-boundary validation.') + $validationDetails
+    }
+
+    $runRecord = & (Join-Path $PSScriptRoot 'new-autonomous-run-record.ps1') -ArtifactId $effectiveRunRecordArtifactId -WriteBoundaryId $effectiveRunRecordBoundaryId -RequestSummary "Write automation request artifact to $resolvedRequestPath" -OutputPath $RunRecordOutputPath -Mode $RunRecordMode -Status $(if ($validation.valid) { 'success' } else { 'failed' }) -OperationPath $resolvedRequestPath -OperationEditType $BoundaryEditType -OperationStatus 'performed' -ValidationName $validationNames -ValidationStatus $validationStatuses -ValidationDetails $validationDetails -PassThru
+    $runRecordPath = $runRecord.recordPath
+}
 
 $result = [ordered]@{
     projectRoot = $resolvedProjectRoot
@@ -148,6 +211,9 @@ $result = [ordered]@{
     requestId = $requestDocument.requestId
     runId = $requestDocument.runId
     schemaValid = [bool]$validation.valid
+    writeBoundaryValidated = [bool]($null -ne $writeBoundaryValidation -and $writeBoundaryValidation.requestAllowed)
+    writeBoundaryId = if ($null -ne $writeBoundaryValidation) { $writeBoundaryValidation.boundaryId } else { $null }
+    runRecordPath = $runRecordPath
 }
 
 if (-not $result.schemaValid) {

@@ -46,6 +46,14 @@ pwsh ./tools/automation/new-autonomous-run-record.ps1 -ArtifactId <artifact-id> 
 
 Use this when you want an auditable JSON record of what an automation flow attempted and whether it stayed within its declared boundary.
 
+### Run the automated PowerShell tool tests
+
+```powershell
+pwsh ./tools/tests/run-tool-tests.ps1
+```
+
+Use this to execute the Pester-based contract suite for every PowerShell script under `tools/`.
+
 ## What this tooling is for
 
 The tooling foundation exists to make future plugin work easier to specify, validate, and consume.

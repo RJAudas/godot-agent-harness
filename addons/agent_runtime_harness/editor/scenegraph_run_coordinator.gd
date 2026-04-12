@@ -14,7 +14,7 @@ var _active_config := {}
 var _active_request := {}
 var _last_manifest := {}
 var _last_validation := {}
-var _pending_failure_kind := null
+var _pending_failure_kind: Variant = null
 var _pending_failure_message := ""
 var _active := false
 var _awaiting_runtime := false
@@ -268,7 +268,7 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 
 
 func _emit_status(status: String, details: String, extras := {}) -> void:
-	var payload := _artifact_store.build_status_payload(
+	var payload: Dictionary = _artifact_store.build_status_payload(
 		String(_active_request.get("requestId", "request-pending")),
 		String(_active_request.get("runId", "run-pending")),
 		status,
@@ -334,7 +334,7 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 func _resolve_request(config: Dictionary, request: Dictionary) -> Dictionary:
 	var overrides: Dictionary = request.get("overrides", {})
 	var default_overrides: Dictionary = config.get("defaultRequestOverrides", {})
-	var base_capture_policy := config.get("capturePolicy", {}).duplicate(true)
+	var base_capture_policy: Dictionary = config.get("capturePolicy", {}).duplicate(true)
 	var base_stop_policy := {"stopAfterValidation": true}
 	var resolved := {
 		"requestId": String(request.get("requestId", "request-%s" % str(Time.get_ticks_usec()))),

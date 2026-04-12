@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 
-$script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$script:RepoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 
 function Get-RepoPath {
     param(
@@ -70,4 +70,15 @@ function Invoke-RepoScriptPassThru {
 
     $resolvedScriptPath = Get-RepoPath -Path $ScriptPath
     & $resolvedScriptPath @Parameters
+}
+
+function New-RepoSandboxDirectory {
+    $sandboxRoot = Join-Path (Join-Path $script:RepoRoot 'tools') 'tests/.tmp'
+    if (-not (Test-Path -LiteralPath $sandboxRoot)) {
+        New-Item -ItemType Directory -Path $sandboxRoot -Force | Out-Null
+    }
+
+    $sandboxPath = Join-Path $sandboxRoot ([guid]::NewGuid().Guid)
+    New-Item -ItemType Directory -Path $sandboxPath -Force | Out-Null
+    return $sandboxPath
 }

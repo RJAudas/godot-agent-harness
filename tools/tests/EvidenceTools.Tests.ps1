@@ -51,35 +51,49 @@ Describe 'tools/evidence/new-evidence-manifest.ps1' {
     }
 
     It 'reduces artifactCount when optional artifacts are absent' {
-        $runtimePath = Join-Path $TestDrive 'runtime-sample'
-        Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample') -Destination $runtimePath -Recurse
-        Remove-Item -LiteralPath (Join-Path $runtimePath 'invariants.json') -Force
+        $sandboxPath = New-RepoSandboxDirectory
+        $runtimePath = Join-Path $sandboxPath 'runtime-sample'
 
-        $outputPath = Join-Path $TestDrive 'partial-manifest.json'
-        $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/evidence/new-evidence-manifest.ps1' -Parameters @{
-            RuntimeArtifactsPath = $runtimePath
-            OutputPath = $outputPath
-            PassThru = $true
+        try {
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample') -Destination $runtimePath -Recurse
+            Remove-Item -LiteralPath (Join-Path $runtimePath 'invariants.json') -Force
+
+            $outputPath = Join-Path $TestDrive 'partial-manifest.json'
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/evidence/new-evidence-manifest.ps1' -Parameters @{
+                RuntimeArtifactsPath = $runtimePath
+                OutputPath = $outputPath
+                PassThru = $true
+            }
+
+            $manifest = Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json -Depth 100
+            $result.artifactCount | Should -Be 4
+            @($manifest.invariants).Count | Should -Be 0
+            @($manifest.artifactRefs).Count | Should -Be 4
         }
-
-        $manifest = Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json -Depth 100
-        $result.artifactCount | Should -Be 4
-        @($manifest.invariants).Count | Should -Be 0
-        @($manifest.artifactRefs).Count | Should -Be 4
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     It 'fails when summary.json is missing' {
-        $runtimePath = Join-Path $TestDrive 'runtime-without-summary'
-        Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample') -Destination $runtimePath -Recurse
-        Remove-Item -LiteralPath (Join-Path $runtimePath 'summary.json') -Force
+        $sandboxPath = New-RepoSandboxDirectory
+        $runtimePath = Join-Path $sandboxPath 'runtime-sample'
 
-        {
-            Invoke-RepoScriptPassThru -ScriptPath 'tools/evidence/new-evidence-manifest.ps1' -Parameters @{
-                RuntimeArtifactsPath = $runtimePath
-                OutputPath = (Join-Path $TestDrive 'missing-summary.json')
-                PassThru = $true
-            }
-        } | Should -Throw '*summary file not found*'
+        try {
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample') -Destination $runtimePath -Recurse
+            Remove-Item -LiteralPath (Join-Path $runtimePath 'summary.json') -Force
+
+            {
+                Invoke-RepoScriptPassThru -ScriptPath 'tools/evidence/new-evidence-manifest.ps1' -Parameters @{
+                    RuntimeArtifactsPath = $runtimePath
+                    OutputPath = (Join-Path $TestDrive 'missing-summary.json')
+                    PassThru = $true
+                }
+            } | Should -Throw '*summary file not found*'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     It 'rejects invalid status values' {
@@ -90,6 +104,20 @@ Describe 'tools/evidence/new-evidence-manifest.ps1' {
                 PassThru = $true
             }
         } | Should -Throw '*Cannot validate argument*'
+    }
+
+    It 'rejects runtime artifact roots outside the repository' {
+        $runtimePath = Join-Path $TestDrive 'external-runtime-sample'
+        New-Item -ItemType Directory -Path $runtimePath -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $runtimePath 'summary.json') -Value '{"scenarioId":"outside","runId":"outside","status":"fail","headline":"h","outcome":"o","keyFindings":[]}'
+
+        {
+            Invoke-RepoScriptPassThru -ScriptPath 'tools/evidence/new-evidence-manifest.ps1' -Parameters @{
+                RuntimeArtifactsPath = $runtimePath
+                OutputPath = (Join-Path $TestDrive 'outside-runtime.json')
+                PassThru = $true
+            }
+        } | Should -Throw '*resolves outside the repository root*'
     }
 }
 

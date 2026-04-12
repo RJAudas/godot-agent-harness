@@ -79,4 +79,15 @@ Describe 'tools/validate-json.ps1' {
         $result.valid | Should -BeTrue
         $result.schemaPath | Should -Match 'evidence-manifest.schema.json$'
     }
+
+    It 'returns an invalid pass-through object without terminating the caller' {
+        $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/validate-json.ps1' -Parameters @{
+            InputPath = 'tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.invalid.json'
+            SchemaPath = 'specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json'
+            PassThru = $true
+        }
+
+        $result.valid | Should -BeFalse
+        $result.error | Should -Not -BeNullOrEmpty
+    }
 }

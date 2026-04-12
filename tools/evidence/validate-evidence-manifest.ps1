@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-RepoRoot {
-    return (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    return (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 }
 
 function Resolve-RepoPath {
@@ -48,7 +48,7 @@ function Convert-ToRepoChildPath {
 }
 
 $resolvedManifestPath = Resolve-RepoPath -Path $ManifestPath
-$schemaResult = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedManifestPath -SchemaPath 'specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json' -PassThru
+$schemaResult = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedManifestPath -SchemaPath 'specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json' -PassThru -AllowInvalid
 $manifest = Get-Content -LiteralPath $resolvedManifestPath -Raw | ConvertFrom-Json -Depth 100
 $missingArtifactPaths = New-Object System.Collections.Generic.List[string]
 

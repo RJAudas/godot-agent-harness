@@ -66,6 +66,6 @@ else {
     [pscustomobject]$result | ConvertTo-Json -Depth 5
 }
 
-if (-not $isValid -and -not $AllowInvalid) {
+if (-not $isValid -and -not $AllowInvalid -and -not $PassThru) {
     exit 1
 }

@@ -15,7 +15,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-RepoRoot {
-    return (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    return (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 }
 
 function Resolve-RepoPath {
@@ -50,8 +50,32 @@ function Get-RepoRelativePath {
     )
 
     $repoRoot = Get-RepoRoot
-    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $Path)
+    $fullPath = Convert-ToRepoChildPath -Path $Path
+    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $fullPath)
     return ($relativePath -replace '\\', '/')
+}
+
+function Convert-ToRepoChildPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $repoRoot = [System.IO.Path]::GetFullPath((Get-RepoRoot))
+    $repoRootWithSeparator = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+    }
+    else {
+        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+    }
+
+    if ($fullPath -ne $repoRoot -and -not $fullPath.StartsWith($repoRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path '$Path' resolves outside the repository root."
+    }
+
+    return $fullPath
 }
 
 function Assert-NonEmptyValue {
@@ -82,7 +106,7 @@ function Assert-ValidStatus {
     }
 }
 
-$resolvedArtifactsPath = Resolve-RepoPath -Path $RuntimeArtifactsPath
+$resolvedArtifactsPath = Convert-ToRepoChildPath -Path $RuntimeArtifactsPath
 $resolvedOutputPath = Resolve-RepoPath -Path $OutputPath -CreateParent
 
 $summaryPath = Join-Path $resolvedArtifactsPath 'summary.json'

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json",
+  "title": "Automation Run Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "scenarioId",
+    "runId",
+    "outputDirectory",
+    "artifactRoot",
+    "expectationFiles",
+    "capturePolicy",
+    "stopPolicy",
+    "requestedBy",
+    "createdAt"
+  ],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenarioId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetScene": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputDirectory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactRoot": {
+      "type": "string"
+    },
+    "expectationFiles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "capturePolicy": {
+      "$ref": "#/$defs/capturePolicy"
+    },
+    "stopPolicy": {
+      "$ref": "#/$defs/stopPolicy"
+    },
+    "requestedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetScene": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outputDirectory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactRoot": {
+          "type": "string"
+        },
+        "expectationFiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "capturePolicy": {
+          "$ref": "#/$defs/capturePolicy"
+        },
+        "stopPolicy": {
+          "$ref": "#/$defs/stopPolicy"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "capturePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startup", "manual", "failure"],
+      "properties": {
+        "startup": {
+          "type": "boolean"
+        },
+        "manual": {
+          "type": "boolean"
+        },
+        "failure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stopPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stopAfterValidation"],
+      "properties": {
+        "stopAfterValidation": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

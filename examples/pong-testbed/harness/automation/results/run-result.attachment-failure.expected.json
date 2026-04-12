@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-healthy-001",
+  "runId": "pong-autonomous-run-attachment-failure-001",
+  "finalStatus": "failed",
+  "failureKind": "attachment",
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-attachment-failure-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "The runtime debugger session never attached."
+    ],
+    "validatedAt": "2026-04-12T12:21:00Z"
+  },
+  "terminationStatus": "already_closed",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:21:10Z"
+}

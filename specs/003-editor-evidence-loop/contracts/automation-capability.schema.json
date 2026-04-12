@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/003-editor-evidence-loop/contracts/automation-capability.schema.json",
+  "title": "Automation Capability Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "checkedAt",
+    "projectIdentifier",
+    "singleTargetReady",
+    "launchControlAvailable",
+    "runtimeBridgeAvailable",
+    "captureControlAvailable",
+    "persistenceAvailable",
+    "validationAvailable",
+    "shutdownControlAvailable",
+    "blockedReasons",
+    "recommendedControlPath"
+  ],
+  "properties": {
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectIdentifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "singleTargetReady": {
+      "type": "boolean"
+    },
+    "launchControlAvailable": {
+      "type": "boolean"
+    },
+    "runtimeBridgeAvailable": {
+      "type": "boolean"
+    },
+    "captureControlAvailable": {
+      "type": "boolean"
+    },
+    "persistenceAvailable": {
+      "type": "boolean"
+    },
+    "validationAvailable": {
+      "type": "boolean"
+    },
+    "shutdownControlAvailable": {
+      "type": "boolean"
+    },
+    "blockedReasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "recommendedControlPath": {
+      "type": "string",
+      "enum": ["file_broker", "editor_script_forwarder", "local_ipc"]
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -5,7 +5,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
-$testPath = Join-Path (Join-Path $repoRoot 'tools') 'tests/*.Tests.ps1'
+$testsRoot = Join-Path (Join-Path $repoRoot 'tools') 'tests'
+$preferredTests = @(
+    (Join-Path $testsRoot 'ScenegraphAutomationLoop.Tests.ps1')
+)
+$discoveredTests = Get-ChildItem -LiteralPath $testsRoot -Filter '*.Tests.ps1' -File |
+    Where-Object { $_.FullName -notin $preferredTests } |
+    Sort-Object Name |
+    ForEach-Object { $_.FullName }
+$testPath = @($preferredTests + $discoveredTests)
 $pesterModule = Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1
 
 if ($null -eq $pesterModule) {

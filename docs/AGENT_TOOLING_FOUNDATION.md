@@ -54,6 +54,22 @@ pwsh ./tools/automation/new-autonomous-run-record.ps1 -ArtifactId <artifact-id> 
 
 Use this when you want an auditable JSON record of what an automation flow attempted and whether it stayed within its declared boundary.
 
+### Read the current editor-evidence capability artifact
+
+```powershell
+pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>
+```
+
+Use this when the Godot project is already open in the editor and you want a deterministic read of the latest capability artifact that the plugin-owned broker wrote.
+
+### Write an autonomous editor-evidence run request
+
+```powershell
+pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>
+```
+
+Use this when you want to submit a machine-readable request into the plugin-owned file broker without editing the request JSON by hand.
+
 ### Run the automated PowerShell tool tests
 
 ```powershell
@@ -74,6 +90,12 @@ It provides:
 - boundary checks and run logs for any approval-free automation
 
 It does **not** implement runtime harness behavior by itself.
+
+It now does provide the workspace-side helper surface for the autonomous editor evidence loop:
+
+- read capability artifacts from `harness/automation/results/`
+- write run requests into `harness/automation/requests/`
+- validate the resulting run-result and manifest-centered evidence artifacts with the existing schema and manifest tools
 
 If you want collision events, frame traces, scene snapshots, or other runtime data streams, those still need to be implemented in `addons/agent_runtime_harness/` or another runtime-facing part of the repo. The tooling here helps define what those outputs should look like and how to validate them once they exist.
 

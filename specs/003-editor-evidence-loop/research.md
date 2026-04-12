@@ -83,3 +83,6 @@
 - The current plan assumes the scenegraph runtime and bridge remain the evidence-producing core; no new runtime evidence family is needed.
 - No `../godot` source inspection was required for planning. If editor-owned run control proves ambiguous during implementation, inspect `../godot` only to confirm plugin-layer limitations before considering deeper escalation.
 - If workspace-side helper scripts are added, they should remain deterministic and should integrate with existing automation boundary and run-log expectations rather than inventing a parallel safety model.
+- The implemented v1 path uses `scenegraph_automation_broker.gd` plus `scenegraph_run_coordinator.gd` to sequence launch, runtime attachment, capture, persistence, validation, and shutdown through the existing debugger bridge.
+- Workspace-side helpers now exist at `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1` so agents can interact with the broker through deterministic files instead of ad hoc manual edits.
+- This environment validated schemas, fixtures, helper scripts, and task-level PowerShell coverage, but it did not execute a live Godot editor session. End-to-end healthy, blocked, reliability, and timing checks still require running the quickstart against an open example project.

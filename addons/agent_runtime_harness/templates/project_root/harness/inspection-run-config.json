@@ -1,12 +1,31 @@
 {
   "scenarioId": "runtime-smoke-test",
   "runId": "runtime-smoke-test-run-01",
+  "targetScene": "",
   "outputDirectory": "res://evidence/scenegraph/latest",
   "artifactRoot": "",
   "capturePolicy": {
     "startup": true,
     "manual": true,
     "failure": true
+  },
+  "automation": {
+    "requestPath": "res://harness/automation/requests/run-request.json",
+    "requestsDirectory": "res://harness/automation/requests",
+    "resultsDirectory": "res://harness/automation/results",
+    "capabilityResultPath": "res://harness/automation/results/capability.json",
+    "lifecycleStatusPath": "res://harness/automation/results/lifecycle-status.json",
+    "runResultPath": "res://harness/automation/results/run-result.json"
+  },
+  "defaultRequestOverrides": {
+    "capturePolicy": {
+      "startup": true,
+      "manual": true,
+      "failure": true
+    },
+    "stopPolicy": {
+      "stopAfterValidation": true
+    }
   },
   "expectationFiles": []
 }

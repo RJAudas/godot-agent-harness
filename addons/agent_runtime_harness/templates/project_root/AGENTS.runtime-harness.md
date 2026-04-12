@@ -9,3 +9,6 @@
 - Keep gameplay changes separate from harness changes when possible. Modify `addons/agent_runtime_harness/` only when the task actually concerns capture, transport, or evidence persistence.
 - Treat the Scenegraph Harness dock as the operator control surface and the persisted evidence bundle as the agent handoff surface.
 - If runtime verification fails, distinguish between a gameplay failure and a harness wiring failure such as a missing autoload or no persisted bundle.
+- For autonomous editor evidence runs, prefer the file-broker path under `harness/automation/requests/` and `harness/automation/results/` before considering fallback surfaces.
+- Read `harness/automation/results/capability.json` or the latest final run result before opening raw evidence files.
+- Treat blocked capability or run results as explicit unsupported-state signals; do not guess around them with hidden editor interaction.

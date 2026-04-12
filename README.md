@@ -108,6 +108,13 @@ The repository uses a Copilot-first guidance stack for agent work:
 - `.github/prompts/` and `.github/agents/` for reusable Copilot-native workflows
 - `tools/evals/001-agent-tooling-foundation/` for seeded eval prompts and machine-readable result files
 
+For the autonomous editor evidence loop, the current workspace-side entry points are:
+
+- `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`
+- `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`
+
+These helpers target the plugin-owned file broker under `harness/automation/requests/` and `harness/automation/results/`.
+
 ## Development discipline
 
 Feature work in this repository follows a plugin-first constitution:

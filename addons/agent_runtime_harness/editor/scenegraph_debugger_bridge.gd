@@ -8,6 +8,7 @@ signal session_state_changed(state, details)
 signal capture_updated(snapshot, diagnostics)
 signal manifest_persisted(manifest)
 signal transport_error(message)
+signal automation_session_configured(session_context)
 
 var _session_context := {}
 var _latest_snapshot := {}
@@ -51,6 +52,10 @@ func _capture(message: String, data: Array, session_id: int) -> bool:
 			if not data.is_empty():
 				_on_persistence_completed(data[0])
 			return true
+		"session_configured":
+			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
+				_on_session_configured(data[0])
+			return true
 		"runtime_error":
 			if not data.is_empty():
 				_on_runtime_error(String(data[0]))
@@ -79,6 +84,16 @@ func get_latest_diagnostics() -> Array:
 	return _latest_diagnostics.duplicate(true)
 
 
+func has_active_session() -> bool:
+	return _get_active_session() != null
+
+
+func get_active_session_id() -> int:
+	if _get_active_session() == null:
+		return -1
+	return _active_session_id
+
+
 func _on_capture_ready(snapshot: Dictionary, diagnostics: Array) -> void:
 	_latest_snapshot = snapshot.duplicate(true)
 	_latest_diagnostics = diagnostics.duplicate(true)
@@ -89,6 +104,11 @@ func _on_capture_ready(snapshot: Dictionary, diagnostics: Array) -> void:
 func _on_persistence_completed(manifest: Dictionary) -> void:
 	emit_signal("session_state_changed", "persisted", "Scenegraph evidence bundle written.")
 	emit_signal("manifest_persisted", manifest)
+
+
+func _on_session_configured(session_context: Dictionary) -> void:
+	emit_signal("session_state_changed", "configured", "Runtime automation session configured.")
+	emit_signal("automation_session_configured", session_context)
 
 
 func _on_runtime_error(message: String) -> void:

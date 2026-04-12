@@ -17,9 +17,9 @@
 
 **Purpose**: Create the fixture, template, and test locations that every story depends on.
 
-- [ ] T001 Create automation fixture directories under `examples/pong-testbed/harness/automation/requests/` and `examples/pong-testbed/harness/automation/results/`
-- [ ] T002 [P] Create template automation directories under `addons/agent_runtime_harness/templates/project_root/harness/automation/requests/` and `addons/agent_runtime_harness/templates/project_root/harness/automation/results/`
-- [ ] T003 [P] Add the new task-level test suite file `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and register it from `tools/tests/run-tool-tests.ps1`
+- [X] T001 Create automation fixture directories under `examples/pong-testbed/harness/automation/requests/` and `examples/pong-testbed/harness/automation/results/`
+- [X] T002 [P] Create template automation directories under `addons/agent_runtime_harness/templates/project_root/harness/automation/requests/` and `addons/agent_runtime_harness/templates/project_root/harness/automation/results/`
+- [X] T003 [P] Add the new task-level test suite file `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and register it from `tools/tests/run-tool-tests.ps1`
 
 ---
 
@@ -29,11 +29,11 @@
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T004 Create contract schemas in `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`, and `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`
-- [ ] T005 [P] Add shared automation constants, artifact names, and lifecycle states in `addons/agent_runtime_harness/shared/inspection_constants.gd`
-- [ ] T006 [P] Implement shared request and result file handling in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
-- [ ] T007 [P] Extend `examples/pong-testbed/harness/inspection-run-config.json` and `addons/agent_runtime_harness/templates/project_root/harness/inspection-run-config.json` with scenario-declared target-scene fields, automation paths, and default request-scoped override support
-- [ ] T008 Extend `tools/tests/ScenegraphAutomationLoop.Tests.ps1` to validate the new automation schemas with `tools/validate-json.ps1`
+- [X] T004 Create contract schemas in `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`, and `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`
+- [X] T005 [P] Add shared automation constants, artifact names, and lifecycle states in `addons/agent_runtime_harness/shared/inspection_constants.gd`
+- [X] T006 [P] Implement shared request and result file handling in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
+- [X] T007 [P] Extend `examples/pong-testbed/harness/inspection-run-config.json` and `addons/agent_runtime_harness/templates/project_root/harness/inspection-run-config.json` with scenario-declared target-scene fields, automation paths, and default request-scoped override support
+- [X] T008 Extend `tools/tests/ScenegraphAutomationLoop.Tests.ps1` to validate the new automation schemas with `tools/validate-json.ps1`
 
 **Checkpoint**: Shared automation contracts and artifact plumbing are ready; story work can begin.
 
@@ -47,17 +47,16 @@
 
 ### Validation for User Story 1 ⚠️
 
-- [ ] T009 [P] [US1] Add capability fixtures at `examples/pong-testbed/harness/automation/results/capability-ready.expected.json` and `examples/pong-testbed/harness/automation/results/capability-blocked.expected.json`
-- [ ] T010 [P] [US1] Add request fixtures at `examples/pong-testbed/harness/automation/requests/run-request.healthy.json` and `examples/pong-testbed/harness/automation/requests/run-request.blocked.json`
-- [ ] T011 [P] [US1] Add capability, single-project, scene-target, shutdown-readiness, and runtime-attachment lifecycle validation coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` against `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json` and `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`
+- [X] T009 [P] [US1] Add capability fixtures at `examples/pong-testbed/harness/automation/results/capability-ready.expected.json` and `examples/pong-testbed/harness/automation/results/capability-blocked.expected.json`
+- [X] T010 [P] [US1] Add request fixtures at `examples/pong-testbed/harness/automation/requests/run-request.healthy.json` and `examples/pong-testbed/harness/automation/requests/run-request.blocked.json`
+- [X] T011 [P] [US1] Add capability, single-project, scene-target, shutdown-readiness, and runtime-attachment lifecycle validation coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` against `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json` and `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`
 
 ### Implementation for User Story 1
-
-- [ ] T012 [US1] Implement the plugin-owned automation broker in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and wire it from `addons/agent_runtime_harness/plugin.gd`
-- [ ] T013 [P] [US1] Implement request intake, single-run locking, and request-scoped override parsing in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd`
-- [ ] T014 [P] [US1] Implement scenario-declared target-scene resolution and play-start control in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd`
-- [ ] T015 [US1] Emit capability results, lifecycle-status artifacts through runtime attachment, and blocked run results from `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
-- [ ] T016 [US1] Add example-project wiring for automation request and result paths in `examples/pong-testbed/project.godot` and `examples/pong-testbed/harness/inspection-run-config.json`
+- [X] T012 [US1] Implement the plugin-owned automation broker in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and wire it from `addons/agent_runtime_harness/plugin.gd`
+- [X] T013 [P] [US1] Implement request intake, single-run locking, and request-scoped override parsing in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd`
+- [X] T014 [P] [US1] Implement scenario-declared target-scene resolution and play-start control in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd`
+- [X] T015 [US1] Emit capability results, lifecycle-status artifacts through runtime attachment, and blocked run results from `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
+- [X] T016 [US1] Add example-project wiring for automation request and result paths in `examples/pong-testbed/project.godot` and `examples/pong-testbed/harness/inspection-run-config.json`
 
 **Checkpoint**: User Story 1 is complete when a healthy request can start the declared scene and report attached-runtime status, and blocked requests return deterministic machine-readable results without touching the dock.
 
@@ -71,17 +70,17 @@
 
 ### Validation for User Story 2 ⚠️
 
-- [ ] T017 [P] [US2] Add autonomous run result fixtures at `examples/pong-testbed/harness/automation/results/run-result.success.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.attachment-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.capture-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.validation-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.shutdown-failure.expected.json`, and `examples/pong-testbed/harness/automation/results/run-result.gameplay-failure.expected.json`
-- [ ] T018 [P] [US2] Add manifest-backed automated run validation and failure-kind matrix coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` using `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json` and `specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json`
+- [X] T017 [P] [US2] Add autonomous run result fixtures at `examples/pong-testbed/harness/automation/results/run-result.success.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.attachment-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.capture-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.validation-failure.expected.json`, `examples/pong-testbed/harness/automation/results/run-result.shutdown-failure.expected.json`, and `examples/pong-testbed/harness/automation/results/run-result.gameplay-failure.expected.json`
+- [X] T018 [P] [US2] Add manifest-backed automated run validation and failure-kind matrix coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` using `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json` and `specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json`
 
 ### Implementation for User Story 2
 
-- [ ] T019 [P] [US2] Implement end-to-end run lifecycle sequencing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T020 [P] [US2] Extend `addons/agent_runtime_harness/editor/scenegraph_debugger_bridge.gd` and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd` with automation-aware session configuration and completion signaling
-- [ ] T021 [US2] Implement lifecycle-status and final run-result artifact writing in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T022 [US2] Wire validated capture, persistence, and shutdown sequencing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` and `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd`
-- [ ] T023 [US2] Implement run-id-based stale-artifact protection in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`, `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`, and `examples/pong-testbed/harness/automation/results/`
-- [ ] T024 [US2] Extend template and example-project automation output settings in `addons/agent_runtime_harness/templates/project_root/harness/inspection-run-config.json` and `examples/pong-testbed/harness/inspection-run-config.json`
+- [X] T019 [P] [US2] Implement end-to-end run lifecycle sequencing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T020 [P] [US2] Extend `addons/agent_runtime_harness/editor/scenegraph_debugger_bridge.gd` and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd` with automation-aware session configuration and completion signaling
+- [X] T021 [US2] Implement lifecycle-status and final run-result artifact writing in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T022 [US2] Wire validated capture, persistence, and shutdown sequencing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` and `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd`
+- [X] T023 [US2] Implement run-id-based stale-artifact protection in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`, `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`, and `examples/pong-testbed/harness/automation/results/`
+- [X] T024 [US2] Extend template and example-project automation output settings in `addons/agent_runtime_harness/templates/project_root/harness/inspection-run-config.json` and `examples/pong-testbed/harness/inspection-run-config.json`
 
 **Checkpoint**: User Story 2 is complete when the autonomous loop can run end to end and the final result always points to a validated, current evidence bundle.
 
@@ -95,16 +94,16 @@
 
 ### Validation for User Story 3 ⚠️
 
-- [ ] T025 [P] [US3] Add control-path and blocked-behavior fixtures at `examples/pong-testbed/harness/automation/results/capability-options.expected.json` and `examples/pong-testbed/harness/automation/results/run-result.blocked.expected.json`
-- [ ] T026 [P] [US3] Add helper and control-path validation coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
+- [X] T025 [P] [US3] Add control-path and blocked-behavior fixtures at `examples/pong-testbed/harness/automation/results/capability-options.expected.json` and `examples/pong-testbed/harness/automation/results/run-result.blocked.expected.json`
+- [X] T026 [P] [US3] Add helper and control-path validation coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
 
 ### Implementation for User Story 3
 
-- [ ] T027 [P] [US3] Finalize contract docs and align schemas in `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md`, `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`, and `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`
-- [ ] T028 [P] [US3] Update `addons/agent_runtime_harness/templates/project_root/AGENTS.runtime-harness.md` with the preferred file-broker path, blocked conditions, and manifest-first evidence workflow for autonomous runs
-- [ ] T029 [P] [US3] Implement deterministic workspace helpers in `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1`
-- [ ] T030 [US3] Add helper-script coverage in `tools/tests/AutomationTools.Tests.ps1` and document the supported automation surfaces in `docs/AGENT_TOOLING_FOUNDATION.md`
-- [ ] T031 [US3] Update `specs/003-editor-evidence-loop/quickstart.md` and `specs/003-editor-evidence-loop/research.md` with the implemented default path and any validated fallback findings
+- [X] T027 [P] [US3] Finalize contract docs and align schemas in `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md`, `specs/003-editor-evidence-loop/contracts/automation-capability.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json`, `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json`, and `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`
+- [X] T028 [P] [US3] Update `addons/agent_runtime_harness/templates/project_root/AGENTS.runtime-harness.md` with the preferred file-broker path, blocked conditions, and manifest-first evidence workflow for autonomous runs
+- [X] T029 [P] [US3] Implement deterministic workspace helpers in `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1`
+- [X] T030 [US3] Add helper-script coverage in `tools/tests/AutomationTools.Tests.ps1` and document the supported automation surfaces in `docs/AGENT_TOOLING_FOUNDATION.md`
+- [X] T031 [US3] Update `specs/003-editor-evidence-loop/quickstart.md` and `specs/003-editor-evidence-loop/research.md` with the implemented default path and any validated fallback findings
 
 **Checkpoint**: User Story 3 is complete when agents and maintainers can see exactly what path is supported, what is blocked, and what alternatives remain deferred.
 
@@ -114,8 +113,8 @@
 
 **Purpose**: Final synchronization, end-to-end validation, and documentation cleanup across stories.
 
-- [ ] T032 [P] Update `README.md` and `docs/AGENT_RUNTIME_HARNESS.md` with the implemented autonomous editor evidence loop entry points, constraints, and validation flow
-- [ ] T033 [P] Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched automation helpers
+- [X] T032 [P] Update `README.md` and `docs/AGENT_RUNTIME_HARNESS.md` with the implemented autonomous editor evidence loop entry points, constraints, and validation flow
+- [X] T033 [P] Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched automation helpers
 - [ ] T034 Run the full validation flow in `specs/003-editor-evidence-loop/quickstart.md` against `examples/pong-testbed/` and record implementation notes in `specs/003-editor-evidence-loop/research.md`
 - [ ] T035 [P] Run repeated seeded autonomous runs for `examples/pong-testbed/` and record machine-readable reliability results in `examples/pong-testbed/harness/automation/results/reliability-summary.json`
 - [ ] T036 [P] Measure end-to-end request-to-stop timing for the seeded healthy flow and record the result in `examples/pong-testbed/harness/automation/results/performance-summary.json`

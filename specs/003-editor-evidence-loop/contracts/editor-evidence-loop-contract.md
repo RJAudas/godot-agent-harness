@@ -6,6 +6,18 @@ Define the planned machine-readable contract between a workspace-side agent and 
 
 ## Contract Surfaces
 
+The implemented v1 control surface is the plugin-owned file broker:
+
+- Requests: `harness/automation/requests/run-request.json`
+- Capability: `harness/automation/results/capability.json`
+- Lifecycle status: `harness/automation/results/lifecycle-status.json`
+- Final run result: `harness/automation/results/run-result.json`
+
+Workspace-side helpers mirror those paths:
+
+- `pwsh ./tools/automation/get-editor-evidence-capability.ps1`
+- `pwsh ./tools/automation/request-editor-evidence-run.ps1`
+
 ### Capability Result
 
 - **Role**: Reports whether the current open-editor environment is safe to target.
@@ -94,3 +106,4 @@ Define the planned machine-readable contract between a workspace-side agent and 
 - The broker must process at most one autonomous run at a time for the first release and reject overlap with a machine-readable blocked result.
 - Any workspace-side helper that writes request artifacts should integrate with the repository’s existing automation boundary and run-log guidance when those helpers are added.
 - Launch, validation, and shutdown failures must be distinguishable in machine-readable form.
+- Agents should read the capability or final run-result artifact before opening raw scenegraph evidence files.

@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-healthy-001",
+  "runId": "pong-autonomous-run-capture-failure-001",
+  "finalStatus": "failed",
+  "failureKind": "capture",
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-capture-failure-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "Scenegraph capture did not produce a bundle."
+    ],
+    "validatedAt": "2026-04-12T12:22:00Z"
+  },
+  "terminationStatus": "already_closed",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:22:10Z"
+}

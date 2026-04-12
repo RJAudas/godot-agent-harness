@@ -8,6 +8,9 @@ const RUNTIME_TO_EDITOR_CHANNEL := "agent_runtime_harness/scenegraph/capture"
 const ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT := "scenegraph-snapshot"
 const ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS := "scenegraph-diagnostics"
 const ARTIFACT_KIND_SCENEGRAPH_SUMMARY := "scenegraph-summary"
+const ARTIFACT_KIND_AUTOMATION_CAPABILITY := "automation-capability"
+const ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS := "automation-lifecycle-status"
+const ARTIFACT_KIND_AUTOMATION_RUN_RESULT := "automation-run-result"
 
 const TRIGGER_STARTUP := "startup"
 const TRIGGER_MANUAL := "manual"
@@ -24,6 +27,39 @@ const SESSION_STATUS_PERSISTED := "persisted"
 const SESSION_STATUS_CLOSED := "closed"
 const SESSION_STATUS_ERROR := "error"
 
+const AUTOMATION_CONTROL_PATH_FILE_BROKER := "file_broker"
+const AUTOMATION_CONTROL_PATH_EDITOR_SCRIPT_FORWARDER := "editor_script_forwarder"
+const AUTOMATION_CONTROL_PATH_LOCAL_IPC := "local_ipc"
+
+const AUTOMATION_STATUS_RECEIVED := "received"
+const AUTOMATION_STATUS_BLOCKED := "blocked"
+const AUTOMATION_STATUS_LAUNCHING := "launching"
+const AUTOMATION_STATUS_AWAITING_RUNTIME := "awaiting_runtime"
+const AUTOMATION_STATUS_CAPTURING := "capturing"
+const AUTOMATION_STATUS_PERSISTING := "persisting"
+const AUTOMATION_STATUS_VALIDATING := "validating"
+const AUTOMATION_STATUS_STOPPING := "stopping"
+const AUTOMATION_STATUS_COMPLETED := "completed"
+const AUTOMATION_STATUS_FAILED := "failed"
+
+const AUTOMATION_FAILURE_KIND_LAUNCH := "launch"
+const AUTOMATION_FAILURE_KIND_ATTACHMENT := "attachment"
+const AUTOMATION_FAILURE_KIND_CAPTURE := "capture"
+const AUTOMATION_FAILURE_KIND_PERSISTENCE := "persistence"
+const AUTOMATION_FAILURE_KIND_VALIDATION := "validation"
+const AUTOMATION_FAILURE_KIND_SHUTDOWN := "shutdown"
+const AUTOMATION_FAILURE_KIND_GAMEPLAY := "gameplay"
+
+const AUTOMATION_TERMINATION_NOT_STARTED := "not_started"
+const AUTOMATION_TERMINATION_RUNNING := "running"
+const AUTOMATION_TERMINATION_STOPPING := "stopping"
+const AUTOMATION_TERMINATION_STOPPED_CLEANLY := "stopped_cleanly"
+const AUTOMATION_TERMINATION_ALREADY_CLOSED := "already_closed"
+const AUTOMATION_TERMINATION_CRASHED := "crashed"
+const AUTOMATION_TERMINATION_SHUTDOWN_FAILED := "shutdown_failed"
+const AUTOMATION_TERMINATION_BLOCKED := "blocked"
+const AUTOMATION_TERMINATION_UNKNOWN := "unknown"
+
 const DIAGNOSTIC_KIND_MISSING_NODE := "missing_node"
 const DIAGNOSTIC_KIND_HIERARCHY_MISMATCH := "hierarchy_mismatch"
 const DIAGNOSTIC_KIND_CAPTURE_ERROR := "capture_error"
@@ -31,6 +67,11 @@ const DIAGNOSTIC_KIND_CAPTURE_ERROR := "capture_error"
 const DEFAULT_SCENARIO_ID := "runtime-smoke-test"
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"
 const DEFAULT_MANIFEST_ARTIFACT_ROOT := ""
+const DEFAULT_AUTOMATION_REQUEST_PATH := "res://harness/automation/requests/run-request.json"
+const DEFAULT_AUTOMATION_RESULTS_DIRECTORY := "res://harness/automation/results"
+const DEFAULT_AUTOMATION_CAPABILITY_RESULT_PATH := "res://harness/automation/results/capability.json"
+const DEFAULT_AUTOMATION_LIFECYCLE_STATUS_PATH := "res://harness/automation/results/lifecycle-status.json"
+const DEFAULT_AUTOMATION_RUN_RESULT_PATH := "res://harness/automation/results/run-result.json"
 
 
 static func supported_artifact_kinds() -> PackedStringArray:
@@ -38,6 +79,24 @@ static func supported_artifact_kinds() -> PackedStringArray:
 		ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT,
 		ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS,
 		ARTIFACT_KIND_SCENEGRAPH_SUMMARY,
+		ARTIFACT_KIND_AUTOMATION_CAPABILITY,
+		ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS,
+		ARTIFACT_KIND_AUTOMATION_RUN_RESULT,
+	])
+
+
+static func supported_automation_states() -> PackedStringArray:
+	return PackedStringArray([
+		AUTOMATION_STATUS_RECEIVED,
+		AUTOMATION_STATUS_BLOCKED,
+		AUTOMATION_STATUS_LAUNCHING,
+		AUTOMATION_STATUS_AWAITING_RUNTIME,
+		AUTOMATION_STATUS_CAPTURING,
+		AUTOMATION_STATUS_PERSISTING,
+		AUTOMATION_STATUS_VALIDATING,
+		AUTOMATION_STATUS_STOPPING,
+		AUTOMATION_STATUS_COMPLETED,
+		AUTOMATION_STATUS_FAILED,
 	])
 
 

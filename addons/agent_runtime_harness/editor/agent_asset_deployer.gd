@@ -68,6 +68,8 @@ func deploy_into_project() -> Dictionary:
 		project_content = _set_ini_property(project_content, "autoload", "ScenegraphHarness", '"*res://addons/agent_runtime_harness/runtime/scenegraph_autoload.gd"')
 		project_content = _add_packed_string_array_value(project_content, "editor_plugins", "enabled", "res://addons/agent_runtime_harness/plugin.cfg")
 		project_content = _set_ini_property(project_content, "harness", "inspection_run_config", '"res://harness/inspection-run-config.json"')
+		project_content = _set_ini_property(project_content, "harness", "automation_request_path", '"res://harness/automation/requests/run-request.json"')
+		project_content = _set_ini_property(project_content, "harness", "automation_results_directory", '"res://harness/automation/results"')
 		var project_write_result := _write_text(PROJECT_FILE, project_content)
 		operations.append(_build_write_operation(PROJECT_FILE, project_write_result, "updated"))
 		if project_write_result != OK:

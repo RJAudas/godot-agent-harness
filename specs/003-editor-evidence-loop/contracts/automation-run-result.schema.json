@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json",
+  "title": "Automation Run Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "runId",
+    "finalStatus",
+    "failureKind",
+    "manifestPath",
+    "outputDirectory",
+    "validationResult",
+    "terminationStatus",
+    "completedAt"
+  ],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "finalStatus": {
+      "type": "string",
+      "enum": ["completed", "blocked", "failed"]
+    },
+    "failureKind": {
+      "type": ["string", "null"],
+      "enum": ["launch", "attachment", "capture", "persistence", "validation", "shutdown", "gameplay", null]
+    },
+    "manifestPath": {
+      "type": ["string", "null"]
+    },
+    "outputDirectory": {
+      "type": "string"
+    },
+    "validationResult": {
+      "$ref": "#/$defs/validationResult"
+    },
+    "terminationStatus": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "running",
+        "stopping",
+        "stopped_cleanly",
+        "already_closed",
+        "crashed",
+        "shutdown_failed",
+        "blocked",
+        "unknown"
+      ]
+    },
+    "blockedReasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "controlPath": {
+      "type": "string",
+      "enum": ["file_broker", "editor_script_forwarder", "local_ipc"]
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "validationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestExists",
+        "artifactRefsChecked",
+        "missingArtifacts",
+        "bundleValid",
+        "notes",
+        "validatedAt"
+      ],
+      "properties": {
+        "manifestExists": {
+          "type": "boolean"
+        },
+        "artifactRefsChecked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missingArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bundleValid": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "validatedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json",
+  "title": "Automation Lifecycle Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "runId",
+    "status",
+    "details",
+    "timestamp"
+  ],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "received",
+        "blocked",
+        "launching",
+        "awaiting_runtime",
+        "capturing",
+        "persisting",
+        "validating",
+        "stopping",
+        "completed",
+        "failed"
+      ]
+    },
+    "details": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "controlPath": {
+      "type": "string",
+      "enum": ["file_broker", "editor_script_forwarder", "local_ipc"]
+    },
+    "failureKind": {
+      "type": "string",
+      "enum": ["launch", "attachment", "capture", "persistence", "validation", "shutdown", "gameplay"]
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

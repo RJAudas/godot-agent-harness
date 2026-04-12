@@ -232,6 +232,12 @@ Likely implementation:
 - `EditorPlugin`
 - `EditorDebuggerPlugin`
 
+The current autonomous editor evidence loop extends this layer with a plugin-owned file broker:
+
+- request artifacts are read from `harness/automation/requests/run-request.json`
+- capability, lifecycle, and final result artifacts are written under `harness/automation/results/`
+- the broker starts the requested target scene, waits for runtime attachment, persists the scenegraph bundle, validates the manifest, and stops the play session when configured to do so
+
 ### B. Runtime instrumentation addon
 
 Responsibilities:

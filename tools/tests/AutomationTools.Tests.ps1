@@ -228,3 +228,64 @@ Describe 'tools/automation/new-autonomous-run-record.ps1' {
         } | Should -Throw '*ValidationDetails must contain 2 entries*'
     }
 }
+
+Describe 'tools/automation/get-editor-evidence-capability.ps1' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    It 'reads and validates a capability artifact for a sandbox project' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            $resultsPath = Join-Path $harnessPath 'automation\results'
+            New-Item -ItemType Directory -Path $resultsPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/capability-ready.expected.json') -Destination (Join-Path $resultsPath 'capability.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/get-editor-evidence-capability.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                PassThru = $true
+            }
+
+            $result.exists | Should -BeTrue
+            $result.schemaValid | Should -BeTrue
+            $result.capability.recommendedControlPath | Should -Be 'file_broker'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'tools/automation/request-editor-evidence-run.ps1' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    It 'writes a schema-valid request artifact for a sandbox project' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
+                RequestedBy = 'automation-tools-test'
+                PassThru = $true
+            }
+
+            $result.schemaValid | Should -BeTrue
+            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
+            $request.requestedBy | Should -Be 'automation-tools-test'
+            $request.stopPolicy.stopAfterValidation | Should -BeTrue
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

@@ -55,4 +55,31 @@ config/name="Sandbox Game"
 
         (Get-Content -LiteralPath $configPath -Raw) | Should -Be '{"scenarioId":"custom"}'
     }
+
+    It 'reports skipped operations when run with WhatIf' {
+        $gameRoot = New-RepoSandboxDirectory
+        $projectPath = Join-Path $gameRoot 'project.godot'
+        Set-Content -LiteralPath $projectPath -Value 'config_version=5' -NoNewline
+
+        $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/deploy-game-harness.ps1' -Parameters @{
+            GameRoot = $gameRoot
+            PassThru = $true
+            WhatIf = $true
+        }
+
+        $actions = @($result.operations | ForEach-Object { $_.action })
+
+        $actions | Should -Contain 'skipped-copy-addon'
+        $actions | Should -Contain 'skipped-create-config'
+        $actions | Should -Contain 'skipped-update-project-settings'
+        $actions | Should -Contain 'copilot-instructions-skipped'
+        $actions | Should -Contain 'agents-skipped'
+        $actions | Should -Contain 'skipped-write-prompt'
+        $actions | Should -Contain 'skipped-write-agent'
+
+        (Join-Path $gameRoot 'addons/agent_runtime_harness/plugin.cfg') | Should -Not -Exist
+        (Join-Path $gameRoot 'harness/inspection-run-config.json') | Should -Not -Exist
+        (Join-Path $gameRoot '.github/prompts/godot-evidence-triage.prompt.md') | Should -Not -Exist
+        (Join-Path $gameRoot '.github/agents/godot-evidence-triage.agent.md') | Should -Not -Exist
+    }
 }

@@ -62,7 +62,7 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 				"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
 			],
 		},
-		"createdAt": Time.get_datetime_string_from_system(true),
+		"createdAt": InspectionConstants.utc_timestamp_now(),
 	}
 
 	var manifest_error := _write_json(manifest_path, manifest)

@@ -37,7 +37,7 @@ func configure_session(session_context: Dictionary) -> void:
 	_session_context = {
 		"session_id": session_context.get("session_id", _build_identifier("session")),
 		"run_id": session_context.get("run_id", _build_identifier("run")),
-		"scenario_id": session_context.get("scenario_id", "pong-scenegraph-happy-path"),
+		"scenario_id": session_context.get("scenario_id", InspectionConstants.DEFAULT_SCENARIO_ID),
 		"requested_by": session_context.get("requested_by", "editor_plugin"),
 		"output_directory": session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY),
 		"artifact_root": session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT),
@@ -122,7 +122,8 @@ func _load_session_config(config_path: String) -> void:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
 
-	_session_context["scenario_id"] = parsed.get("scenarioId", _session_context.get("scenario_id", "pong-scenegraph-happy-path"))
+	_session_context["run_id"] = parsed.get("runId", _session_context.get("run_id", _build_identifier("run")))
+	_session_context["scenario_id"] = parsed.get("scenarioId", _session_context.get("scenario_id", InspectionConstants.DEFAULT_SCENARIO_ID))
 	_session_context["artifact_root"] = parsed.get("artifactRoot", _session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
 	_session_context["output_directory"] = parsed.get("outputDirectory", _session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
 	_session_context["capture_policy"] = parsed.get("capturePolicy", _session_context.get("capture_policy", {}))

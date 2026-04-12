@@ -8,11 +8,11 @@
       "selectors": [
         {
           "selector_type": "name",
-	      "value": "Ball"
+          "value": "Ball"
         },
         {
           "selector_type": "type",
-	      "value": "CharacterBody2D"
+          "value": "CharacterBody2D"
         }
       ],
       "required_parent": "/root/Main",

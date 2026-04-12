@@ -189,10 +189,10 @@ func _write_text(path: String, content: String) -> int:
 	return OK
 
 
-func _ensure_directory(path: String, operations: Array = []) -> void:
+func _ensure_directory(path: String, operations = null) -> void:
 	var absolute_path := ProjectSettings.globalize_path(path)
 	DirAccess.make_dir_recursive_absolute(absolute_path)
-	if not operations.is_empty():
+	if operations is Array:
 		operations.append({
 			"path": path,
 			"status": "ensured-directory",

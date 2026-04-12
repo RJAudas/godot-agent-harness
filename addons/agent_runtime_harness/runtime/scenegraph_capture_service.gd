@@ -18,7 +18,7 @@ func _build_snapshot_id(session_context: Dictionary, trigger_type: String) -> St
 
 
 func capture_snapshot(root_node: Node, session_context: Dictionary, trigger_type: String, reason: String) -> Dictionary:
-	var timestamp := Time.get_datetime_string_from_system(true)
+	var timestamp := InspectionConstants.utc_timestamp_now()
 	var snapshot_id := _build_snapshot_id(session_context, trigger_type)
 
 	var root_scene := {

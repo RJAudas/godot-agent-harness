@@ -28,6 +28,7 @@ const DIAGNOSTIC_KIND_MISSING_NODE := "missing_node"
 const DIAGNOSTIC_KIND_HIERARCHY_MISMATCH := "hierarchy_mismatch"
 const DIAGNOSTIC_KIND_CAPTURE_ERROR := "capture_error"
 
+const DEFAULT_SCENARIO_ID := "runtime-smoke-test"
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"
 const DEFAULT_MANIFEST_ARTIFACT_ROOT := ""
 
@@ -38,3 +39,15 @@ static func supported_artifact_kinds() -> PackedStringArray:
 		ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS,
 		ARTIFACT_KIND_SCENEGRAPH_SUMMARY,
 	])
+
+
+static func utc_timestamp_now() -> String:
+	var datetime := Time.get_datetime_dict_from_system(true)
+	return "%04d-%02d-%02dT%02d:%02d:%02dZ" % [
+		int(datetime.get("year", 1970)),
+		int(datetime.get("month", 1)),
+		int(datetime.get("day", 1)),
+		int(datetime.get("hour", 0)),
+		int(datetime.get("minute", 0)),
+		int(datetime.get("second", 0)),
+	]

@@ -126,6 +126,21 @@ function Set-FileContent {
     Write-Utf8NoBomFile -Path $Path -Content ($Content.TrimEnd() + [Environment]::NewLine)
 }
 
+function Add-Operation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Operations,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Action
+    )
+
+    $Operations.Add([ordered]@{ path = $Path; action = $Action })
+}
+
 function Set-IniProperty {
     param(
         [Parameter(Mandatory = $true)]
@@ -298,8 +313,12 @@ $addonDestinationPath = Join-Path $addonDestinationRoot 'agent_runtime_harness'
 Ensure-Directory -Path $addonDestinationRoot
 if ($PSCmdlet.ShouldProcess($addonDestinationPath, 'Copy harness addon')) {
     Copy-Item -Path $addonSourcePath -Destination $addonDestinationRoot -Recurse -Force
+    $copyAddonAction = 'copied-addon'
 }
-$operations.Add([ordered]@{ path = $addonDestinationPath; action = 'copied-addon' })
+else {
+    $copyAddonAction = 'skipped-copy-addon'
+}
+Add-Operation -Operations $operations -Path $addonDestinationPath -Action $copyAddonAction
 
 Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
 Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
@@ -308,11 +327,15 @@ $configPath = Join-Path $resolvedGameRoot 'harness/inspection-run-config.json'
 if (-not (Test-Path -LiteralPath $configPath)) {
     if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {
         Set-FileContent -Path $configPath -Content (Get-InspectionRunConfigContent)
+        $configAction = 'created-config'
     }
-    $operations.Add([ordered]@{ path = $configPath; action = 'created-config' })
+    else {
+        $configAction = 'skipped-create-config'
+    }
+    Add-Operation -Operations $operations -Path $configPath -Action $configAction
 }
 else {
-    $operations.Add([ordered]@{ path = $configPath; action = 'preserved-config' })
+    Add-Operation -Operations $operations -Path $configPath -Action 'preserved-config'
 }
 
 if (-not $SkipProjectSettings) {
@@ -322,8 +345,12 @@ if (-not $SkipProjectSettings) {
     $projectContent = Set-IniProperty -Content $projectContent -SectionName 'harness' -Key 'inspection_run_config' -Value '"res://harness/inspection-run-config.json"'
     if ($PSCmdlet.ShouldProcess($projectFilePath, 'Update project.godot harness wiring')) {
         Set-FileContent -Path $projectFilePath -Content $projectContent
+        $projectSettingsAction = 'updated-project-settings'
     }
-    $operations.Add([ordered]@{ path = $projectFilePath; action = 'updated-project-settings' })
+    else {
+        $projectSettingsAction = 'skipped-update-project-settings'
+    }
+    Add-Operation -Operations $operations -Path $projectFilePath -Action $projectSettingsAction
 }
 
 if (-not $SkipAgentAssets) {
@@ -334,7 +361,7 @@ if (-not $SkipAgentAssets) {
     else {
         $copilotAction = 'skipped'
     }
-    $operations.Add([ordered]@{ path = $copilotInstructionsPath; action = "copilot-instructions-$copilotAction" })
+    Add-Operation -Operations $operations -Path $copilotInstructionsPath -Action "copilot-instructions-$copilotAction"
 
     $agentsPath = Join-Path $resolvedGameRoot 'AGENTS.md'
     if (Test-Path -LiteralPath $agentsPath) {
@@ -354,19 +381,27 @@ if (-not $SkipAgentAssets) {
             $agentsAction = 'skipped'
         }
     }
-    $operations.Add([ordered]@{ path = $agentsPath; action = "agents-$agentsAction" })
+    Add-Operation -Operations $operations -Path $agentsPath -Action "agents-$agentsAction"
 
     $promptPath = Join-Path $resolvedGameRoot '.github/prompts/godot-evidence-triage.prompt.md'
     if ($PSCmdlet.ShouldProcess($promptPath, 'Write Godot evidence triage prompt')) {
         Set-FileContent -Path $promptPath -Content (Get-TriagePromptContent)
+        $promptAction = 'wrote-prompt'
     }
-    $operations.Add([ordered]@{ path = $promptPath; action = 'wrote-prompt' })
+    else {
+        $promptAction = 'skipped-write-prompt'
+    }
+    Add-Operation -Operations $operations -Path $promptPath -Action $promptAction
 
     $agentPath = Join-Path $resolvedGameRoot '.github/agents/godot-evidence-triage.agent.md'
     if ($PSCmdlet.ShouldProcess($agentPath, 'Write Godot evidence triage agent')) {
         Set-FileContent -Path $agentPath -Content (Get-TriageAgentContent)
+        $agentAction = 'wrote-agent'
     }
-    $operations.Add([ordered]@{ path = $agentPath; action = 'wrote-agent' })
+    else {
+        $agentAction = 'skipped-write-agent'
+    }
+    Add-Operation -Operations $operations -Path $agentPath -Action $agentAction
 }
 
 $result = [ordered]@{

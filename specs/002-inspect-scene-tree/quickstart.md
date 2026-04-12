@@ -9,13 +9,15 @@ Validate the editor-first scenegraph inspection loop in a deterministic example 
 1. Open `examples/pong-testbed/` in the Godot editor once the feature implementation is present.
 2. Confirm the project references `harness/inspection-run-config.json` and the example scenes under `scenes/`.
 3. Enable the harness addon from the project plugin settings and confirm the editor exposes the Scenegraph Harness dock.
+4. If you are installing the harness into a different game project, prefer the plugin-driven deployment flow: copy `addons/agent_runtime_harness/`, enable the addon, and click `Deploy Agent Assets` from the dock. Use `pwsh ./tools/deploy-game-harness.ps1 -GameRoot <game-root>` only when you want to deploy from this source checkout.
 
 ## 2. Validate Startup And Manual Capture
 
 1. Start a play session from `scenes/main.tscn` in the Godot editor.
 2. Confirm the harness captures an automatic startup snapshot that matches the structure in `harness/expected-live-scenegraph.json`.
 3. Trigger a manual capture from the dock while the session is still running.
-4. Confirm the latest scenegraph summary includes the active root, bounded node details, and the `manual` trigger reason.
+4. Trigger `Persist Bundle` from the dock after the capture.
+5. Confirm the latest scenegraph summary includes the active root, bounded node details, and the `manual` trigger reason.
 
 ## 3. Validate Diagnostic Capture
 
@@ -29,7 +31,8 @@ Validate the editor-first scenegraph inspection loop in a deterministic example 
 1. End the play session and inspect the generated evidence bundle for the run.
 2. Confirm the bundle contains a manifest plus referenced scenegraph snapshot and diagnostic artifacts.
 3. Validate the manifest with `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath examples/pong-testbed/harness/expected-evidence-manifest.json` or the generated run manifest.
-4. Validate the snapshot and diagnostics with `pwsh ./tools/validate-json.ps1 -InputPath examples/pong-testbed/harness/expected-live-scenegraph.json -SchemaPath specs/002-inspect-scene-tree/contracts/scenegraph-snapshot.schema.json` and `pwsh ./tools/validate-json.ps1 -InputPath examples/pong-testbed/evidence/scenegraph-diagnostics.json -SchemaPath specs/002-inspect-scene-tree/contracts/scenegraph-diagnostics.schema.json`.
+4. Confirm the generated manifest reports `validation.bundleValid = true` when the referenced snapshot, diagnostics, and summary files were written successfully.
+5. Validate the snapshot and diagnostics with `pwsh ./tools/validate-json.ps1 -InputPath examples/pong-testbed/harness/expected-live-scenegraph.json -SchemaPath specs/002-inspect-scene-tree/contracts/scenegraph-snapshot.schema.json` and `pwsh ./tools/validate-json.ps1 -InputPath examples/pong-testbed/evidence/scenegraph-diagnostics.json -SchemaPath specs/002-inspect-scene-tree/contracts/scenegraph-diagnostics.schema.json`.
 
 ## 5. Validate Agent Consumption
 

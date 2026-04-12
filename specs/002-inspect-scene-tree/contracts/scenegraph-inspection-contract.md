@@ -63,12 +63,23 @@ Recommended artifact kinds:
 - `scenegraph-diagnostics`
 - `scenegraph-summary`
 
+The first implementation uses these stable filenames inside the run output directory:
+
+- `scenegraph-snapshot.json`
+- `scenegraph-diagnostics.json`
+- `scenegraph-summary.json`
+- `evidence-manifest.json`
+
+The diagnostics payload stores one top-level bundle keyed by `snapshot_id`, `session_id`, `run_id`, and `scenario_id`, with each diagnostic entry carrying one of the supported statuses: `missing_node`, `hierarchy_mismatch`, or `capture_error`.
+
 The manifest summary should let an agent determine:
 
 - whether capture succeeded,
 - whether required nodes were missing or misplaced,
 - which snapshot is the most relevant,
 - and whether the run ended with a transport or persistence error.
+
+In the implemented flow, a healthy capture remains `complete`, while captures with valid node-finding problems are marked `partial` and paired with diagnostics so agents can distinguish scenegraph defects from transport failures.
 
 ## Reuse Constraint
 

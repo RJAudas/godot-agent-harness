@@ -1,0 +1,13 @@
+{
+  "status": "fail",
+  "headline": "Scenegraph diagnostics found missing or misplaced nodes.",
+  "outcome": "The capture succeeded, but one or more required nodes were missing or attached under the wrong branch.",
+  "keyFindings": [
+    "Root scene: /root/Main",
+    "Snapshot nodes: 5",
+    "Trigger: failure",
+    "missing_node: The Ball gameplay node must exist under the Main root."
+  ],
+  "latestSnapshotId": "scenegraph-session-002-failure-01",
+  "diagnosticCount": 1
+}

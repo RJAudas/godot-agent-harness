@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/002-inspect-scene-tree/contracts/scenegraph-diagnostics.schema.json",
+  "title": "Scenegraph Diagnostics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "session_id",
+    "run_id",
+    "scenario_id",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "diagnostic_id",
+          "snapshot_id",
+          "status",
+          "message"
+        ],
+        "properties": {
+          "diagnostic_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "snapshot_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expectation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["missing_node", "hierarchy_mismatch", "capture_error"]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_identity": {
+            "type": "string"
+          },
+          "observed_path": {
+            "type": "string"
+          },
+          "expected_parent": {
+            "type": "string"
+          },
+          "mismatch_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

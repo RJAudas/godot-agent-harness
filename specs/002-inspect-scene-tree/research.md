@@ -35,3 +35,11 @@
 - **Decision**: Treat standalone packaged builds as explicitly out of scope for the first release while naming capture triggers, session metadata, and artifact payloads so they do not depend on editor-only semantics.
 - **Rationale**: This preserves a low-complexity first implementation and keeps open a low-cost compatibility path for a later runtime-only harness.
 - **Alternatives considered**: Designing separate editor and packaged contracts now was rejected because it adds premature abstraction. Treating the editor session as the only possible producer was rejected because it would make later reuse unnecessarily expensive.
+
+## Implementation Notes
+
+- Added repo-local scenegraph snapshot and diagnostics schemas under `specs/002-inspect-scene-tree/contracts/` and validated them with `tools/validate-json.ps1`.
+- Added deterministic example fixtures under `examples/pong-testbed/` for healthy, missing-node, and hierarchy-mismatch cases, plus a persisted manifest fixture that validates through `tools/evidence/validate-evidence-manifest.ps1`.
+- Extended `tools/evidence/new-evidence-manifest.ps1` and `tools/evidence/validate-evidence-manifest.ps1` so the existing manifest-centered flow explicitly recognizes `scenegraph-snapshot`, `scenegraph-diagnostics`, and `scenegraph-summary` artifact kinds.
+- Reviewed the seeded `tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/scene-snapshot.json` contract and kept it unchanged because the new scenegraph artifacts extend the manifest bundle without changing the existing sample snapshot shape.
+- Local validation covered all PowerShell tests and machine-readable fixtures. End-to-end editor execution from the Godot runtime remains pending because no Godot executable was available in the current environment.

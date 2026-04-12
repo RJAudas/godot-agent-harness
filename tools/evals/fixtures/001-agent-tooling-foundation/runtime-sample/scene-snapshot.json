@@ -1,0 +1,28 @@
+{
+  "scene": "Main",
+  "frame": 121,
+  "nodes": [
+    {
+      "path": "/root/Main",
+      "type": "Node2D"
+    },
+    {
+      "path": "/root/Main/Ball",
+      "type": "CharacterBody2D",
+      "properties": {
+        "position": [
+          12.0,
+          94.0
+        ],
+        "velocity": [
+          -220.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "path": "/root/Main/LeftWall",
+      "type": "StaticBody2D"
+    }
+  ]
+}

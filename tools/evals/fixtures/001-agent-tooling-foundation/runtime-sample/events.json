@@ -1,0 +1,27 @@
+[
+  {
+    "frame": 118,
+    "timestampMs": 1966,
+    "category": "collision",
+    "sourceNodePath": "/root/Main/Ball",
+    "name": "wall_contact",
+    "payload": {
+      "collider": "/root/Main/LeftWall",
+      "normal": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "frame": 121,
+    "timestampMs": 2016,
+    "category": "invariant",
+    "sourceNodePath": "/root/Main/Harness",
+    "name": "ball-clears-wall-within-two-frames",
+    "payload": {
+      "status": "fail",
+      "overlapFrames": 4
+    }
+  }
+]

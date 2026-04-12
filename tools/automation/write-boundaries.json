@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "boundaries": [
+    {
+      "id": "godot-evidence-triage-first-release",
+      "artifactId": "godot-evidence-triage.agent",
+      "description": "First-release boundary for evidence triage automation outputs.",
+      "allowedPaths": [
+        "tools/evals/001-agent-tooling-foundation/",
+        "tools/automation/run-records/"
+      ],
+      "allowedEditTypes": [
+        "create",
+        "update"
+      ],
+      "stopConditions": [
+        "Requested write falls outside eval result or run-record paths.",
+        "Evidence manifest is missing or schema-invalid.",
+        "Requested task requires changing runtime artifacts instead of evaluating them."
+      ],
+      "escalationConditions": [
+        "User asks for addon or engine changes.",
+        "Request requires delete operations or destructive rewrites.",
+        "Task requires expanding the boundary contract."
+      ],
+      "logOutputPath": "tools/automation/run-records/"
+    }
+  ]
+}

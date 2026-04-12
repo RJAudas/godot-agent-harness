@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0.0",
+  "evaluationId": "us2-evidence-bundle-2026-04-11",
+  "storyId": "US2",
+  "surface": "combined",
+  "executionMode": "repo-local",
+  "status": "pass",
+  "artifacts": {
+    "fixturePaths": [
+      "tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.valid.json",
+      "tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.invalid.json",
+      "tools/evals/001-agent-tooling-foundation/us2-evidence-consumption.md"
+    ],
+    "guidancePaths": [
+      "docs/AGENT_RUNTIME_HARNESS.md",
+      "tools/evidence/new-evidence-manifest.ps1",
+      "tools/evidence/validate-evidence-manifest.ps1",
+      "specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json"
+    ],
+    "outputPath": "tools/evals/001-agent-tooling-foundation/us2-bundle-results.json"
+  },
+  "summary": {
+    "headline": "Manifest-centered evidence bundles validate and route agents to the right raw artifacts.",
+    "details": "The seeded runtime sample produces a valid generated manifest, the canonical valid manifest fixture resolves all referenced files, and the intentionally invalid fixture is rejected by schema validation."
+  },
+  "checks": [
+    {
+      "id": "generated-manifest-created",
+      "status": "pass",
+      "details": "The manifest assembly helper generated `tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.generated.json` from the seeded runtime sample."
+    },
+    {
+      "id": "valid-manifest-fixture-passed",
+      "status": "pass",
+      "details": "The seeded valid manifest passed schema validation and all referenced artifact paths resolved successfully."
+    },
+    {
+      "id": "invalid-manifest-fixture-rejected",
+      "status": "pass",
+      "details": "The intentionally invalid fixture omits required manifest fields and is rejected by the contract schema."
+    },
+    {
+      "id": "manifest-first-handoff-documented",
+      "status": "pass",
+      "details": "The runtime harness doc and evidence-consumption eval fixture require agents to use the manifest before opening raw trace, event, or scene files."
+    }
+  ],
+  "metrics": {
+    "evidenceFirstRespected": true
+  },
+  "recordedAt": "2026-04-11T00:00:00Z"
+}

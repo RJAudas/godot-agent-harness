@@ -1,0 +1,12 @@
+{
+  "scenarioId": "pong-wall-bounce-left-001",
+  "runId": "pong-wall-bounce-left-001-run-01",
+  "status": "fail",
+  "headline": "Ball remained overlapped with the left wall",
+  "outcome": "Invariant failure after repeated overlap frames near the left boundary.",
+  "keyFindings": [
+    "Ball overlapped the wall collider from frames 118 through 121.",
+    "Horizontal velocity remained negative after the first wall-contact event.",
+    "The Ball node remained present in the scene snapshot throughout the failure window."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "manifestId": "evidence-invalid-sample",
+  "runId": "pong-wall-bounce-left-001-run-invalid",
+  "scenarioId": "pong-wall-bounce-left-001",
+  "status": "fail",
+  "artifactRefs": [],
+  "validation": {
+    "bundleValid": false
+  }
+}

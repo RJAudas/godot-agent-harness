@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ball-clears-wall-within-two-frames",
+    "status": "fail",
+    "message": "Ball remained overlapped with the left wall for four consecutive frames.",
+    "artifactRefs": [
+      "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/trace.jsonl",
+      "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/events.json"
+    ]
+  },
+  {
+    "id": "horizontal-velocity-reverses-after-wall-contact",
+    "status": "fail",
+    "message": "Horizontal velocity stayed negative after wall collision instead of reflecting positive."
+  }
+]

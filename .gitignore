@@ -5,11 +5,18 @@
 *.tmp
 *.temp
 *.bak
+*.swp
 
 # Godot generated state
 .godot/
 .import/
 export_presets.cfg
+
+# Editor and OS state
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
 # Common secret and certificate material
 *.pem

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1.0.0",
+  "manifestId": "evidence-pong-wall-bounce-left-001-run-01",
+  "runId": "pong-wall-bounce-left-001-run-01",
+  "scenarioId": "pong-wall-bounce-left-001",
+  "status": "fail",
+  "summary": {
+    "headline": "Ball remained overlapped with the left wall",
+    "outcome": "Invariant failure after repeated overlap frames near the left boundary.",
+    "keyFindings": [
+      "Ball overlapped the wall collider from frames 118 through 121.",
+      "Horizontal velocity remained negative after the first wall-contact event.",
+      "The Ball node remained present in the scene snapshot throughout the failure window."
+    ]
+  },
+  "invariants": [
+    {
+      "id": "ball-clears-wall-within-two-frames",
+      "status": "fail",
+      "message": "Ball remained overlapped with the left wall for four consecutive frames.",
+      "artifactRefs": [
+        "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/trace.jsonl",
+        "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/events.json"
+      ]
+    },
+    {
+      "id": "horizontal-velocity-reverses-after-wall-contact",
+      "status": "fail",
+      "message": "Horizontal velocity stayed negative after wall collision instead of reflecting positive."
+    }
+  ],
+  "artifactRefs": [
+    {
+      "kind": "trace",
+      "path": "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/trace.jsonl",
+      "mediaType": "application/jsonl",
+      "description": "Per-frame trace data for the runtime sample."
+    },
+    {
+      "kind": "events",
+      "path": "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/events.json",
+      "mediaType": "application/json",
+      "description": "Structured runtime events for the sample run."
+    },
+    {
+      "kind": "scene_snapshot",
+      "path": "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/scene-snapshot.json",
+      "mediaType": "application/json",
+      "description": "Scene snapshot captured around the failure window."
+    },
+    {
+      "kind": "stdout_summary",
+      "path": "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/summary.json",
+      "mediaType": "application/json",
+      "description": "Normalized summary for the sample run."
+    },
+    {
+      "kind": "invariant_report",
+      "path": "tools/evals/fixtures/001-agent-tooling-foundation/runtime-sample/invariants.json",
+      "mediaType": "application/json",
+      "description": "Invariant outcomes for the sample run."
+    }
+  ],
+  "producer": {
+    "toolingArtifactId": "tools/evidence/new-evidence-manifest.ps1",
+    "surface": "repo-local"
+  },
+  "validation": {
+    "bundleValid": false,
+    "notes": [
+      "Manifest generation does not assert bundle validity. Run tools/evidence/validate-evidence-manifest.ps1 to validate schema and artifact presence.",
+      "Generated manifest includes 5 of 5 expected runtime artifacts."
+    ]
+  },
+  "createdAt": "2026-04-12T00:04:18.2406210Z"
+}

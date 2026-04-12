@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "8a520ab7-5fc7-4733-8466-99e61faf600c",
+  "artifactId": "godot-evidence-triage.agent",
+  "runId": "83132bb8-87a2-4d7b-b1e6-d27933fcde13",
+  "mode": "simulated",
+  "status": "success",
+  "requestSummary": "Validate in-scope eval result output for manifest-centered evidence triage.",
+  "writeBoundaryId": "godot-evidence-triage-first-release",
+  "operations": [
+    {
+      "path": "tools/evals/001-agent-tooling-foundation/us3-validation-results.json",
+      "editType": "update",
+      "status": "performed",
+      "note": "Eval result file updated inside the declared boundary."
+    }
+  ],
+  "stopReasons": [],
+  "escalationReasons": [],
+  "validations": [
+    {
+      "name": "write-boundary-check",
+      "status": "pass",
+      "details": "Requested eval result path is allowed by the boundary contract."
+    }
+  ],
+  "startedAt": "2026-04-11T23:15:06.5922505Z",
+  "endedAt": "2026-04-11T23:15:06.5923166Z"
+}

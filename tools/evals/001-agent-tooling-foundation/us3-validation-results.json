@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0.0",
+  "evaluationId": "us3-automation-validation-2026-04-11",
+  "storyId": "US3",
+  "surface": "combined",
+  "executionMode": "repo-local",
+  "status": "pass",
+  "artifacts": {
+    "fixturePaths": [
+      "tools/evals/001-agent-tooling-foundation/us3-automation-classification.md",
+      "tools/evals/001-agent-tooling-foundation/us3-write-boundary.md",
+      "tools/evals/001-agent-tooling-foundation/us3-expected-results.json"
+    ],
+    "guidancePaths": [
+      "docs/AI_TOOLING_AUTOMATION_MATRIX.md",
+      ".github/prompts/godot-evidence-triage.prompt.md",
+      ".github/agents/godot-evidence-triage.agent.md",
+      "tools/automation/write-boundaries.json",
+      "tools/automation/validate-write-boundary.ps1",
+      "tools/automation/new-autonomous-run-record.ps1"
+    ],
+    "outputPath": "tools/evals/001-agent-tooling-foundation/us3-validation-results.json"
+  },
+  "summary": {
+    "headline": "Automation decision rules and write boundaries are concrete and enforceable.",
+    "details": "The automation matrix classifies instruction, workflow, prompt, agent, and future skill responsibilities. The evidence triage artifact can update seeded eval outputs but is blocked from addon paths outside the first-release boundary, and the run-record helper emits schema-valid logs."
+  },
+  "checks": [
+    {
+      "id": "automation-matrix-defined",
+      "status": "pass",
+      "details": "The repository now has an explicit decision matrix for instructions, scripts, prompts, agents, and local skills."
+    },
+    {
+      "id": "allowed-write-request-passed",
+      "status": "pass",
+      "details": "The evidence triage artifact is permitted to update `tools/evals/001-agent-tooling-foundation/us3-validation-results.json`."
+    },
+    {
+      "id": "out-of-scope-write-request-rejected",
+      "status": "pass",
+      "details": "The same artifact is rejected when asked to update `addons/agent_runtime_harness/plugin.gd` because addon paths are outside the declared boundary."
+    },
+    {
+      "id": "run-record-generated",
+      "status": "pass",
+      "details": "`tools/automation/run-records/godot-evidence-triage-validation.json` was generated and validated against the autonomous run record schema."
+    }
+  ],
+  "metrics": {
+    "writeBoundaryRespected": true
+  },
+  "recordedAt": "2026-04-11T00:00:00Z"
+}

@@ -1,0 +1,27 @@
+{
+  "guidanceEntryPoints": [
+    ".github/copilot-instructions.md",
+    "AGENTS.md"
+  ],
+  "pathSpecificGuidance": [
+    ".github/instructions/addons.instructions.md",
+    ".github/instructions/scenarios.instructions.md",
+    ".github/instructions/tools.instructions.md"
+  ],
+  "preferredWriteTargets": [
+    ".github/",
+    "docs/",
+    "tools/",
+    "specs/001-agent-tooling-foundation/"
+  ],
+  "requiredConstraints": [
+    "plugin-first",
+    "manifest-first-when-evidence-exists",
+    "machine-readable-validation"
+  ],
+  "validationCommands": [
+    "pwsh ./tools/validate-json.ps1 -InputPath <json-path> -SchemaPath <schema-path>",
+    "pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>",
+    "pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <artifact-id> -RequestedPath <path> -RequestedEditType <edit-type>"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0.0",
+  "evaluationId": "us1-orientation-2026-04-11",
+  "storyId": "US1",
+  "surface": "combined",
+  "executionMode": "repo-local",
+  "status": "pass",
+  "artifacts": {
+    "fixturePaths": [
+      "tools/evals/001-agent-tooling-foundation/us1-copilot-chat-orientation.md",
+      "tools/evals/001-agent-tooling-foundation/us1-copilot-cli-orientation.md"
+    ],
+    "expectedPath": "tools/evals/001-agent-tooling-foundation/us1-guidance-selection.expected.json",
+    "guidancePaths": [
+      ".github/copilot-instructions.md",
+      "AGENTS.md",
+      ".github/instructions/addons.instructions.md",
+      ".github/instructions/scenarios.instructions.md",
+      ".github/instructions/tools.instructions.md"
+    ],
+    "outputPath": "tools/evals/001-agent-tooling-foundation/us1-orientation-results.json"
+  },
+  "summary": {
+    "headline": "The durable guidance stack resolves to repo-wide then path-specific instructions.",
+    "details": "Repo-wide Copilot instructions, AGENTS guidance, and subtree-specific instruction files are present, aligned, and point toward plugin-first, machine-readable validation workflows."
+  },
+  "checks": [
+    {
+      "id": "guidance-entry-points-present",
+      "status": "pass",
+      "details": "The repo-wide Copilot instructions and AGENTS.md files exist and are referenced by the seeded orientation fixtures."
+    },
+    {
+      "id": "path-specific-instructions-present",
+      "status": "pass",
+      "details": "Addon, scenario, and tools instruction files narrow behavior under the expected subtrees."
+    },
+    {
+      "id": "plugin-first-constraint-documented",
+      "status": "pass",
+      "details": "The guidance stack consistently preserves plugin-first scope and avoids engine-fork escalation without evidence."
+    },
+    {
+      "id": "validation-loop-documented",
+      "status": "pass",
+      "details": "The guidance stack references repository-local validation commands and machine-readable result locations."
+    }
+  ],
+  "metrics": {
+    "firstPassRoutingAccurate": true,
+    "pluginFirstRespected": true,
+    "evidenceFirstRespected": true
+  },
+  "recordedAt": "2026-04-11T00:00:00Z"
+}

@@ -17,8 +17,8 @@
 
 **Purpose**: Add shared test scaffolding for build-failed runs before contract and broker changes begin.
 
-- [ ] T001 Add shared build-diagnostic assertion helpers in `tools/tests/TestHelpers.ps1`
-- [ ] T002 [P] Add a build-failure test grouping scaffold in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`
+- [X] T001 Add shared build-diagnostic assertion helpers in `tools/tests/TestHelpers.ps1`
+- [X] T002 [P] Add a build-failure test grouping scaffold in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`
 
 ---
 
@@ -28,10 +28,10 @@
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T004 Extend `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json` and `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json` with the `build` failure kind and the build-failure payload fields required by the 004 spec
-- [ ] T005 [P] Align `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md` and `specs/004-report-build-errors/contracts/build-error-run-result-contract.md` on lifecycle, result, and no-manifest semantics for build-failed runs
-- [ ] T006 [P] Add shared build-failure constants and payload semantics in `addons/agent_runtime_harness/shared/inspection_constants.gd`
-- [ ] T007 [P] Extend reusable result-writing helpers in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and test assertions in `tools/tests/TestHelpers.ps1` for build diagnostics and raw build output
+- [X] T004 Extend `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json` and `specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json` with the `build` failure kind and the build-failure payload fields required by the 004 spec
+- [X] T005 [P] Align `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md` and `specs/004-report-build-errors/contracts/build-error-run-result-contract.md` on lifecycle, result, and no-manifest semantics for build-failed runs
+- [X] T006 [P] Add shared build-failure constants and payload semantics in `addons/agent_runtime_harness/shared/inspection_constants.gd`
+- [X] T007 [P] Extend reusable result-writing helpers in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and test assertions in `tools/tests/TestHelpers.ps1` for build diagnostics and raw build output
 
 **Checkpoint**: Shared contract and payload plumbing are ready; story work can begin.
 
@@ -45,15 +45,15 @@
 
 ### Validation for User Story 1 ⚠️
 
-- [ ] T008 [P] [US1] Add deterministic build-failure request, lifecycle, and expected result fixtures in `examples/pong-testbed/harness/automation/requests/run-request.build-failure.json`, `examples/pong-testbed/harness/automation/results/lifecycle-status.build-failure.expected.json`, and `examples/pong-testbed/harness/automation/results/run-result.build-failure.expected.json`
-- [ ] T009 [P] [US1] Add schema and regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` for lifecycle-status `failureKind = build`, `buildFailurePhase`, and `buildDiagnosticCount`, plus run-result `buildDiagnostics` and `rawBuildOutput`
+- [X] T008 [P] [US1] Add deterministic build-failure request, lifecycle, and expected result fixtures in `examples/pong-testbed/harness/automation/requests/run-request.build-failure.json`, `examples/pong-testbed/harness/automation/results/lifecycle-status.build-failure.expected.json`, and `examples/pong-testbed/harness/automation/results/run-result.build-failure.expected.json`
+- [X] T009 [P] [US1] Add schema and regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` for lifecycle-status `failureKind = build`, `buildFailurePhase`, and `buildDiagnosticCount`, plus run-result `buildDiagnostics` and `rawBuildOutput`
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement build-failure detection and lifecycle classification in the launch-to-attach boundary in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T011 [P] [US1] Wire any required broker-side observation and signal handling in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/plugin.gd`
-- [ ] T012 [P] [US1] Extend lifecycle-status and final result writing in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` to emit normalized diagnostics and raw build output for the active run
-- [ ] T013 [US1] Preserve healthy successful-run behavior in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` so build payloads appear only on build-failed runs
+- [X] T010 [US1] Implement build-failure detection and lifecycle classification in the launch-to-attach boundary in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T011 [P] [US1] Wire any required broker-side observation and signal handling in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/plugin.gd`
+- [X] T012 [P] [US1] Extend lifecycle-status and final result writing in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` to emit normalized diagnostics and raw build output for the active run
+- [X] T013 [US1] Preserve healthy successful-run behavior in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` so build payloads appear only on build-failed runs
 
 **Checkpoint**: User Story 1 is complete when a broken run returns actionable build diagnostics through the existing final run-result artifact.
 
@@ -67,15 +67,15 @@
 
 ### Validation for User Story 2 ⚠️
 
-- [ ] T014 [P] [US2] Add stale-manifest, multi-error, blocking resource-load, partial-metadata, and blocked-nonbuild expected results under `examples/pong-testbed/harness/automation/results/`
-- [ ] T015 [P] [US2] Add regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` for stale-manifest prevention, multi-diagnostic preservation, blocking resource-load handling, partial metadata retention, and blocked-vs-build distinctions
+- [X] T014 [P] [US2] Add stale-manifest, multi-error, blocking resource-load, partial-metadata, and blocked-nonbuild expected results under `examples/pong-testbed/harness/automation/results/`
+- [X] T015 [P] [US2] Add regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` for stale-manifest prevention, multi-diagnostic preservation, blocking resource-load handling, partial metadata retention, and blocked-vs-build distinctions
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Implement explicit no-manifest validation notes and stale-artifact protection for build-failed runs in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T017 [P] [US2] Preserve multiple diagnostics and partial metadata in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T018 [US2] Keep blocked prerequisite outcomes distinct from build-failed outcomes in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T019 [US2] Align result fixtures in `examples/pong-testbed/harness/automation/results/` so previous manifests are never treated as the output of a build-failed run
+- [X] T016 [US2] Implement explicit no-manifest validation notes and stale-artifact protection for build-failed runs in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T017 [P] [US2] Preserve multiple diagnostics and partial metadata in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T018 [US2] Keep blocked prerequisite outcomes distinct from build-failed outcomes in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T019 [US2] Align result fixtures in `examples/pong-testbed/harness/automation/results/` so previous manifests are never treated as the output of a build-failed run
 
 **Checkpoint**: User Story 2 is complete when build-failed runs stay actionable and safe even under stale-output and multi-error conditions.
 
@@ -89,15 +89,15 @@
 
 ### Validation for User Story 3 ⚠️
 
-- [ ] T020 [P] [US3] Add healthy-run regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `examples/pong-testbed/harness/automation/results/run-result.success.expected.json` to confirm manifest-centered success behavior remains unchanged
-- [ ] T021 [P] [US3] Add helper or consumer regression coverage in `tools/tests/AutomationTools.Tests.ps1` if updated contract fields affect schema-consuming scripts or result readers
+- [X] T020 [P] [US3] Add healthy-run regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `examples/pong-testbed/harness/automation/results/run-result.success.expected.json` to confirm manifest-centered success behavior remains unchanged
+- [X] T021 [P] [US3] Add helper or consumer regression coverage in `tools/tests/AutomationTools.Tests.ps1` if updated contract fields affect schema-consuming scripts or result readers
 
 ### Implementation for User Story 3
 
-- [ ] T022 [P] [US3] Update `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md`, `specs/003-editor-evidence-loop/quickstart.md`, and `specs/004-report-build-errors/contracts/build-error-run-result-contract.md` to document the shared contract extension without introducing a new diagnostics channel
-- [ ] T023 [P] [US3] Update `docs/AGENT_TOOLING_FOUNDATION.md` and `specs/004-report-build-errors/quickstart.md` so agents read the final run result first for build-failed runs and the manifest first for successful runs
-- [ ] T024 [US3] Update `addons/agent_runtime_harness/templates/project_root/AGENTS.runtime-harness.md` and any related deployed guidance templates so the build-failure path is described in the same plugin-owned workflow
-- [ ] T025 [US3] Confirm result-contract compatibility across `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`, `tools/tests/AutomationTools.Tests.ps1`, and any touched helper expectations
+- [X] T022 [P] [US3] Update `specs/003-editor-evidence-loop/contracts/editor-evidence-loop-contract.md`, `specs/003-editor-evidence-loop/quickstart.md`, and `specs/004-report-build-errors/contracts/build-error-run-result-contract.md` to document the shared contract extension without introducing a new diagnostics channel
+- [X] T023 [P] [US3] Update `docs/AGENT_TOOLING_FOUNDATION.md` and `specs/004-report-build-errors/quickstart.md` so agents read the final run result first for build-failed runs and the manifest first for successful runs
+- [X] T024 [US3] Update `addons/agent_runtime_harness/templates/project_root/AGENTS.runtime-harness.md` and any related deployed guidance templates so the build-failure path is described in the same plugin-owned workflow
+- [X] T025 [US3] Confirm result-contract compatibility across `specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json`, `tools/tests/AutomationTools.Tests.ps1`, and any touched helper expectations
 
 **Checkpoint**: User Story 3 is complete when the build-failure extension is documented as part of the same broker workflow and successful runs still use the manifest-centered path unchanged.
 
@@ -107,9 +107,9 @@
 
 **Purpose**: Run full regression coverage, verify quickstart behavior, and synchronize high-level docs.
 
-- [ ] T026 [P] Update `README.md` and `docs/AGENT_RUNTIME_HARNESS.md` if the build-failure extension changes the documented autonomous-run outcome flow
-- [ ] T027 Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched contract files
-- [ ] T028 [P] Execute the validation flow in `specs/004-report-build-errors/quickstart.md` against `examples/pong-testbed/` and record any implementation notes in `specs/004-report-build-errors/research.md`
+- [X] T026 [P] Update `README.md` and `docs/AGENT_RUNTIME_HARNESS.md` if the build-failure extension changes the documented autonomous-run outcome flow
+- [X] T027 Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched contract files
+- [X] T028 [P] Execute the validation flow in `specs/004-report-build-errors/quickstart.md` against `examples/pong-testbed/` and record any implementation notes in `specs/004-report-build-errors/research.md`
 - [ ] T029 [P] Measure request-to-failed-result timing for seeded build-failure runs against the 30-second target and record the result in `specs/004-report-build-errors/research.md`
 - [ ] T030 [P] Run seeded repair-and-retry validation cycles for the build-failure fixtures and record the observed pass-rate evidence in `specs/004-report-build-errors/research.md`
 

@@ -106,6 +106,26 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 	}
 
 
+func handle_editor_build() -> bool:
+	if not _run_coordinator.is_active():
+		return true
+
+	var request := _run_coordinator.get_active_request()
+	if request.is_empty():
+		return true
+
+	var build_failure_phase := InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING
+	if _run_coordinator.is_awaiting_runtime():
+		build_failure_phase = InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_AWAITING_RUNTIME
+
+	var build_failure := _collect_build_failure_payload(request, build_failure_phase)
+	if build_failure.is_empty():
+		return true
+
+	_run_coordinator.handle_build_failed(build_failure)
+	return false
+
+
 func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -> void:
 	var signature_payload := capability.duplicate(true)
 	signature_payload.erase("checkedAt")
@@ -116,6 +136,252 @@ func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -
 	_last_capability_signature = signature
 	_artifact_store.write_capability_result(config, capability)
 	emit_signal("capability_updated", capability)
+
+
+func _collect_build_failure_payload(request: Dictionary, build_failure_phase: String) -> Dictionary:
+	var target_scene := String(request.get("targetScene", ""))
+	if target_scene.is_empty():
+		return {}
+
+	var diagnostics := _collect_build_diagnostics(target_scene)
+	if diagnostics.is_empty():
+		return {}
+
+	var raw_build_output: Array = []
+	for diagnostic_value in diagnostics:
+		var diagnostic: Dictionary = diagnostic_value
+		var raw_excerpt := String(diagnostic.get("rawExcerpt", ""))
+		if not raw_excerpt.is_empty():
+			raw_build_output.append(raw_excerpt)
+
+	if raw_build_output.is_empty():
+		raw_build_output.append("Build validation failed before runtime attachment for %s." % target_scene)
+
+	var details := "Detected %d build diagnostic(s) before runtime attachment." % diagnostics.size()
+	return _artifact_store.build_build_failure_payload(build_failure_phase, diagnostics, _dedupe_strings(raw_build_output), details)
+
+
+func _collect_build_diagnostics(target_scene: String) -> Array:
+	var diagnostics: Array = []
+	var queued_paths: Array = [target_scene]
+	var visited_paths := {}
+
+	while not queued_paths.is_empty():
+		var resource_path := String(queued_paths.pop_back())
+		if resource_path.is_empty() or visited_paths.has(resource_path):
+			continue
+		visited_paths[resource_path] = true
+
+		for dependency_ref_value in _resolve_dependency_refs(resource_path):
+			var dependency_ref: Dictionary = dependency_ref_value
+			var dependency_path := String(dependency_ref.get("resourcePath", ""))
+			if dependency_path.is_empty():
+				continue
+			if not _resource_path_exists(dependency_path):
+				diagnostics.append(_build_missing_dependency_diagnostic(dependency_ref))
+				continue
+			if not visited_paths.has(dependency_path):
+				queued_paths.append(dependency_path)
+
+		var diagnostic := _inspect_resource_path(resource_path)
+		if not diagnostic.is_empty() and not _diagnostic_exists(diagnostics, diagnostic):
+			diagnostics.append(diagnostic)
+
+	return diagnostics
+
+
+func _resolve_dependency_refs(resource_path: String) -> Array:
+	var dependency_refs: Array = []
+	var seen_signatures := {}
+
+	for dependency_value in ResourceLoader.get_dependencies(resource_path):
+		var dependency_path := _extract_repo_resource_path(String(dependency_value))
+		if dependency_path.is_empty():
+			continue
+		_append_dependency_ref(dependency_refs, seen_signatures, {
+			"resourcePath": dependency_path,
+			"line": null,
+			"column": null,
+			"rawExcerpt": null,
+		})
+
+	for parsed_dependency_value in _parse_text_resource_references(resource_path):
+		_append_dependency_ref(dependency_refs, seen_signatures, parsed_dependency_value)
+
+	return dependency_refs
+
+
+func _append_dependency_ref(dependency_refs: Array, seen_signatures: Dictionary, dependency_ref: Dictionary) -> void:
+	var resource_path := String(dependency_ref.get("resourcePath", ""))
+	if resource_path.is_empty():
+		return
+	var signature := "%s|%s|%s" % [
+		resource_path,
+		str(dependency_ref.get("line", null)),
+		str(dependency_ref.get("column", null)),
+	]
+	if seen_signatures.has(signature):
+		return
+	seen_signatures[signature] = true
+	dependency_refs.append({
+		"resourcePath": resource_path,
+		"line": dependency_ref.get("line", null),
+		"column": dependency_ref.get("column", null),
+		"rawExcerpt": dependency_ref.get("rawExcerpt", null),
+	})
+
+
+func _parse_text_resource_references(resource_path: String) -> Array:
+	if not (resource_path.get_extension().to_lower() in ["tscn", "scn", "tres", "res"]):
+		return []
+	if not FileAccess.file_exists(resource_path):
+		return []
+
+	var handle := FileAccess.open(resource_path, FileAccess.READ)
+	if handle == null:
+		return []
+
+	var dependency_refs: Array = []
+	var line_number := 0
+	while not handle.eof_reached():
+		line_number += 1
+		var raw_line := handle.get_line()
+		var search_start := 0
+		while true:
+			var path_index := raw_line.find("res://", search_start)
+			if path_index == -1:
+				break
+			var resource_text := _extract_resource_path_from_line(raw_line, path_index)
+			if not resource_text.is_empty():
+				dependency_refs.append({
+					"resourcePath": resource_text,
+					"line": line_number,
+					"column": path_index + 1,
+					"rawExcerpt": raw_line.strip_edges(),
+				})
+			search_start = path_index + 6
+	handle.close()
+	return dependency_refs
+
+
+func _extract_resource_path_from_line(raw_line: String, path_index: int) -> String:
+	var stop_characters := ["\"", "'", " ", ")", "]", ","]
+	var end_index := path_index
+	while end_index < raw_line.length():
+		var current_character := raw_line.substr(end_index, 1)
+		if current_character in stop_characters:
+			break
+		end_index += 1
+	return raw_line.substr(path_index, end_index - path_index).trim_suffix("::")
+
+
+func _resource_path_exists(resource_path: String) -> bool:
+	return ResourceLoader.exists(resource_path) or FileAccess.file_exists(resource_path)
+
+
+func _build_missing_dependency_diagnostic(dependency_ref: Dictionary) -> Dictionary:
+	var resource_path := String(dependency_ref.get("resourcePath", ""))
+	var source_kind := _classify_build_source_kind(resource_path)
+	var raw_excerpt = dependency_ref.get("rawExcerpt", null)
+	var message := "Referenced %s could not be loaded before starting the autonomous run." % source_kind
+	if raw_excerpt == null:
+		raw_excerpt = "%s: %s" % [resource_path, message]
+	return _artifact_store.build_build_diagnostic(
+		resource_path,
+		message,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+		dependency_ref.get("line", null),
+		dependency_ref.get("column", null),
+		source_kind,
+		"ERR_FILE_NOT_FOUND",
+		raw_excerpt
+	)
+
+
+func _diagnostic_exists(diagnostics: Array, candidate: Dictionary) -> bool:
+	for diagnostic_value in diagnostics:
+		var diagnostic: Dictionary = diagnostic_value
+		if diagnostic.get("resourcePath", null) == candidate.get("resourcePath", null) \
+		and diagnostic.get("message", "") == candidate.get("message", "") \
+		and diagnostic.get("line", null) == candidate.get("line", null) \
+		and diagnostic.get("column", null) == candidate.get("column", null):
+			return true
+	return false
+
+
+func _extract_repo_resource_path(raw_dependency: String) -> String:
+	if raw_dependency.begins_with("res://"):
+		return raw_dependency
+	for dependency_part in raw_dependency.split("::"):
+		if dependency_part.begins_with("res://"):
+			return dependency_part
+	return ""
+
+
+func _inspect_resource_path(resource_path: String) -> Dictionary:
+	var source_kind := _classify_build_source_kind(resource_path)
+	if source_kind == InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT:
+		return _inspect_script_resource(resource_path)
+
+	var resource = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	if resource != null:
+		return {}
+
+	var message := "Failed to load %s before starting the autonomous run." % source_kind
+	var raw_excerpt := "%s: %s" % [resource_path, message]
+	return _artifact_store.build_build_diagnostic(
+		resource_path,
+		message,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+		null,
+		null,
+		source_kind,
+		null,
+		raw_excerpt
+	)
+
+
+func _inspect_script_resource(resource_path: String) -> Dictionary:
+	var script = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	if script == null:
+		var missing_message := "Failed to load script before starting the autonomous run."
+		return _artifact_store.build_build_diagnostic(
+			resource_path,
+			missing_message,
+			InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+			null,
+			null,
+			InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+			null,
+			"%s: %s" % [resource_path, missing_message]
+		)
+
+	var reload_error := script.reload(false)
+	if reload_error == OK:
+		return {}
+
+	var message := "Script reload failed with %s." % error_string(reload_error)
+	return _artifact_store.build_build_diagnostic(
+		resource_path,
+		message,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+		null,
+		null,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+		null,
+		"%s: %s" % [resource_path, message]
+	)
+
+
+func _classify_build_source_kind(resource_path: String) -> String:
+	var extension := resource_path.get_extension().to_lower()
+	if extension == "gd":
+		return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT
+	if extension in ["tscn", "scn"]:
+		return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCENE
+	if extension.is_empty():
+		return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN
+	return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_RESOURCE
 
 
 func _dedupe_strings(values: Array) -> Array:

@@ -1,0 +1,40 @@
+{
+  "requestId": "pong-request-build-failure-stale-001",
+  "runId": "pong-autonomous-run-build-failure-stale-001",
+  "finalStatus": "failed",
+  "failureKind": "build",
+  "buildFailurePhase": "awaiting_runtime",
+  "buildDiagnostics": [
+    {
+      "resourcePath": "res://scripts/build_failures/syntax_error_root.gd",
+      "message": "Referenced script could not be loaded before starting the autonomous run.",
+      "severity": "error",
+      "line": null,
+      "column": null,
+      "sourceKind": "script",
+      "code": "ERR_FILE_NOT_FOUND",
+      "rawExcerpt": "res://scripts/build_failures/syntax_error_root.gd: Referenced script could not be loaded before starting the autonomous run."
+    }
+  ],
+  "rawBuildOutput": [
+    "res://scripts/build_failures/syntax_error_root.gd: Referenced script could not be loaded before starting the autonomous run."
+  ],
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-build-failure-stale-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "No new evidence manifest was produced because the run failed during build before runtime capture.",
+      "An existing manifest file was ignored so stale evidence would not be reported for this build-failed run.",
+      "Detected 1 build diagnostic(s) before runtime attachment."
+    ],
+    "validatedAt": "2026-04-12T13:13:06Z"
+  },
+  "terminationStatus": "already_closed",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T13:13:07Z"
+}

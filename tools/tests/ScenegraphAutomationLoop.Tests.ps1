@@ -86,6 +86,29 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
+    It 'accepts a build-failed lifecycle status payload' {
+        $payloadPath = Join-Path $TestDrive 'automation-lifecycle-status.build-failure.json'
+        @{
+            requestId = 'pong-request-build-failure-001'
+            runId = 'pong-autonomous-run-build-failure-001'
+            status = 'failed'
+            details = 'Detected 2 build diagnostic(s) before runtime attachment.'
+            timestamp = '2026-04-12T13:10:05Z'
+            failureKind = 'build'
+            buildFailurePhase = 'launching'
+            buildDiagnosticCount = 2
+            rawBuildOutputAvailable = $true
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
     It 'accepts a completed run result payload' {
         $payloadPath = Join-Path $TestDrive 'automation-run-result.json'
         @{
@@ -107,6 +130,54 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
             blockedReasons = @()
             controlPath = 'file_broker'
             completedAt = '2026-04-12T12:03:30Z'
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
+    It 'accepts a build-failed run result payload' {
+        $payloadPath = Join-Path $TestDrive 'automation-run-result.build-failure.json'
+        @{
+            requestId = 'pong-request-build-failure-001'
+            runId = 'pong-autonomous-run-build-failure-001'
+            finalStatus = 'failed'
+            failureKind = 'build'
+            buildFailurePhase = 'launching'
+            buildDiagnostics = @(
+                @{
+                    resourcePath = 'res://scripts/build_failures/syntax_error_root.gd'
+                    message = 'Script reload failed with Parse Error.'
+                    severity = 'error'
+                    line = $null
+                    column = $null
+                    sourceKind = 'script'
+                    code = $null
+                    rawExcerpt = 'res://scripts/build_failures/syntax_error_root.gd: Script reload failed with Parse Error.'
+                }
+            )
+            rawBuildOutput = @(
+                'res://scripts/build_failures/syntax_error_root.gd: Script reload failed with Parse Error.'
+            )
+            manifestPath = $null
+            outputDirectory = 'res://evidence/automation/pong-build-failure-001'
+            validationResult = @{
+                manifestExists = $false
+                artifactRefsChecked = 0
+                missingArtifacts = @()
+                bundleValid = $false
+                notes = @('No new evidence manifest was produced because the run failed during build before runtime capture.')
+                validatedAt = '2026-04-12T13:10:06Z'
+            }
+            terminationStatus = 'not_started'
+            blockedReasons = @()
+            controlPath = 'file_broker'
+            completedAt = '2026-04-12T13:10:07Z'
         } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
 
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
@@ -160,6 +231,16 @@ Describe 'examples/pong-testbed automation fixtures' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
+    It 'accepts the build-failure run request fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/run-request.build-failure.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
     It 'accepts the capability options fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
             '-InputPath', 'examples/pong-testbed/harness/automation/results/capability-options.expected.json',
@@ -185,6 +266,26 @@ Describe 'examples/pong-testbed automation fixtures' {
         $manifestValidation.ParsedOutput.bundleValid | Should -BeTrue
     }
 
+    It 'accepts the build-failure lifecycle and run-result fixtures' {
+        $lifecycleResult = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/lifecycle-status.build-failure.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json'
+        )
+        $runResultValidation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $runResult = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.build-failure.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $lifecycleResult.ExitCode | Should -Be 0
+        $lifecycleResult.ParsedOutput.valid | Should -BeTrue
+        $runResultValidation.ExitCode | Should -Be 0
+        $runResultValidation.ParsedOutput.valid | Should -BeTrue
+        Assert-BuildFailureRunResult -Result $runResult -ExpectedPhase 'launching' -ExpectedDiagnosticCount 2
+        Assert-BuildDiagnostic -Diagnostic $runResult.buildDiagnostics[0] -ExpectedResourcePath 'res://scripts/build_failures/syntax_error_root.gd' -ExpectedSourceKind 'script'
+        Assert-BuildDiagnostic -Diagnostic $runResult.buildDiagnostics[1] -ExpectedResourcePath 'res://scripts/build_failures/syntax_error_child.gd' -ExpectedSourceKind 'script'
+    }
+
     It 'accepts each failure and blocked run result fixture' {
         $fixturePaths = @(
             'examples/pong-testbed/harness/automation/results/run-result.attachment-failure.expected.json',
@@ -204,6 +305,83 @@ Describe 'examples/pong-testbed automation fixtures' {
             $result.ExitCode | Should -Be 0
             $result.ParsedOutput.valid | Should -BeTrue
         }
+    }
+
+    It 'preserves success-path compatibility by omitting build payloads from the healthy run fixture' {
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.success.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $result.failureKind | Should -BeNullOrEmpty
+        $result.PSObject.Properties.Name | Should -Not -Contain 'buildFailurePhase'
+        $result.PSObject.Properties.Name | Should -Not -Contain 'buildDiagnostics'
+        $result.PSObject.Properties.Name | Should -Not -Contain 'rawBuildOutput'
+        $result.manifestPath | Should -Be 'examples/pong-testbed/harness/expected-evidence-manifest.json'
+    }
+
+    It 'preserves multiple build diagnostics for the multi-error fixture' {
+        $validation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.multi-diagnostic.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.build-failure.multi-diagnostic.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $validation.ExitCode | Should -Be 0
+        $validation.ParsedOutput.valid | Should -BeTrue
+        Assert-BuildFailureRunResult -Result $result -ExpectedPhase 'launching' -ExpectedDiagnosticCount 3
+    }
+
+    It 'keeps stale manifests out of the build-failed result' {
+        $validation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.stale-manifest.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.build-failure.stale-manifest.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $validation.ExitCode | Should -Be 0
+        $validation.ParsedOutput.valid | Should -BeTrue
+        $result.manifestPath | Should -BeNullOrEmpty
+        $result.validationResult.notes | Should -Contain 'An existing manifest file was ignored so stale evidence would not be reported for this build-failed run.'
+    }
+
+    It 'classifies blocking resource-load failures as build failures with resource diagnostics' {
+        $validation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.resource-load.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.build-failure.resource-load.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $validation.ExitCode | Should -Be 0
+        $validation.ParsedOutput.valid | Should -BeTrue
+        Assert-BuildFailureRunResult -Result $result -ExpectedPhase 'launching' -ExpectedDiagnosticCount 1
+        Assert-BuildDiagnostic -Diagnostic $result.buildDiagnostics[0] -ExpectedResourcePath 'res://textures/missing_build_failure.png' -ExpectedSourceKind 'resource'
+    }
+
+    It 'retains partial build metadata and raw output when exact coordinates are unavailable' {
+        $validation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.partial-metadata.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.build-failure.partial-metadata.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $validation.ExitCode | Should -Be 0
+        $validation.ParsedOutput.valid | Should -BeTrue
+        $result.buildDiagnostics[0].line | Should -BeNullOrEmpty
+        $result.buildDiagnostics[0].column | Should -BeNullOrEmpty
+        $result.buildDiagnostics[0].code | Should -BeNullOrEmpty
+        $result.buildDiagnostics[0].rawExcerpt | Should -Not -BeNullOrEmpty
+    }
+
+    It 'keeps blocked non-build outcomes distinct from build failures' {
+        $validation = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.blocked-nonbuild.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $result = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/run-result.blocked-nonbuild.expected.json') -Raw | ConvertFrom-Json -Depth 100
+
+        $validation.ExitCode | Should -Be 0
+        $validation.ParsedOutput.valid | Should -BeTrue
+        $result.finalStatus | Should -Be 'blocked'
+        $result.failureKind | Should -BeNullOrEmpty
+        $result.PSObject.Properties.Name | Should -Not -Contain 'buildDiagnostics'
     }
 }
 

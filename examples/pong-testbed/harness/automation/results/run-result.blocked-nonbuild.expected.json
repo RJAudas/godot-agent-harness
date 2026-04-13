@@ -1,0 +1,24 @@
+{
+  "requestId": "pong-request-blocked-nonbuild-001",
+  "runId": "pong-autonomous-run-blocked-nonbuild-001",
+  "finalStatus": "blocked",
+  "failureKind": null,
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-blocked-nonbuild-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "Run remained blocked because another editor play session was already active."
+    ],
+    "validatedAt": "2026-04-12T13:16:06Z"
+  },
+  "terminationStatus": "blocked",
+  "blockedReasons": [
+    "scene_already_running"
+  ],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T13:16:07Z"
+}

@@ -24,8 +24,8 @@ Implement build-failure reporting as a narrow extension of the existing autonomo
 
 1. Create or seed a broken example-project case in `examples/pong-testbed/` that produces a compile, parse, or blocking resource-load error during launch.
 2. Request an autonomous run through the existing editor-evidence workflow and confirm the final run result reports `failureKind = build` with diagnostics for the active `runId`.
-3. Confirm the run result does not point to a stale manifest from a previous successful run.
-4. Re-run the healthy example-project flow and confirm the existing manifest-centered evidence bundle still validates successfully.
+3. Confirm the run result leaves `manifestPath = null`, includes validation notes that no new bundle was produced, and does not point to a stale manifest from a previous successful run.
+4. Re-run the healthy example-project flow and confirm the existing manifest-centered evidence bundle still validates successfully with no build payload fields added.
 5. Measure request-to-failed-result timing for the seeded build-failure path and confirm it stays within the 30-second target.
 6. Validate any updated JSON contracts and related PowerShell test surfaces.
 
@@ -39,5 +39,6 @@ pwsh ./tools/tests/run-tool-tests.ps1
 ## Expected Outcomes
 
 - Build-failed runs expose normalized diagnostics and raw build-output text through the existing result contract.
+- Build-failed runs are routed from `run-result.json` directly and do not require a manifest lookup.
 - Successful runs continue to expose `evidence-manifest.json` through the current manifest-centered workflow.
 - Agents can decide to repair code and retry from the reported artifacts alone.

@@ -1,0 +1,12 @@
+{
+  "requestId": "pong-request-build-failure-001",
+  "runId": "pong-autonomous-run-build-failure-001",
+  "status": "failed",
+  "details": "Detected 2 build diagnostic(s) before runtime attachment.",
+  "timestamp": "2026-04-12T13:10:05Z",
+  "controlPath": "file_broker",
+  "failureKind": "build",
+  "buildFailurePhase": "launching",
+  "buildDiagnosticCount": 2,
+  "rawBuildOutputAvailable": true
+}

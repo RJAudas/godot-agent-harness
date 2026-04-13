@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-build-failure-001",
+  "scenarioId": "pong-scenegraph-build-failure",
+  "runId": "pong-autonomous-run-build-failure-001",
+  "targetScene": "res://scenes/build_failure_missing_dependencies_case.tscn",
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-build-failure-001",
+  "artifactRoot": "examples/pong-testbed/evidence/automation/pong-autonomous-run-build-failure-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "scenegraph-build-failure-fixture",
+  "createdAt": "2026-04-12T13:10:00Z",
+  "overrides": {
+    "targetScene": "res://scenes/build_failure_missing_dependencies_case.tscn"
+  }
+}

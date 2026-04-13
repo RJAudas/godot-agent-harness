@@ -72,6 +72,8 @@ Workspace-side helpers mirror those paths:
   - `buildFailurePhase` with `launching` or `awaiting_runtime`
   - `buildDiagnosticCount`
   - `rawBuildOutputAvailable`
+- **No-manifest rule for build failures**:
+  - build-failed runs may stop during the editor plugin build callback or before runtime attachment, so lifecycle failure status must make it clear that capture and persistence never began
 
 ### Automated Run Result
 
@@ -99,6 +101,7 @@ Workspace-side helpers mirror those paths:
 - A run cannot report success until the manifest and referenced artifacts have been validated.
 - The evidence bundle must be traceable to the current `runId` so stale outputs cannot satisfy a new request accidentally.
 - Build-failed runs use the same run-result artifact and must keep `manifestPath` set to `null` when no new evidence bundle was produced.
+- Agents should read `run-result.json` first for autonomous runs; only successful or otherwise manifest-backed runs should continue into the manifest-centered evidence path.
 
 ## Control Path Options
 

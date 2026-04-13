@@ -28,13 +28,13 @@ Validate that an agent can trigger an autonomous editor run for the example proj
 ## 4. Validate Result And Evidence Handoff
 
 1. Inspect the final automated run result artifact from the workspace.
-2. Confirm it reports the run identifier, manifest path, output directory, validation outcome, and termination status.
-3. Open the reported manifest and confirm the referenced snapshot, diagnostics, and summary artifacts exist.
-4. Validate the manifest with `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>` if helper tooling remains unchanged.
+2. Confirm it reports the run identifier, output directory, validation outcome, and termination status, plus either a manifest path for a successful run or build diagnostics for a build-failed run.
+3. When the run completed successfully, open the reported manifest and confirm the referenced snapshot, diagnostics, and summary artifacts exist.
+4. Validate the manifest with `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>` when helper tooling remains unchanged and a manifest was produced.
 
 ## 5. Validate Failure And Blocked Cases
 
-1. Submit a run against an intentionally broken expectation case and confirm the final result classifies the failure correctly while still returning the persisted evidence path.
+1. Submit a run against an intentionally broken build case and confirm the final result classifies the failure as `build`, returns normalized diagnostics plus raw build output, and leaves `manifestPath` empty because no new bundle was produced.
 2. Trigger a blocked prerequisite condition, such as missing harness wiring or ambiguous target detection, and confirm the capability or run result reports `blocked` rather than a misleading runtime failure.
 3. Submit a second request while one autonomous run is already active and confirm the system returns a machine-readable blocked result instead of queueing silently.
 4. Confirm stale artifacts from a previous run are not misreported as the output of the current request.

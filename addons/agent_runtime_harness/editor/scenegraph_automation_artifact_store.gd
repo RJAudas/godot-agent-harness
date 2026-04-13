@@ -87,6 +87,7 @@ func build_status_payload(request_id: String, run_id: String, status: String, de
 		"status": status,
 		"details": details,
 		"timestamp": InspectionConstants.utc_timestamp_now(),
+		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 	}
 	for key in extras.keys():
 		payload[key] = extras[key]
@@ -102,6 +103,109 @@ func build_validation_result(manifest: Dictionary, missing_artifacts: Array, bun
 		"notes": notes.duplicate(true),
 		"validatedAt": InspectionConstants.utc_timestamp_now(),
 	}
+
+
+func build_build_diagnostic(resource_path, message: String, severity: String, line = null, column = null, source_kind: String = InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN, code = null, raw_excerpt = null) -> Dictionary:
+	return {
+		"resourcePath": _normalize_optional_string(resource_path),
+		"message": message,
+		"severity": _normalize_build_severity(severity),
+		"line": _normalize_optional_positive_int(line),
+		"column": _normalize_optional_positive_int(column),
+		"sourceKind": _normalize_build_source_kind(source_kind),
+		"code": _normalize_optional_string(code),
+		"rawExcerpt": _normalize_optional_string(raw_excerpt),
+	}
+
+
+func build_build_failure_payload(build_failure_phase: String, diagnostics: Array, raw_build_output: Array, details: String) -> Dictionary:
+	return normalize_build_failure_payload({
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": build_failure_phase,
+		"buildDiagnostics": diagnostics,
+		"rawBuildOutput": raw_build_output,
+		"details": details,
+	})
+
+
+func build_build_failure_status_extras(build_failure_phase: String, diagnostics: Array, raw_build_output: Array) -> Dictionary:
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": build_failure_phase,
+		"buildDiagnosticCount": diagnostics.size(),
+		"rawBuildOutputAvailable": not raw_build_output.is_empty(),
+	}
+
+
+func normalize_build_failure_payload(payload: Dictionary) -> Dictionary:
+	var normalized_diagnostics: Array = []
+	for diagnostic_value in payload.get("buildDiagnostics", []):
+		if typeof(diagnostic_value) != TYPE_DICTIONARY:
+			continue
+		normalized_diagnostics.append(build_build_diagnostic(
+			diagnostic_value.get("resourcePath", null),
+			String(diagnostic_value.get("message", "")),
+			String(diagnostic_value.get("severity", InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN)),
+			diagnostic_value.get("line", null),
+			diagnostic_value.get("column", null),
+			String(diagnostic_value.get("sourceKind", InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN)),
+			diagnostic_value.get("code", null),
+			diagnostic_value.get("rawExcerpt", null)
+		))
+
+	var normalized_output: Array = []
+	for output_value in payload.get("rawBuildOutput", []):
+		var output_line := String(output_value)
+		if output_line.is_empty():
+			continue
+		normalized_output.append(output_line)
+
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": String(payload.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+		"buildDiagnostics": normalized_diagnostics,
+		"rawBuildOutput": normalized_output,
+		"details": String(payload.get("details", "Build diagnostics were detected before runtime attachment.")),
+	}
+
+
+func _normalize_build_severity(severity: String) -> String:
+	if severity in [
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_WARNING,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN,
+	]:
+		return severity
+	return InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN
+
+
+func _normalize_build_source_kind(source_kind: String) -> String:
+	if source_kind in [
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCENE,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_RESOURCE,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN,
+	]:
+		return source_kind
+	return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN
+
+
+func _normalize_optional_positive_int(value):
+	if value == null:
+		return null
+	var integer_value := int(value)
+	if integer_value <= 0:
+		return null
+	return integer_value
+
+
+func _normalize_optional_string(value):
+	if value == null:
+		return null
+	var text := String(value)
+	if text.is_empty():
+		return null
+	return text
 
 
 func _write_json_atomically(path: String, payload: Variant) -> Dictionary:

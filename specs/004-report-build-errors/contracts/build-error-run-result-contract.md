@@ -62,6 +62,7 @@ The final run result remains the primary machine-readable outcome for the run an
 - Agents should read `run-result.json` first to determine whether the run failed during build.
 - If `failureKind = build`, the agent should use `buildDiagnostics` as the structured fix surface and `rawBuildOutput` for additional context.
 - Agents should not expect `evidence-manifest.json` to exist for build-failed runs.
+- The plugin-owned broker may detect these failures during the editor plugin build callback or while the run is still waiting for runtime attachment, but the reporting surface remains the same lifecycle and final-result artifacts.
 
 ## Rejected V1 Alternatives
 

@@ -39,3 +39,14 @@
 - **Alternatives considered**:
   - Manual editor checks only: rejected because they do not provide repeatable proof for agents.
   - Tool-only schema validation without runtime failure fixtures: rejected because it would not prove the broker can attribute real build failures correctly.
+
+## Implementation Notes
+
+- The plugin now uses the existing `EditorPlugin._build()` callback to let the automation broker classify build-failed runs before runtime attachment begins. The broker scans the requested target scene, its discovered dependencies, and text-declared resource references so script parse failures and missing-resource cases can be normalized into the shared run-result contract without adding a second diagnostics channel.
+- Build-failed runs now keep `manifestPath = null`, emit explicit no-manifest validation notes, and add a stale-manifest warning when an older output bundle still exists at the configured output location.
+- Successful runs remain on the manifest-centered path; the healthy success fixture intentionally omits `buildFailurePhase`, `buildDiagnostics`, and `rawBuildOutput` to prove the extension is additive rather than a transport replacement.
+
+## Validation Notes
+
+- `pwsh ./tools/tests/run-tool-tests.ps1` passed with 70 tests, including new schema, fixture, helper, and request-writer coverage for build-failed, stale-manifest, resource-load, partial-metadata, and blocked-nonbuild cases.
+- `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples/pong-testbed` returned `exists = false` and `schemaValid = false` because no live editor capability artifact was present in the current workspace. That blocked live quickstart execution, end-to-end request-to-failed-result timing measurement, and repair-and-retry pass-rate collection in this session.

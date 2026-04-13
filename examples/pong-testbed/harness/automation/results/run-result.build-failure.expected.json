@@ -1,0 +1,50 @@
+{
+  "requestId": "pong-request-build-failure-001",
+  "runId": "pong-autonomous-run-build-failure-001",
+  "finalStatus": "failed",
+  "failureKind": "build",
+  "buildFailurePhase": "launching",
+  "buildDiagnostics": [
+    {
+      "resourcePath": "res://scripts/build_failures/syntax_error_root.gd",
+      "message": "Referenced script could not be loaded before starting the autonomous run.",
+      "severity": "error",
+      "line": 3,
+      "column": 35,
+      "sourceKind": "script",
+      "code": "ERR_FILE_NOT_FOUND",
+      "rawExcerpt": "[ext_resource type=\"Script\" path=\"res://scripts/build_failures/syntax_error_root.gd\" id=\"1_root_script\"]"
+    },
+    {
+      "resourcePath": "res://scripts/build_failures/syntax_error_child.gd",
+      "message": "Referenced script could not be loaded before starting the autonomous run.",
+      "severity": "error",
+      "line": 4,
+      "column": 35,
+      "sourceKind": "script",
+      "code": "ERR_FILE_NOT_FOUND",
+      "rawExcerpt": "[ext_resource type=\"Script\" path=\"res://scripts/build_failures/syntax_error_child.gd\" id=\"2_child_script\"]"
+    }
+  ],
+  "rawBuildOutput": [
+    "[ext_resource type=\"Script\" path=\"res://scripts/build_failures/syntax_error_root.gd\" id=\"1_root_script\"]",
+    "[ext_resource type=\"Script\" path=\"res://scripts/build_failures/syntax_error_child.gd\" id=\"2_child_script\"]"
+  ],
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-build-failure-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "No new evidence manifest was produced because the run failed during build before runtime capture.",
+      "Detected 2 build diagnostic(s) before runtime attachment."
+    ],
+    "validatedAt": "2026-04-12T13:10:06Z"
+  },
+  "terminationStatus": "not_started",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T13:10:07Z"
+}

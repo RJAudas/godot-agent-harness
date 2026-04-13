@@ -1,0 +1,18 @@
+{
+  "routing": {
+    "run-unit-tests-request": "ordinary-tests",
+    "verify-node-in-game-request": "scenegraph-runtime-verification",
+    "prove-gameplay-change-request": "combined-validation",
+    "inspect-existing-manifest-request": "evidence-triage"
+  },
+  "runtimeVerificationWorkflow": [
+    "read-capability-first",
+    "request-brokered-run",
+    "inspect-persisted-manifest-first",
+    "report-blocked-or-missing-runtime-artifacts-explicitly"
+  ],
+  "combinedValidationPolicy": {
+    "requiresExistingDeterministicTestSurface": true,
+    "forbidInventingNewOrdinaryTestsOnlyToSatisfyRule": true
+  }
+}

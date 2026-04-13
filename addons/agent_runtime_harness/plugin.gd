@@ -3,10 +3,12 @@ extends EditorPlugin
 
 const ScenegraphDock = preload("res://addons/agent_runtime_harness/editor/scenegraph_dock.gd")
 const ScenegraphDebuggerBridge = preload("res://addons/agent_runtime_harness/editor/scenegraph_debugger_bridge.gd")
+const ScenegraphAutomationBroker = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd")
 const AgentAssetDeployer = preload("res://addons/agent_runtime_harness/editor/agent_asset_deployer.gd")
 
 var _dock: Control
 var _bridge
+var _automation_broker: Node
 var _agent_asset_deployer: AgentAssetDeployer
 
 
@@ -17,6 +19,10 @@ func _enter_tree() -> void:
 		"requested_by": "editor_plugin",
 	})
 	add_debugger_plugin(_bridge)
+
+	_automation_broker = ScenegraphAutomationBroker.new()
+	_automation_broker.configure(self, _bridge, "res://harness/inspection-run-config.json")
+	add_child(_automation_broker)
 
 	_agent_asset_deployer = AgentAssetDeployer.new()
 
@@ -31,6 +37,10 @@ func _exit_tree() -> void:
 		remove_control_from_bottom_panel(_dock)
 		_dock.queue_free()
 		_dock = null
+
+	if _automation_broker != null:
+		_automation_broker.queue_free()
+		_automation_broker = null
 
 	if _bridge != null:
 		remove_debugger_plugin(_bridge)

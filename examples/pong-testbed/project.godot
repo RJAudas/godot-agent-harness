@@ -16,3 +16,5 @@ enabled=PackedStringArray("res://../../addons/agent_runtime_harness/plugin.cfg")
 
 [harness]
 inspection_run_config="res://harness/inspection-run-config.json"
+automation_request_path="res://harness/automation/requests/run-request.json"
+automation_results_directory="res://harness/automation/results"

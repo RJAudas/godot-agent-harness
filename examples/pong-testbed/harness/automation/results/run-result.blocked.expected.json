@@ -1,0 +1,24 @@
+{
+  "requestId": "pong-request-blocked-001",
+  "runId": "pong-autonomous-run-blocked-001",
+  "finalStatus": "blocked",
+  "failureKind": null,
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-blocked-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "The run was blocked before launch because the editor target was not eligible."
+    ],
+    "validatedAt": "2026-04-12T12:27:00Z"
+  },
+  "terminationStatus": "blocked",
+  "blockedReasons": [
+    "scene_already_running"
+  ],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:27:10Z"
+}

@@ -288,6 +288,14 @@ function Get-TriageAgentContent {
     return (Get-TemplateContent -RelativePath '.github/agents/godot-evidence-triage.agent.md')
 }
 
+function Get-RuntimeVerificationPromptContent {
+    return (Get-TemplateContent -RelativePath '.github/prompts/godot-runtime-verification.prompt.md')
+}
+
+function Get-RuntimeVerificationAgentContent {
+    return (Get-TemplateContent -RelativePath '.github/agents/godot-runtime-verification.agent.md')
+}
+
 function Get-InspectionRunConfigContent {
     return (Get-TemplateContent -RelativePath 'harness/inspection-run-config.json')
 }
@@ -393,6 +401,16 @@ if (-not $SkipAgentAssets) {
     }
     Add-Operation -Operations $operations -Path $promptPath -Action $promptAction
 
+    $runtimePromptPath = Join-Path $resolvedGameRoot '.github/prompts/godot-runtime-verification.prompt.md'
+    if ($PSCmdlet.ShouldProcess($runtimePromptPath, 'Write Godot runtime verification prompt')) {
+        Set-FileContent -Path $runtimePromptPath -Content (Get-RuntimeVerificationPromptContent)
+        $runtimePromptAction = 'wrote-runtime-prompt'
+    }
+    else {
+        $runtimePromptAction = 'skipped-write-runtime-prompt'
+    }
+    Add-Operation -Operations $operations -Path $runtimePromptPath -Action $runtimePromptAction
+
     $agentPath = Join-Path $resolvedGameRoot '.github/agents/godot-evidence-triage.agent.md'
     if ($PSCmdlet.ShouldProcess($agentPath, 'Write Godot evidence triage agent')) {
         Set-FileContent -Path $agentPath -Content (Get-TriageAgentContent)
@@ -402,6 +420,16 @@ if (-not $SkipAgentAssets) {
         $agentAction = 'skipped-write-agent'
     }
     Add-Operation -Operations $operations -Path $agentPath -Action $agentAction
+
+    $runtimeAgentPath = Join-Path $resolvedGameRoot '.github/agents/godot-runtime-verification.agent.md'
+    if ($PSCmdlet.ShouldProcess($runtimeAgentPath, 'Write Godot runtime verification agent')) {
+        Set-FileContent -Path $runtimeAgentPath -Content (Get-RuntimeVerificationAgentContent)
+        $runtimeAgentAction = 'wrote-runtime-agent'
+    }
+    else {
+        $runtimeAgentAction = 'skipped-write-runtime-agent'
+    }
+    Add-Operation -Operations $operations -Path $runtimeAgentPath -Action $runtimeAgentAction
 }
 
 $result = [ordered]@{

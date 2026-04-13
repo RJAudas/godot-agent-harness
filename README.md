@@ -82,7 +82,9 @@ That plugin action installs the project-level assets the agent needs:
 - `.github/copilot-instructions.md` managed runtime-harness block
 - `AGENTS.md` managed runtime-harness block
 - `.github/prompts/godot-evidence-triage.prompt.md`
+- `.github/prompts/godot-runtime-verification.prompt.md`
 - `.github/agents/godot-evidence-triage.agent.md`
+- `.github/agents/godot-runtime-verification.agent.md`
 - `harness/inspection-run-config.json`
 - `project.godot` wiring for the harness autoload and config path
 
@@ -107,6 +109,19 @@ The repository uses a Copilot-first guidance stack for agent work:
 - `.github/instructions/` for subtree-specific constraints
 - `.github/prompts/` and `.github/agents/` for reusable Copilot-native workflows
 - `tools/evals/001-agent-tooling-foundation/` for seeded eval prompts and machine-readable result files
+
+For the autonomous editor evidence loop, the current workspace-side entry points are:
+
+- `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`
+- `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`
+
+These helpers target the plugin-owned file broker under `harness/automation/requests/` and `harness/automation/results/`.
+
+Agent guidance now routes validation through three modes:
+
+- ordinary tests for unit, contract, or framework checks that do not ask about the running game
+- Scenegraph Harness runtime verification for runtime-visible outcomes such as what appears in game or whether a node exists while playing
+- combined validation when a change affects runtime-visible behavior and an existing deterministic test surface should also run
 
 ## Development discipline
 

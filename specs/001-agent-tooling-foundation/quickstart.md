@@ -36,9 +36,16 @@ Validate that the first-release tooling works in VS Code Copilot Chat and Copilo
 4. Emit the machine-readable run log with `pwsh ./tools/automation/new-autonomous-run-record.ps1 -ArtifactId 'godot-evidence-triage.agent' -WriteBoundaryId 'godot-evidence-triage-first-release' -RequestSummary 'Validate in-scope eval result output for manifest-centered evidence triage.' -OperationPath 'tools/evals/001-agent-tooling-foundation/us3-validation-results.json' -OperationEditType 'update' -OperationStatus 'performed' -OperationNote 'Eval result file updated inside the declared boundary.' -ValidationName 'write-boundary-check' -ValidationStatus 'pass' -ValidationDetails 'Requested eval result path is allowed by the boundary contract.' -OutputPath 'tools/automation/run-records/godot-evidence-triage-validation.json'`.
 5. Record the validation result in `tools/evals/001-agent-tooling-foundation/us3-validation-results.json` and validate it with `pwsh ./tools/validate-json.ps1 -InputPath 'tools/evals/001-agent-tooling-foundation/us3-validation-results.json' -SchemaPath 'tools/evals/agent-eval-result.schema.json'`.
 
-## 5. Final Validation
+## 5. Runtime Routing Validation
 
-1. Confirm the story result files exist in `tools/evals/001-agent-tooling-foundation/`.
+1. Use `tools/evals/001-agent-tooling-foundation/us4-runtime-routing.md` to review how the guidance stack routes ambiguous testing language.
+2. Compare the resulting classifications against `tools/evals/001-agent-tooling-foundation/us4-expected-results.json`.
+3. Confirm the routing distinguishes between ordinary tests, Scenegraph Harness runtime verification, combined validation, and post-run evidence triage.
+4. Validate `tools/evals/001-agent-tooling-foundation/us4-routing-results.json` with `pwsh ./tools/validate-json.ps1 -InputPath 'tools/evals/001-agent-tooling-foundation/us4-routing-results.json' -SchemaPath 'tools/evals/agent-eval-result.schema.json'`.
+
+## 6. Final Validation
+
+1. Confirm the story result files exist in `tools/evals/001-agent-tooling-foundation/`, including the runtime-routing eval outputs.
 2. Validate `tools/evals/001-agent-tooling-foundation/final-validation-results.json` with `pwsh ./tools/validate-json.ps1 -InputPath 'tools/evals/001-agent-tooling-foundation/final-validation-results.json' -SchemaPath 'tools/evals/agent-eval-result.schema.json'`.
 
 ## Exit Criteria
@@ -46,4 +53,5 @@ Validate that the first-release tooling works in VS Code Copilot Chat and Copilo
 - Copilot Chat and Copilot CLI both consume the planned guidance stack successfully.
 - Evidence manifests validate and point cleanly to raw runtime artifacts.
 - At least one autonomous artifact stays fully within its declared write boundary during seeded evals.
+- Ambiguous testing requests route cleanly to ordinary tests, Scenegraph Harness runtime verification, combined validation, or evidence triage.
 - Evaluation results are concrete enough to retain, narrow, or remove shipped tooling artifacts.

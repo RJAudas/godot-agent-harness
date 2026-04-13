@@ -24,6 +24,31 @@
         "Task requires expanding the boundary contract."
       ],
       "logOutputPath": "tools/automation/run-records/"
+    },
+    {
+      "id": "editor-evidence-run-request-helper",
+      "artifactId": "editor-evidence-run-request.helper",
+      "description": "Boundary for deterministic editor-evidence run-request artifacts and audit records.",
+      "allowedPaths": [
+        "examples/pong-testbed/harness/automation/requests/",
+        "tools/tests/.tmp/",
+        "tools/automation/run-records/"
+      ],
+      "allowedEditTypes": [
+        "create",
+        "update"
+      ],
+      "stopConditions": [
+        "Requested request artifact path falls outside the declared automation request or test-sandbox locations.",
+        "Requested edit type is destructive or not explicitly allowed.",
+        "The helper is asked to bypass the declared workspace write boundary."
+      ],
+      "escalationConditions": [
+        "The request needs to write into a project path that is not yet declared in the boundary contract.",
+        "The helper must support delete operations or non-file-broker automation surfaces.",
+        "A workflow needs broader auditing than the helper can record with the existing run-record schema."
+      ],
+      "logOutputPath": "tools/automation/run-records/"
     }
   ]
 }

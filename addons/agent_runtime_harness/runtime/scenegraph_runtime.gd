@@ -36,6 +36,7 @@ func _exit_tree() -> void:
 func configure_session(session_context: Dictionary) -> void:
 	_session_context = {
 		"session_id": session_context.get("session_id", _build_identifier("session")),
+		"request_id": session_context.get("request_id", _build_identifier("request")),
 		"run_id": session_context.get("run_id", _build_identifier("run")),
 		"scenario_id": session_context.get("scenario_id", InspectionConstants.DEFAULT_SCENARIO_ID),
 		"requested_by": session_context.get("requested_by", "editor_plugin"),
@@ -46,10 +47,15 @@ func configure_session(session_context: Dictionary) -> void:
 			"manual": true,
 			"failure": true,
 		}),
+		"stop_policy": session_context.get("stop_policy", {
+			"stopAfterValidation": true,
+		}),
 	}
 
 	if session_context.has("config_path"):
 		_load_session_config(String(session_context.get("config_path")))
+
+	_send_debugger_message("session_configured", [_build_session_configuration_event()])
 
 
 func request_manual_capture() -> Dictionary:
@@ -127,6 +133,7 @@ func _load_session_config(config_path: String) -> void:
 	_session_context["artifact_root"] = parsed.get("artifactRoot", _session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
 	_session_context["output_directory"] = parsed.get("outputDirectory", _session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
 	_session_context["capture_policy"] = parsed.get("capturePolicy", _session_context.get("capture_policy", {}))
+	_session_context["stop_policy"] = parsed.get("defaultRequestOverrides", {}).get("stopPolicy", _session_context.get("stop_policy", {}))
 
 	_expectations.clear()
 	for expectation_path_value in parsed.get("expectationFiles", []):
@@ -182,6 +189,16 @@ func _on_debugger_request(message: String, data: Array) -> bool:
 func _send_debugger_message(message_name: String, data: Array) -> void:
 	if EngineDebugger.is_active():
 		EngineDebugger.send_message("%s:%s" % [InspectionConstants.RUNTIME_TO_EDITOR_CHANNEL, message_name], data)
+
+
+func _build_session_configuration_event() -> Dictionary:
+	return {
+		"request_id": String(_session_context.get("request_id", "")),
+		"session_id": String(_session_context.get("session_id", "")),
+		"run_id": String(_session_context.get("run_id", "")),
+		"scenario_id": String(_session_context.get("scenario_id", "")),
+		"stop_policy": _session_context.get("stop_policy", {}).duplicate(true),
+	}
 
 
 func _emit_runtime_error(message: String) -> void:

@@ -62,6 +62,7 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 				"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
 			],
 		},
+		"producer": _build_producer(session_context),
 		"createdAt": InspectionConstants.utc_timestamp_now(),
 	}
 
@@ -111,3 +112,13 @@ func _build_artifact_ref(kind: String, artifact_root: String, file_name: String,
 		"mediaType": media_type,
 		"description": description,
 	}
+
+
+func _build_producer(session_context: Dictionary) -> Dictionary:
+	var producer := {
+		"surface": "scenegraph_harness_runtime",
+	}
+	var request_id := String(session_context.get("request_id", ""))
+	if not request_id.is_empty():
+		producer["toolingArtifactId"] = "scenegraph_automation_broker"
+	return producer

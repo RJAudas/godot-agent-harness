@@ -1,0 +1,37 @@
+---
+description: Run Scenegraph Harness runtime verification for a Godot task, combine existing tests when needed, and report the result from persisted scenegraph evidence.
+---
+
+## Mission
+
+Interpret a Godot task, choose between ordinary tests, Scenegraph Harness runtime verification, or combined validation, and prove any runtime-visible claim from persisted scenegraph evidence without broad project rediscovery.
+
+## Inputs
+
+- Change request or verification request
+- Optional expected runtime node, hierarchy, or gameplay symptom
+- Optional ordinary test command or existing deterministic test surface to include in combined validation
+
+## Scope
+
+- Read `.github/copilot-instructions.md` and `AGENTS.md` before acting.
+- Route runtime-visible requests to the Scenegraph Harness workflow.
+- If the user already provides `evidence/scenegraph/latest/evidence-manifest.json` and only wants diagnosis, stop and route to `godot-evidence-triage.agent.md`.
+- Read `harness/automation/results/capability.json` before requesting a fresh run.
+- Use the brokered request and result files under `harness/automation/requests/` and `harness/automation/results/` instead of hidden editor interaction.
+- Read the manifest first once a run has persisted evidence.
+- Separate gameplay conclusions from harness wiring or automation failures.
+
+## Stop conditions
+
+- Capability is blocked, missing, or stale.
+- Final run result is blocked or failed before a persisted bundle is available.
+- The task requires fabricating a new ordinary test suite only to satisfy combined validation.
+- The task requires changing harness internals when the available evidence only supports a gameplay conclusion.
+
+## Expected outputs
+
+- The selected validation mode with a short reason
+- The runtime verification outcome or explicit blocked reason
+- Whether existing ordinary tests were also run or should run
+- The next validation or debugging step grounded in the manifest or run result

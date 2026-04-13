@@ -9,7 +9,8 @@
     "fixturePaths": [
       "tools/evals/001-agent-tooling-foundation/us1-orientation-results.json",
       "tools/evals/001-agent-tooling-foundation/us2-bundle-results.json",
-      "tools/evals/001-agent-tooling-foundation/us3-validation-results.json"
+      "tools/evals/001-agent-tooling-foundation/us3-validation-results.json",
+      "tools/evals/001-agent-tooling-foundation/us4-routing-results.json"
     ],
     "guidancePaths": [
       "README.md",
@@ -20,8 +21,8 @@
     "outputPath": "tools/evals/001-agent-tooling-foundation/final-validation-results.json"
   },
   "summary": {
-    "headline": "The agent tooling foundation is fully scaffolded, validated, and recorded in machine-readable outputs.",
-    "details": "Setup directories, shared schemas, evidence tooling, automation boundaries, Copilot guidance assets, and story-level result files are all present and synchronized with the quickstart flow."
+    "headline": "The agent tooling foundation is scaffolded, validated, and now routes runtime verification explicitly.",
+    "details": "Setup directories, shared schemas, evidence tooling, automation boundaries, runtime-verification guidance assets, and story-level result files are present and synchronized with the quickstart flow."
   },
   "checks": [
     {
@@ -37,12 +38,17 @@
     {
       "id": "story-results-recorded",
       "status": "pass",
-      "details": "US1, US2, and US3 each have seeded fixtures and machine-readable result files in `tools/evals/001-agent-tooling-foundation/`."
+      "details": "US1, US2, US3, and US4 each have seeded fixtures and machine-readable result files in `tools/evals/001-agent-tooling-foundation/`."
     },
     {
       "id": "quickstart-synced",
       "status": "pass",
       "details": "The quickstart now references the implemented commands, result files, and validation loop used in this repo."
+    },
+    {
+      "id": "runtime-routing-documented",
+      "status": "pass",
+      "details": "The guidance stack and reusable assets consistently distinguish ordinary tests, Scenegraph Harness runtime verification, combined validation, and post-run evidence triage."
     }
   ],
   "metrics": {

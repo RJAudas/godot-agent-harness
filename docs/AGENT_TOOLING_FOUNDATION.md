@@ -54,6 +54,22 @@ pwsh ./tools/automation/new-autonomous-run-record.ps1 -ArtifactId <artifact-id> 
 
 Use this when you want an auditable JSON record of what an automation flow attempted and whether it stayed within its declared boundary.
 
+### Read the current editor-evidence capability artifact
+
+```powershell
+pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>
+```
+
+Use this when the Godot project is already open in the editor and you want a deterministic read of the latest capability artifact that the plugin-owned broker wrote. This is the first step in Scenegraph Harness runtime verification from the source repository.
+
+### Write an autonomous editor-evidence run request
+
+```powershell
+pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>
+```
+
+Use this when you want to submit a machine-readable request into the plugin-owned file broker without editing the request JSON by hand. Use it after a ready capability check when a task needs Scenegraph Harness runtime verification.
+
 ### Run the automated PowerShell tool tests
 
 ```powershell
@@ -74,6 +90,26 @@ It provides:
 - boundary checks and run logs for any approval-free automation
 
 It does **not** implement runtime harness behavior by itself.
+
+It now does provide the workspace-side helper surface for the autonomous editor evidence loop:
+
+- read capability artifacts from `harness/automation/results/`
+- write run requests into `harness/automation/requests/`
+- validate the resulting run-result and manifest-centered evidence artifacts with the existing schema and manifest tools
+
+## Validation routing modes
+
+The agent-tooling stack now distinguishes three validation modes:
+
+1. **Ordinary tests** for unit, contract, framework, and other non-runtime checks.
+2. **Scenegraph Harness runtime verification** for runtime-visible requests such as "verify at runtime," "test the running code," "check what appears in game," or "confirm the node exists while playing."
+3. **Combined validation** when a change affects runtime-visible behavior and there is already an existing deterministic test surface.
+
+Use the runtime harness when the request is about proving the running result, not just exercising code paths in isolation.
+Do not substitute runtime verification for normal tests that already cover the changed logic.
+Do not invent new ordinary tests solely to satisfy the combined-validation rule.
+
+If a user already provides an evidence manifest and only wants diagnosis, use the manifest-centered evidence-triage workflow rather than launching a fresh run.
 
 If you want collision events, frame traces, scene snapshots, or other runtime data streams, those still need to be implemented in `addons/agent_runtime_harness/` or another runtime-facing part of the repo. The tooling here helps define what those outputs should look like and how to validate them once they exist.
 
@@ -120,6 +156,11 @@ Recommended deployment flow for a fresh game project:
 
 That flow installs the same `.github/`, `AGENTS.md`, `harness/`, and `project.godot` wiring that the PowerShell deployment script installs from the source repository.
 
+The deployed templates now install two reusable workflow pairs:
+
+- `godot-evidence-triage` for post-run manifest-centered diagnosis
+- `godot-runtime-verification` for end-to-end runtime proof from capability check through persisted bundle review
+
 Examples:
 
 - run a validator yourself before trusting a generated JSON file
@@ -157,6 +198,15 @@ That keeps the plugin self-sufficient after it has been copied into another game
 3. Assemble or update an evidence manifest.
 4. Validate the manifest.
 5. Add or update eval fixtures that describe how an agent should consume the new artifact.
+
+### When verifying a runtime-visible gameplay change
+
+1. Decide whether the task needs runtime verification only or combined validation with existing ordinary tests.
+2. Read the current capability artifact with `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`.
+3. If capability is ready, write a brokered run request with `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`.
+4. Wait for the final run result and then read the persisted `evidence-manifest.json` first.
+5. Read summary, diagnostics, and snapshot artifacts only as needed.
+6. Report blocked capability, blocked runs, or missing persisted bundles explicitly instead of guessing from editor narration.
 
 ### When authoring a new prompt or agent artifact
 

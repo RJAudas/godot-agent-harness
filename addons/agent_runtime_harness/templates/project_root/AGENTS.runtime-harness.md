@@ -16,5 +16,5 @@
 - If runtime verification fails, distinguish between a gameplay failure and a harness wiring failure such as a missing autoload or no persisted bundle.
 - For autonomous editor evidence runs, prefer the file-broker path under `harness/automation/requests/` and `harness/automation/results/` before considering fallback surfaces.
 - Read `harness/automation/results/capability.json` or the latest final run result before opening raw evidence files.
-- If `run-result.json` reports `failureKind = build`, use the build diagnostics and raw build output there and do not expect a manifest for that run.
+- If `run-result.json` reports `failureKind = build`, use the build diagnostics and raw build output there, report `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest for that run.
 - Treat blocked capability or run results as explicit unsupported-state signals; do not guess around them with hidden editor interaction.

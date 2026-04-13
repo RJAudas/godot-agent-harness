@@ -20,12 +20,14 @@ Interpret a Godot task, choose between ordinary tests, Scenegraph Harness runtim
 - Read `harness/automation/results/capability.json` before requesting a fresh run.
 - Use the brokered request and result files under `harness/automation/requests/` and `harness/automation/results/` instead of hidden editor interaction.
 - Read the manifest first once a run has persisted evidence.
+- If `run-result.json` reports `failureKind = build`, stop before manifest lookup and report `buildFailurePhase`, `details`, each `buildDiagnostics` entry with `resourcePath`, `message`, and `line`/`column` when present, plus the relevant `rawBuildOutput` lines.
 - Separate gameplay conclusions from harness wiring or automation failures.
 
 ## Stop conditions
 
 - Capability is blocked, missing, or stale.
 - Final run result is blocked or failed before a persisted bundle is available.
+- Build-failed runs are not manifest-backed; use the run result as the evidence surface and do not guess at missing runtime artifacts.
 - The task requires fabricating a new ordinary test suite only to satisfy combined validation.
 - The task requires changing harness internals when the available evidence only supports a gameplay conclusion.
 

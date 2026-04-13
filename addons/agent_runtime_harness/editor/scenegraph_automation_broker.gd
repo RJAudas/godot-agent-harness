@@ -183,9 +183,9 @@ func _collect_build_diagnostics(target_scene: String) -> Array:
 			if not visited_paths.has(dependency_path):
 				queued_paths.append(dependency_path)
 
-		var diagnostic := _inspect_resource_path(resource_path)
-		if not diagnostic.is_empty() and not _diagnostic_exists(diagnostics, diagnostic):
-			diagnostics.append(diagnostic)
+		for diagnostic_value in _inspect_resource_path(resource_path):
+			var diagnostic: Dictionary = diagnostic_value
+			_append_unique_diagnostic(diagnostics, diagnostic)
 
 	return diagnostics
 
@@ -298,15 +298,28 @@ func _build_missing_dependency_diagnostic(dependency_ref: Dictionary) -> Diction
 	)
 
 
-func _diagnostic_exists(diagnostics: Array, candidate: Dictionary) -> bool:
-	for diagnostic_value in diagnostics:
-		var diagnostic: Dictionary = diagnostic_value
-		if diagnostic.get("resourcePath", null) == candidate.get("resourcePath", null) \
-		and diagnostic.get("message", "") == candidate.get("message", "") \
-		and diagnostic.get("line", null) == candidate.get("line", null) \
-		and diagnostic.get("column", null) == candidate.get("column", null):
-			return true
-	return false
+func _append_unique_diagnostic(diagnostics: Array, candidate: Dictionary) -> void:
+	if candidate.is_empty():
+		return
+
+	for index in range(diagnostics.size()):
+		var diagnostic: Dictionary = diagnostics[index]
+		if diagnostic.get("resourcePath", null) != candidate.get("resourcePath", null) \
+		or diagnostic.get("message", "") != candidate.get("message", "") \
+		or diagnostic.get("line", null) != candidate.get("line", null):
+			continue
+
+		var existing_column = diagnostic.get("column", null)
+		var candidate_column = candidate.get("column", null)
+		if existing_column == candidate_column:
+			return
+		if existing_column == null and candidate_column != null:
+			diagnostics[index] = candidate
+			return
+		if existing_column != null and candidate_column == null:
+			return
+
+	diagnostics.append(candidate)
 
 
 func _extract_repo_resource_path(raw_dependency: String) -> String:
@@ -318,18 +331,18 @@ func _extract_repo_resource_path(raw_dependency: String) -> String:
 	return ""
 
 
-func _inspect_resource_path(resource_path: String) -> Dictionary:
+func _inspect_resource_path(resource_path: String) -> Array:
 	var source_kind := _classify_build_source_kind(resource_path)
 	if source_kind == InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT:
 		return _inspect_script_resource(resource_path)
 
 	var resource = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
 	if resource != null:
-		return {}
+		return []
 
 	var message := "Failed to load %s before starting the autonomous run." % source_kind
 	var raw_excerpt := "%s: %s" % [resource_path, message]
-	return _artifact_store.build_build_diagnostic(
+	return [_artifact_store.build_build_diagnostic(
 		resource_path,
 		message,
 		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
@@ -338,14 +351,14 @@ func _inspect_resource_path(resource_path: String) -> Dictionary:
 		source_kind,
 		null,
 		raw_excerpt
-	)
+	)]
 
 
-func _inspect_script_resource(resource_path: String) -> Dictionary:
+func _inspect_script_resource(resource_path: String) -> Array:
 	var script: Script = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP) as Script
 	if script == null:
 		var missing_message := "Failed to load script before starting the autonomous run."
-		return _artifact_store.build_build_diagnostic(
+		return [_artifact_store.build_build_diagnostic(
 			resource_path,
 			missing_message,
 			InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
@@ -354,14 +367,18 @@ func _inspect_script_resource(resource_path: String) -> Dictionary:
 			InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
 			null,
 			"%s: %s" % [resource_path, missing_message]
-		)
+		)]
 
 	var reload_error: int = script.reload(false)
 	if reload_error == OK:
-		return {}
+		return []
+
+	var editor_diagnostics := _collect_script_editor_diagnostics(resource_path, script)
+	if not editor_diagnostics.is_empty():
+		return editor_diagnostics
 
 	var message := "Script reload failed with %s." % error_string(reload_error)
-	return _artifact_store.build_build_diagnostic(
+	return [_artifact_store.build_build_diagnostic(
 		resource_path,
 		message,
 		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
@@ -370,7 +387,170 @@ func _inspect_script_resource(resource_path: String) -> Dictionary:
 		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
 		null,
 		"%s: %s" % [resource_path, message]
-	)
+	)]
+
+
+func _collect_script_editor_diagnostics(resource_path: String, script: Script) -> Array:
+	var editor_interface = _get_editor_interface()
+	if editor_interface == null:
+		return []
+
+	var script_editor = editor_interface.get_script_editor()
+	if script_editor == null:
+		return []
+
+	var previous_script: Script = script_editor.get_current_script()
+	editor_interface.edit_script(script, -1, 0, true)
+	var current_script: Script = script_editor.get_current_script()
+	if current_script == null or current_script.get_path() != resource_path:
+		_restore_script_editor(previous_script, resource_path, editor_interface)
+		return []
+	var current_editor = script_editor.get_current_editor()
+	if current_editor == null:
+		_restore_script_editor(previous_script, resource_path, editor_interface)
+		return []
+
+	var diagnostics: Array = []
+	for text_value in _collect_script_editor_text_blocks(current_editor):
+		var text := String(text_value)
+		for diagnostic_value in _parse_script_editor_diagnostics(resource_path, text):
+			var diagnostic: Dictionary = diagnostic_value
+			_append_unique_diagnostic(diagnostics, diagnostic)
+
+	_restore_script_editor(previous_script, resource_path, editor_interface)
+	return diagnostics
+
+
+func _restore_script_editor(previous_script: Script, current_resource_path: String, editor_interface) -> void:
+	if previous_script == null:
+		return
+	if previous_script.get_path() == current_resource_path:
+		return
+	editor_interface.edit_script(previous_script, -1, 0, true)
+
+
+func _collect_script_editor_text_blocks(root: Node) -> Array:
+	var texts: Array = []
+	_collect_rich_text_blocks(root, texts)
+	return _dedupe_strings(texts)
+
+
+func _collect_rich_text_blocks(node: Node, texts: Array) -> void:
+	if node is RichTextLabel:
+		var label: RichTextLabel = node
+		var raw_text := label.get_text().strip_edges()
+		if not raw_text.is_empty():
+			texts.append(raw_text)
+		var parsed_text := label.get_parsed_text().strip_edges()
+		if not parsed_text.is_empty():
+			texts.append(parsed_text)
+
+	for child in node.get_children():
+		if child is Node:
+			_collect_rich_text_blocks(child, texts)
+
+
+func _parse_script_editor_diagnostics(default_resource_path: String, text: String) -> Array:
+	var diagnostics: Array = []
+	var current_resource_path := default_resource_path
+	var pending_line = null
+	var lines := text.replace("\r", "").split("\n", false)
+
+	for raw_line_value in lines:
+		var line_text := String(raw_line_value).strip_edges()
+		if line_text.is_empty():
+			continue
+
+		var summary_match := _match_script_error_summary(line_text)
+		if not summary_match.is_empty():
+			diagnostics.append(_artifact_store.build_build_diagnostic(
+				current_resource_path,
+				String(summary_match.get("message", "")),
+				InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+				summary_match.get("line", null),
+				summary_match.get("column", null),
+				InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+				null,
+				line_text
+			))
+			pending_line = null
+			continue
+
+		if line_text.begins_with("res://") and line_text.ends_with(":"):
+			current_resource_path = line_text.trim_suffix(":")
+			pending_line = null
+			continue
+
+		var line_match := _match_script_error_line(line_text)
+		if not line_match.is_empty():
+			var inline_message := String(line_match.get("message", ""))
+			if inline_message.is_empty():
+				pending_line = {
+					"resourcePath": current_resource_path,
+					"line": line_match.get("line", null),
+				}
+				continue
+
+			diagnostics.append(_artifact_store.build_build_diagnostic(
+				current_resource_path,
+				inline_message,
+				InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+				line_match.get("line", null),
+				null,
+				InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+				null,
+				line_text
+			))
+			pending_line = null
+			continue
+
+		if pending_line != null:
+			diagnostics.append(_artifact_store.build_build_diagnostic(
+				String(pending_line.get("resourcePath", current_resource_path)),
+				line_text,
+				InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+				pending_line.get("line", null),
+				null,
+				InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+				null,
+				"Line %d: %s" % [int(pending_line.get("line", 0)), line_text]
+			))
+			pending_line = null
+
+	return diagnostics
+
+
+func _match_script_error_summary(line_text: String) -> Dictionary:
+	for pattern in [
+		"^Error at \\(\\[hint=Line (\\d+), column (\\d+)\\][^\\]]+\\[/hint\\]\\):\\s*(.+)$",
+		"^Error at \\(Line (\\d+), column (\\d+)\\):\\s*(.+)$",
+		"^Error at \\((\\d+),\\s*(\\d+)\\):\\s*(.+)$",
+	]:
+		var regex := RegEx.new()
+		if regex.compile(pattern) != OK:
+			continue
+		var match := regex.search(line_text)
+		if match == null:
+			continue
+		return {
+			"line": int(match.get_string(1)),
+			"column": int(match.get_string(2)),
+			"message": String(match.get_string(3)).strip_edges(),
+		}
+	return {}
+
+
+func _match_script_error_line(line_text: String) -> Dictionary:
+	var regex := RegEx.new()
+	if regex.compile("^Line\\s+(\\d+):\\s*(.*)$") != OK:
+		return {}
+	var match := regex.search(line_text)
+	if match == null:
+		return {}
+	return {
+		"line": int(match.get_string(1)),
+		"message": String(match.get_string(2)).strip_edges(),
+	}
 
 
 func _classify_build_source_kind(resource_path: String) -> String:
@@ -394,10 +574,14 @@ func _dedupe_strings(values: Array) -> Array:
 	return deduped
 
 
-func _is_playing_scene() -> bool:
+func _get_editor_interface():
 	if _plugin == null:
-		return false
-	var editor_interface = _plugin.get_editor_interface()
+		return null
+	return _plugin.get_editor_interface()
+
+
+func _is_playing_scene() -> bool:
+	var editor_interface = _get_editor_interface()
 	if editor_interface == null:
 		return false
 	return editor_interface.is_playing_scene()

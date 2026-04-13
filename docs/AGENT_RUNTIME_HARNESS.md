@@ -270,7 +270,7 @@ Agents should consume runtime evidence through a manifest-centered bundle instea
 
 For autonomous editor evidence runs, read the final `harness/automation/results/run-result.json` first:
 
-- if `failureKind = build`, use the build diagnostics and raw build output from that result and do not expect a manifest
+- if `failureKind = build`, use the build diagnostics and raw build output from that result, surface `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest
 - otherwise, follow the existing manifest-centered bundle flow
 
 Recommended flow:

@@ -1,0 +1,39 @@
+{
+  "requestId": "pong-request-build-failure-partial-001",
+  "runId": "pong-autonomous-run-build-failure-partial-001",
+  "finalStatus": "failed",
+  "failureKind": "build",
+  "buildFailurePhase": "awaiting_runtime",
+  "buildDiagnostics": [
+    {
+      "resourcePath": "res://scripts/build_failures/syntax_error_root.gd",
+      "message": "Script reload failed with Parse Error.",
+      "severity": "error",
+      "line": null,
+      "column": null,
+      "sourceKind": "script",
+      "code": null,
+      "rawExcerpt": "res://scripts/build_failures/syntax_error_root.gd: Script reload failed with Parse Error."
+    }
+  ],
+  "rawBuildOutput": [
+    "res://scripts/build_failures/syntax_error_root.gd: Script reload failed with Parse Error."
+  ],
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-build-failure-partial-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "No new evidence manifest was produced because the run failed during build before runtime capture.",
+      "Detected 1 build diagnostic(s) before runtime attachment."
+    ],
+    "validatedAt": "2026-04-12T13:15:06Z"
+  },
+  "terminationStatus": "already_closed",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T13:15:07Z"
+}

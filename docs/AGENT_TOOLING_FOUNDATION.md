@@ -204,9 +204,10 @@ That keeps the plugin self-sufficient after it has been copied into another game
 1. Decide whether the task needs runtime verification only or combined validation with existing ordinary tests.
 2. Read the current capability artifact with `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`.
 3. If capability is ready, write a brokered run request with `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`.
-4. Wait for the final run result and then read the persisted `evidence-manifest.json` first.
-5. Read summary, diagnostics, and snapshot artifacts only as needed.
-6. Report blocked capability, blocked runs, or missing persisted bundles explicitly instead of guessing from editor narration.
+4. Wait for the final run result and inspect `harness/automation/results/run-result.json` first.
+5. If the run completed and reported a manifest, read the persisted `evidence-manifest.json`; if `failureKind = build`, use the run result instead, surfacing `details`, `resourcePath`, and `line`/`column` when available alongside the raw build output.
+6. Read summary, diagnostics, and snapshot artifacts only as needed.
+7. Report blocked capability, blocked runs, build-failed runs without manifests, or missing persisted bundles explicitly instead of guessing from editor narration.
 
 ### When authoring a new prompt or agent artifact
 

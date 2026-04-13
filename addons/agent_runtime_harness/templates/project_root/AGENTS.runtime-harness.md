@@ -1,8 +1,9 @@
 ## Runtime Harness Workflow
 1. Read `.github/copilot-instructions.md` for repo-wide guidance and the runtime evidence workflow.
 2. Inspect `project.godot` to confirm the harness plugin and autoload wiring before assuming runtime capture is available.
-3. When runtime evidence exists, read `evidence/scenegraph/latest/evidence-manifest.json` before opening raw artifacts.
-4. Only inspect raw scenegraph artifacts that the manifest references.
+3. For autonomous editor evidence runs, read `harness/automation/results/run-result.json` first.
+4. When runtime evidence exists for a successful run, read `evidence/scenegraph/latest/evidence-manifest.json` before opening raw artifacts.
+5. Only inspect raw scenegraph artifacts that the manifest references.
 
 ## Runtime Verification Rules
 - Use **ordinary tests** for unit, contract, framework, and other non-runtime checks.
@@ -15,4 +16,5 @@
 - If runtime verification fails, distinguish between a gameplay failure and a harness wiring failure such as a missing autoload or no persisted bundle.
 - For autonomous editor evidence runs, prefer the file-broker path under `harness/automation/requests/` and `harness/automation/results/` before considering fallback surfaces.
 - Read `harness/automation/results/capability.json` or the latest final run result before opening raw evidence files.
+- If `run-result.json` reports `failureKind = build`, use the build diagnostics and raw build output there, report `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest for that run.
 - Treat blocked capability or run results as explicit unsupported-state signals; do not guess around them with hidden editor interaction.

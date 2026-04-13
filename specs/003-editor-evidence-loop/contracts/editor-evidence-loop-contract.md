@@ -67,6 +67,13 @@ Workspace-side helpers mirror those paths:
   - `stopping`
   - `completed`
   - `failed`
+- **Build-failure extension fields**:
+  - `failureKind` with `build` for editor-reported build, parse, or blocking resource-load failures
+  - `buildFailurePhase` with `launching` or `awaiting_runtime`
+  - `buildDiagnosticCount`
+  - `rawBuildOutputAvailable`
+- **No-manifest rule for build failures**:
+  - build-failed runs may stop during the editor plugin build callback or before runtime attachment, so lifecycle failure status must make it clear that capture and persistence never began
 
 ### Automated Run Result
 
@@ -78,6 +85,9 @@ Workspace-side helpers mirror those paths:
   - `runId`
   - `finalStatus`
   - `failureKind`
+  - `buildFailurePhase`
+  - `buildDiagnostics`
+  - `rawBuildOutput`
   - `manifestPath`
   - `outputDirectory`
   - `validationResult`
@@ -90,6 +100,8 @@ Workspace-side helpers mirror those paths:
 - The manifest remains the primary handoff surface for scenegraph snapshot, diagnostics, and summary artifacts.
 - A run cannot report success until the manifest and referenced artifacts have been validated.
 - The evidence bundle must be traceable to the current `runId` so stale outputs cannot satisfy a new request accidentally.
+- Build-failed runs use the same run-result artifact and must keep `manifestPath` set to `null` when no new evidence bundle was produced.
+- Agents should read `run-result.json` first for autonomous runs; only successful or otherwise manifest-backed runs should continue into the manifest-centered evidence path.
 
 ## Control Path Options
 
@@ -106,4 +118,5 @@ Workspace-side helpers mirror those paths:
 - The broker must process at most one autonomous run at a time for the first release and reject overlap with a machine-readable blocked result.
 - Any workspace-side helper that writes request artifacts should integrate with the repository’s existing automation boundary and run-log guidance when those helpers are added.
 - Launch, validation, and shutdown failures must be distinguishable in machine-readable form.
+- Build failures must be distinguishable from generic launch and attachment failures in both lifecycle-status and run-result artifacts.
 - Agents should read the capability or final run-result artifact before opening raw scenegraph evidence files.

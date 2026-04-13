@@ -3,17 +3,19 @@ extends RefCounted
 class_name ScenegraphRunCoordinator
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
 
 signal lifecycle_status_written(payload)
 signal run_completed(result)
 
 var _plugin: EditorPlugin
 var _bridge
-var _artifact_store
+var _artifact_store: ScenegraphAutomationArtifactStore
 var _active_config := {}
 var _active_request := {}
 var _last_manifest := {}
 var _last_validation := {}
+var _last_build_failure := {}
 var _pending_failure_kind: Variant = null
 var _pending_failure_message := ""
 var _active := false
@@ -26,7 +28,7 @@ var _launch_started_at_usec := 0
 var _active_config_path := ""
 
 
-func configure(plugin: EditorPlugin, bridge: Object, artifact_store: Object) -> void:
+func configure(plugin: EditorPlugin, bridge: Object, artifact_store: ScenegraphAutomationArtifactStore) -> void:
 	_plugin = plugin
 	_bridge = bridge
 	_artifact_store = artifact_store
@@ -36,12 +38,21 @@ func is_active() -> bool:
 	return _active
 
 
+func is_awaiting_runtime() -> bool:
+	return _awaiting_runtime
+
+
+func get_active_request() -> Dictionary:
+	return _active_request.duplicate(true)
+
+
 func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, config_path: String = "") -> Dictionary:
 	_active_config = config.duplicate(true)
 	_active_request = _resolve_request(config, request)
 	_active_config_path = config_path
 	_last_manifest = {}
 	_last_validation = _build_validation_result(false, 0, [], false, ["Validation has not completed yet."])
+	_last_build_failure = {}
 	_pending_failure_kind = null
 	_pending_failure_message = ""
 	_stop_requested = false
@@ -53,23 +64,31 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, 
 
 	_active = true
 	_launch_started_at_usec = Time.get_ticks_usec()
+	var request_id := String(_active_request.get("requestId", ""))
+	var run_id := String(_active_request.get("runId", ""))
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_RECEIVED, "Autonomous run request accepted.")
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_LAUNCHING, "Starting the requested scene in the editor.")
-	_emit_status(InspectionConstants.AUTOMATION_STATUS_AWAITING_RUNTIME, "Waiting for the runtime debugger session to attach.")
-
-	_awaiting_runtime = true
-	_awaiting_capture = true
-	_awaiting_manifest = false
 
 	_bridge.set_session_context(_build_session_context())
 	var editor_interface = _get_editor_interface()
 	if editor_interface == null:
 		return _finish_blocked_run(["editor_interface_unavailable"])
 	editor_interface.play_custom_scene(String(_active_request.get("targetScene", "")))
+	if not _active:
+		return {
+			"ok": false,
+			"requestId": request_id,
+			"runId": run_id,
+		}
+
+	_emit_status(InspectionConstants.AUTOMATION_STATUS_AWAITING_RUNTIME, "Waiting for the runtime debugger session to attach.")
+	_awaiting_runtime = true
+	_awaiting_capture = true
+	_awaiting_manifest = false
 	return {
 		"ok": true,
-		"requestId": _active_request.get("requestId", ""),
-		"runId": _active_request.get("runId", ""),
+		"requestId": request_id,
+		"runId": run_id,
 	}
 
 
@@ -160,6 +179,29 @@ func handle_transport_error(message: String) -> void:
 		_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY, message)
 
 
+func handle_build_failed(payload: Dictionary) -> void:
+	if not _active:
+		return
+
+	_last_build_failure = _artifact_store.normalize_build_failure_payload(payload)
+	_awaiting_runtime = false
+	_awaiting_capture = false
+	_awaiting_manifest = false
+
+	var details := String(_last_build_failure.get("details", "Build diagnostics were detected before runtime attachment."))
+	_last_validation = _build_build_failure_validation_result(details)
+	_emit_status(
+		InspectionConstants.AUTOMATION_STATUS_FAILED,
+		details,
+		_artifact_store.build_build_failure_status_extras(
+			String(_last_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+			_last_build_failure.get("buildDiagnostics", []),
+			_last_build_failure.get("rawBuildOutput", [])
+		)
+	)
+	_finalize_run("failed", InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD, _derive_build_failure_termination_status(), details, _last_build_failure)
+
+
 func _on_runtime_attached() -> void:
 	_awaiting_runtime = false
 	var capture_policy: Dictionary = _active_request.get("capturePolicy", {})
@@ -202,7 +244,6 @@ func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
 	var request_id := String(_active_request.get("requestId", "request-blocked"))
 	var run_id := String(_active_request.get("runId", "run-blocked"))
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_BLOCKED, "Autonomous run request was blocked.", {
-		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_LAUNCH,
 		"evidenceRefs": blocked_reasons,
 	})
 	var result := {
@@ -238,7 +279,7 @@ func _fail_run(failure_kind: String, message: String) -> void:
 	_finalize_run("failed", failure_kind, _derive_failure_termination_status(), message)
 
 
-func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "") -> void:
+func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "", build_failure := {}) -> void:
 	var manifest_path = null
 	if not _last_manifest.is_empty():
 		manifest_path = _resolve_manifest_repo_path()
@@ -262,6 +303,11 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 		"completedAt": InspectionConstants.utc_timestamp_now(),
 	}
+	if failure_kind == InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD:
+		var normalized_build_failure: Dictionary = _artifact_store.normalize_build_failure_payload(build_failure)
+		result["buildFailurePhase"] = normalized_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
+		result["buildDiagnostics"] = normalized_build_failure.get("buildDiagnostics", []).duplicate(true)
+		result["rawBuildOutput"] = normalized_build_failure.get("rawBuildOutput", []).duplicate(true)
 	_artifact_store.write_run_result(_active_config, result)
 	emit_signal("run_completed", result)
 	_reset_state()
@@ -410,6 +456,18 @@ func _build_validation_result(manifest_exists: bool, artifact_refs_checked: int,
 	}
 
 
+func _build_build_failure_validation_result(note: String) -> Dictionary:
+	var notes: Array = [
+		"No new evidence manifest was produced because the run failed during build before runtime capture.",
+	]
+	var expected_manifest_path := _resolve_expected_manifest_resource_path()
+	if FileAccess.file_exists(expected_manifest_path):
+		notes.append("An existing manifest file was ignored so stale evidence would not be reported for this build-failed run.")
+	if not note.is_empty():
+		notes.append(note)
+	return _build_validation_result(false, 0, [], false, notes)
+
+
 func _validate_manifest(manifest: Dictionary) -> Dictionary:
 	if manifest.is_empty():
 		return _build_validation_result(false, 0, [], false, ["No manifest was produced for the autonomous run."])
@@ -454,6 +512,15 @@ func _derive_failure_termination_status() -> String:
 	return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
 
 
+func _derive_build_failure_termination_status() -> String:
+	var build_failure_phase := String(_last_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING))
+	if _is_playing_scene():
+		return InspectionConstants.AUTOMATION_TERMINATION_RUNNING
+	if build_failure_phase == InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_AWAITING_RUNTIME:
+		return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
+	return InspectionConstants.AUTOMATION_TERMINATION_NOT_STARTED
+
+
 func _should_stop_after_validation() -> bool:
 	var stop_policy: Dictionary = _active_request.get("stopPolicy", {})
 	return bool(stop_policy.get("stopAfterValidation", true))
@@ -464,6 +531,18 @@ func _resolve_manifest_repo_path() -> String:
 	if artifact_root.is_empty():
 		artifact_root = String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)).trim_prefix("res://")
 	return artifact_root.path_join("evidence-manifest.json")
+
+
+func _resolve_expected_manifest_resource_path() -> String:
+	var output_directory := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	if not output_directory.is_empty():
+		return output_directory.path_join("evidence-manifest.json")
+
+	var artifact_root := String(_active_request.get("artifactRoot", ""))
+	if artifact_root.begins_with("res://"):
+		return artifact_root.path_join("evidence-manifest.json")
+
+	return InspectionConstants.DEFAULT_OUTPUT_DIRECTORY.path_join("evidence-manifest.json")
 
 
 func _dedupe_strings(values: Array) -> Array:
@@ -498,6 +577,7 @@ func _reset_state() -> void:
 	_stop_requested = false
 	_pending_failure_kind = null
 	_pending_failure_message = ""
+	_last_build_failure = {}
 	_active_config = {}
 	_active_request = {}
 	_last_manifest = {}

@@ -236,7 +236,7 @@ The current autonomous editor evidence loop extends this layer with a plugin-own
 
 - request artifacts are read from `harness/automation/requests/run-request.json`
 - capability, lifecycle, and final result artifacts are written under `harness/automation/results/`
-- the broker starts the requested target scene, waits for runtime attachment, persists the scenegraph bundle, validates the manifest, and stops the play session when configured to do so
+- the broker uses the same plugin-owned path to classify pre-runtime build failures, waits for runtime attachment only when launch succeeds, persists the scenegraph bundle, validates the manifest, and stops the play session when configured to do so
 
 ### B. Runtime instrumentation addon
 
@@ -268,12 +268,18 @@ Likely implementation:
 
 Agents should consume runtime evidence through a manifest-centered bundle instead of opening every raw artifact immediately.
 
+For autonomous editor evidence runs, read the final `harness/automation/results/run-result.json` first:
+
+- if `failureKind = build`, use the build diagnostics and raw build output from that result, surface `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest
+- otherwise, follow the existing manifest-centered bundle flow
+
 Recommended flow:
 
-1. Read `evidence-manifest.json` first.
-2. Use the manifest summary and invariant outcomes to determine pass, fail, or unknown status.
-3. Follow `artifactRefs` only for the specific files needed to explain or validate the reported outcome.
-4. Preserve the raw artifacts unchanged so later runs can replay, diff, or revalidate the same bundle.
+1. Read `run-result.json` first for autonomous runs.
+2. If the run completed with a manifest, read `evidence-manifest.json`.
+3. Use the manifest summary and invariant outcomes to determine pass, fail, or unknown status.
+4. Follow `artifactRefs` only for the specific files needed to explain or validate the reported outcome.
+5. Preserve the raw artifacts unchanged so later runs can replay, diff, or revalidate the same bundle.
 
 The first-release contract for this repository is captured in `specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json`.
 Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` and are intended to show the minimum artifact set an agent should expect:
@@ -284,7 +290,7 @@ Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` 
 - `events.json` for structured runtime events
 - `scene-snapshot.json` for point-in-time hierarchy or state inspection
 
-Agents should treat the manifest as the routing layer and raw files as supporting evidence, not the other way around.
+Agents should treat the autonomous run result as the first routing layer for brokered runs, and treat the manifest as the runtime-evidence routing layer whenever the run actually produced one.
 
 ## Non-goals for v1
 

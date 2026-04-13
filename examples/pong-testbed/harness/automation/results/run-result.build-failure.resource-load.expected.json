@@ -1,0 +1,39 @@
+{
+  "requestId": "pong-request-build-failure-resource-001",
+  "runId": "pong-autonomous-run-build-failure-resource-001",
+  "finalStatus": "failed",
+  "failureKind": "build",
+  "buildFailurePhase": "launching",
+  "buildDiagnostics": [
+    {
+      "resourcePath": "res://textures/missing_build_failure.png",
+      "message": "Referenced resource could not be loaded before starting the autonomous run.",
+      "severity": "error",
+      "line": 7,
+      "column": 36,
+      "sourceKind": "resource",
+      "code": "ERR_FILE_NOT_FOUND",
+      "rawExcerpt": "[ext_resource type=\"Texture2D\" path=\"res://textures/missing_build_failure.png\" id=\"1_missing_texture\"]"
+    }
+  ],
+  "rawBuildOutput": [
+    "[ext_resource type=\"Texture2D\" path=\"res://textures/missing_build_failure.png\" id=\"1_missing_texture\"]"
+  ],
+  "manifestPath": null,
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-build-failure-resource-001",
+  "validationResult": {
+    "manifestExists": false,
+    "artifactRefsChecked": 0,
+    "missingArtifacts": [],
+    "bundleValid": false,
+    "notes": [
+      "No new evidence manifest was produced because the run failed during build before runtime capture.",
+      "Detected 1 build diagnostic(s) before runtime attachment."
+    ],
+    "validatedAt": "2026-04-12T13:14:06Z"
+  },
+  "terminationStatus": "not_started",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T13:14:07Z"
+}

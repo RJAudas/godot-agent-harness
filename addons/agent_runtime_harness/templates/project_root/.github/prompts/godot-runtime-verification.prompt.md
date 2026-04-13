@@ -24,13 +24,14 @@ Choose the correct validation mode for a Godot task and use the Scenegraph Harne
 1. Read `harness/automation/results/capability.json` first to confirm whether the open project can accept a brokered evidence request.
 2. If capability is blocked, missing, or stale, report that blocked state explicitly instead of guessing around the editor.
 3. Write or inspect the brokered request under `harness/automation/requests/run-request.json`.
-4. Wait for the final result under `harness/automation/results/` and confirm that the persisted bundle exists.
-5. Read `evidence/scenegraph/latest/evidence-manifest.json` first, then the summary, then diagnostics or snapshot only if needed.
-6. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, or no persisted bundle.
+4. Wait for the final result under `harness/automation/results/`. If it reports `failureKind = build`, stop there, do not expect a manifest, and read `details`, `buildFailurePhase`, `buildDiagnostics`, and `rawBuildOutput`.
+5. For build-failed runs, report each diagnostic with `resourcePath`, `message`, and `line`/`column` when available, and include the relevant raw build-output lines verbatim instead of paraphrasing them away.
+6. If the run completed with a manifest, read `evidence/scenegraph/latest/evidence-manifest.json` first, then the summary, then diagnostics or snapshot only if needed.
+7. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, no persisted bundle, or build-failed runs that ended before runtime capture.
 
 ## Output
 
 - Selected validation mode
-- Runtime evidence result or blocked reason
+- Runtime evidence result or blocked reason, or the build-failure result with its diagnostic details and raw output
 - Whether ordinary tests were also required
 - Next concrete validation or debugging step

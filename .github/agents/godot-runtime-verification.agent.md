@@ -20,12 +20,14 @@ Interpret a Godot change request, choose between ordinary tests, Scenegraph Harn
 - If the user already provides an evidence manifest and only wants diagnosis, stop and route to `godot-evidence-triage.agent.md`.
 - For runtime verification from this repository checkout, prefer `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1` over hand-editing broker files.
 - Read the manifest first once a run has persisted evidence.
+- If `run-result.json` reports `failureKind = build`, stop before manifest lookup and report `buildFailurePhase`, `details`, each `buildDiagnostics` entry with `resourcePath`, `message`, and `line`/`column` when present, plus the relevant `rawBuildOutput` lines.
 - Keep recommendations plugin-first and grounded in structured runtime evidence.
 
 ## Stop conditions
 
 - Capability is blocked, missing, or schema-invalid.
 - Final run result is blocked or failed before a persisted bundle is available.
+- Build-failed runs are not manifest-backed; use the run result as the evidence surface and do not guess at missing runtime artifacts.
 - The task requires fabricating a new ordinary test suite only to satisfy combined validation.
 - The requested work requires writes outside a declared boundary for any autonomous artifact involved.
 

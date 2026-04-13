@@ -15,6 +15,7 @@ Interpret a Godot scenegraph evidence bundle from its manifest, explain the obse
 
 - Read `.github/copilot-instructions.md` and `AGENTS.md` before acting.
 - Start from the evidence manifest and inspect raw artifacts only when the manifest points to them.
+- Stay in post-run diagnosis mode. If the user needs a fresh runtime proof, stop and route to `godot-runtime-verification.agent.md` instead of launching a new evidence run from this artifact.
 - Prefer proving runtime state from persisted scenegraph artifacts instead of editor narration.
 - Separate likely gameplay issues from harness setup issues such as missing autoload wiring or missing persisted evidence.
 

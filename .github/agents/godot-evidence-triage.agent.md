@@ -16,6 +16,7 @@ Interpret a Godot runtime evidence bundle from its manifest, explain the observe
 
 - Read `.github/copilot-instructions.md`, `AGENTS.md`, and any relevant `.github/instructions/*.instructions.md` file before acting.
 - Start from the evidence manifest and inspect raw artifacts only when the manifest points to them.
+- Stay in post-run diagnosis mode. If the user needs a fresh runtime proof, stop and route to `godot-runtime-verification.agent.md` instead of launching a new evidence run from this artifact.
 - Keep recommendations plugin-first and grounded in structured runtime evidence.
 - If asked to write machine-readable outputs, stay inside `tools/evals/001-agent-tooling-foundation/` and `tools/automation/run-records/` unless a different declared boundary explicitly permits more.
 

@@ -23,7 +23,8 @@ Summarize a manifest-centered scenegraph evidence bundle, identify the most rele
 2. Read the summary artifact next.
 3. Read diagnostics only if the manifest or summary indicates a partial or failed run.
 4. Read the full snapshot only if you need exact node paths, hierarchy details, or property state.
-5. Distinguish gameplay failures from harness wiring failures such as missing autoload setup or no persisted evidence bundle.
+5. Stay in post-run diagnosis mode. If the user needs a fresh runtime proof instead of diagnosis of an existing bundle, hand off to `godot-runtime-verification.prompt.md`.
+6. Distinguish gameplay failures from harness wiring failures such as missing autoload setup or no persisted evidence bundle.
 
 ## Output
 

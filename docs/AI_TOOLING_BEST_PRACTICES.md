@@ -234,6 +234,7 @@ Good instruction content includes:
 - style and review expectations
 - known failure modes and required workarounds
 - what to trust first before searching more broadly
+- validation routing rules that should apply on most tasks, such as when to use ordinary tests versus Scenegraph Harness runtime verification
 
 Repo-wide instruction files are a poor place for exhaustive reference material.
 Because this guidance may be attached broadly, large instruction files create noisy context and can lower signal quality.
@@ -258,6 +259,18 @@ Write instructions in a structure the model can parse easily:
 
 Use short headings, flat lists, and concrete commands.
 Prefer exact file paths, exact command names, and exact success criteria over prose-heavy advice.
+
+### Validation routing for this repo
+
+For this repository, the validation taxonomy itself belongs in instructions and `AGENTS.md`:
+
+- ordinary tests
+- Scenegraph Harness runtime verification
+- combined validation
+
+That routing rule is durable and should not be buried only inside a reusable prompt.
+The reusable prompt and agent layer should then carry the end-to-end runtime-verification workflow after the routing decision is made.
+Keep manifest-centered evidence triage separate so post-run diagnosis does not become overloaded with capability checks and run orchestration.
 
 ### Suggested instruction layout for this repo
 
@@ -368,6 +381,7 @@ For this repository in particular:
 - tie agent outputs to machine-readable runtime evidence wherever possible
 - keep Godot-specific API references in docs, not inside every prompt
 - prefer plugin-first and scenario-driven validation language, matching the constitution
+- keep the validation split explicit: instructions choose between ordinary tests, runtime verification, and combined validation, while prompt and agent artifacts execute the chosen workflow
 - document any requirement to inspect sibling checkouts such as ../godot only when truly needed
 
 ## Validation Heuristics

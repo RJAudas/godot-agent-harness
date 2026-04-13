@@ -5,6 +5,10 @@
 4. Only inspect raw scenegraph artifacts that the manifest references.
 
 ## Runtime Verification Rules
+- Use **ordinary tests** for unit, contract, framework, and other non-runtime checks.
+- Use **Scenegraph Harness runtime verification** for requests such as "verify at runtime," "test the running code," "make sure the node appears in game," "confirm the node exists while playing," or other runtime-visible outcomes.
+- Use **combined validation** when a change affects runtime-visible behavior and there is already a direct deterministic test surface. Run the existing tests and the harness flow together, but do not invent new ordinary tests only to satisfy the combined rule.
+- If the user already provides `evidence/scenegraph/latest/evidence-manifest.json` and only wants diagnosis, stay in the evidence-triage workflow instead of launching a fresh run.
 - Prefer runtime evidence over human retellings when verifying whether a gameplay change worked.
 - Keep gameplay changes separate from harness changes when possible. Modify `addons/agent_runtime_harness/` only when the task actually concerns capture, transport, or evidence persistence.
 - Treat the Scenegraph Harness dock as the operator control surface and the persisted evidence bundle as the agent handoff surface.

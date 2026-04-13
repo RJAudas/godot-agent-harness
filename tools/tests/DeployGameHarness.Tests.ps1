@@ -25,7 +25,9 @@ config/name="Sandbox Game"
         (Join-Path $gameRoot 'addons/agent_runtime_harness/plugin.cfg') | Should -Exist
         (Join-Path $gameRoot 'harness/inspection-run-config.json') | Should -Exist
         (Join-Path $gameRoot '.github/prompts/godot-evidence-triage.prompt.md') | Should -Exist
+        (Join-Path $gameRoot '.github/prompts/godot-runtime-verification.prompt.md') | Should -Exist
         (Join-Path $gameRoot '.github/agents/godot-evidence-triage.agent.md') | Should -Exist
+        (Join-Path $gameRoot '.github/agents/godot-runtime-verification.agent.md') | Should -Exist
         (Join-Path $gameRoot 'AGENTS.md') | Should -Exist
 
         $projectContent = Get-Content -LiteralPath $projectPath -Raw
@@ -75,11 +77,15 @@ config/name="Sandbox Game"
         $actions | Should -Contain 'copilot-instructions-skipped'
         $actions | Should -Contain 'agents-skipped'
         $actions | Should -Contain 'skipped-write-prompt'
+        $actions | Should -Contain 'skipped-write-runtime-prompt'
         $actions | Should -Contain 'skipped-write-agent'
+        $actions | Should -Contain 'skipped-write-runtime-agent'
 
         (Join-Path $gameRoot 'addons/agent_runtime_harness/plugin.cfg') | Should -Not -Exist
         (Join-Path $gameRoot 'harness/inspection-run-config.json') | Should -Not -Exist
         (Join-Path $gameRoot '.github/prompts/godot-evidence-triage.prompt.md') | Should -Not -Exist
+        (Join-Path $gameRoot '.github/prompts/godot-runtime-verification.prompt.md') | Should -Not -Exist
         (Join-Path $gameRoot '.github/agents/godot-evidence-triage.agent.md') | Should -Not -Exist
+        (Join-Path $gameRoot '.github/agents/godot-runtime-verification.agent.md') | Should -Not -Exist
     }
 }

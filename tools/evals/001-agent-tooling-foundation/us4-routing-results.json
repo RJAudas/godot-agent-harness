@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1.0.0",
+  "evaluationId": "us4-runtime-routing-2026-04-12",
+  "storyId": "US4",
+  "surface": "combined",
+  "executionMode": "repo-local",
+  "status": "pass",
+  "artifacts": {
+    "fixturePaths": [
+      "tools/evals/001-agent-tooling-foundation/us4-runtime-routing.md",
+      "tools/evals/001-agent-tooling-foundation/us4-expected-results.json"
+    ],
+    "guidancePaths": [
+      ".github/copilot-instructions.md",
+      "AGENTS.md",
+      "docs/AGENT_TOOLING_FOUNDATION.md",
+      "docs/AI_TOOLING_AUTOMATION_MATRIX.md",
+      ".github/prompts/godot-runtime-verification.prompt.md",
+      ".github/agents/godot-runtime-verification.agent.md",
+      ".github/prompts/godot-evidence-triage.prompt.md",
+      ".github/agents/godot-evidence-triage.agent.md"
+    ],
+    "outputPath": "tools/evals/001-agent-tooling-foundation/us4-routing-results.json"
+  },
+  "summary": {
+    "headline": "Ambiguous testing language now routes to the correct validation workflow.",
+    "details": "The guidance stack distinguishes ordinary tests, Scenegraph Harness runtime verification, combined validation, and manifest-centered evidence triage, and the reusable artifacts preserve that split."
+  },
+  "checks": [
+    {
+      "id": "ordinary-tests-routing-defined",
+      "status": "pass",
+      "details": "Requests to add helpers and run unit tests stay on ordinary test surfaces instead of invoking the runtime harness."
+    },
+    {
+      "id": "runtime-verification-routing-defined",
+      "status": "pass",
+      "details": "Runtime-visible requests now route through capability check, brokered run request, and manifest-first Scenegraph Harness evidence review."
+    },
+    {
+      "id": "combined-validation-routing-defined",
+      "status": "pass",
+      "details": "Gameplay changes with an existing deterministic test surface require both ordinary tests and runtime verification, without fabricating new tests solely to satisfy the rule."
+    },
+    {
+      "id": "evidence-triage-scope-preserved",
+      "status": "pass",
+      "details": "Requests that already provide an evidence manifest stay in the evidence-triage workflow instead of launching a fresh runtime-verification run."
+    }
+  ],
+  "metrics": {
+    "firstPassRoutingAccurate": true,
+    "pluginFirstRespected": true,
+    "evidenceFirstRespected": true
+  },
+  "recordedAt": "2026-04-12T00:00:00Z"
+}

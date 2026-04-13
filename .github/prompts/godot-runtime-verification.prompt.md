@@ -1,0 +1,36 @@
+---
+description: Verify a Godot runtime-visible change with the Scenegraph Harness, combine existing tests when needed, and prove the outcome from persisted evidence.
+---
+
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+## Goal
+
+Choose the correct validation mode for a Godot change, perform Scenegraph Harness runtime verification when the request is about running-game behavior, and keep ordinary tests in scope when the change also has an existing deterministic test surface.
+
+## Routing rules
+
+1. Use ordinary tests only for unit, contract, framework, or schema checks that do not ask about the running game.
+2. Use Scenegraph Harness runtime verification for requests such as "verify at runtime," "test the running code," "make sure the node appears in game," "confirm the node exists while playing," or other runtime-visible outcomes.
+3. Use combined validation when the change affects runtime-visible behavior and there is already a direct deterministic test surface. Run the existing tests plus the runtime harness flow, but do not invent new ordinary tests solely to satisfy the combined rule.
+4. If the user already provides an evidence manifest and only wants diagnosis, hand the task to `godot-evidence-triage.prompt.md` instead of starting a fresh run.
+
+## Runtime verification workflow
+
+1. Confirm harness availability and read the latest capability artifact first. From this repository checkout, prefer `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`.
+2. If capability is blocked, missing, or schema-invalid, report that blocked state explicitly instead of guessing around the editor.
+3. Submit a brokered run request through the workspace-side helper: `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`.
+4. Wait for the final run result and persisted evidence bundle.
+5. Read the evidence manifest first, then the summary, then diagnostics or snapshot only if needed.
+6. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, or no persisted bundle.
+
+## Output
+
+- Selected validation mode
+- Runtime evidence result or blocked reason
+- Whether ordinary tests were also required
+- Next concrete validation or debugging step

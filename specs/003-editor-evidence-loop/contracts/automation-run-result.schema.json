@@ -30,7 +30,23 @@
     },
     "failureKind": {
       "type": ["string", "null"],
-      "enum": ["launch", "attachment", "capture", "persistence", "validation", "shutdown", "gameplay", null]
+      "enum": ["launch", "attachment", "build", "capture", "persistence", "validation", "shutdown", "gameplay", null]
+    },
+    "buildFailurePhase": {
+      "type": ["string", "null"],
+      "enum": ["launching", "awaiting_runtime", null]
+    },
+    "buildDiagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/buildDiagnostic"
+      }
+    },
+    "rawBuildOutput": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "manifestPath": {
       "type": ["string", "null"]
@@ -109,6 +125,51 @@
         "validatedAt": {
           "type": ["string", "null"],
           "format": "date-time"
+        }
+      }
+    },
+    "buildDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resourcePath",
+        "message",
+        "severity",
+        "line",
+        "column",
+        "sourceKind",
+        "code",
+        "rawExcerpt"
+      ],
+      "properties": {
+        "resourcePath": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "unknown"]
+        },
+        "line": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "column": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "sourceKind": {
+          "type": "string",
+          "enum": ["script", "scene", "resource", "unknown"]
+        },
+        "code": {
+          "type": ["string", "null"]
+        },
+        "rawExcerpt": {
+          "type": ["string", "null"]
         }
       }
     }

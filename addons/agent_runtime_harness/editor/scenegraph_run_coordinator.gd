@@ -3,13 +3,14 @@ extends RefCounted
 class_name ScenegraphRunCoordinator
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
 
 signal lifecycle_status_written(payload)
 signal run_completed(result)
 
 var _plugin: EditorPlugin
 var _bridge
-var _artifact_store
+var _artifact_store: ScenegraphAutomationArtifactStore
 var _active_config := {}
 var _active_request := {}
 var _last_manifest := {}
@@ -27,7 +28,7 @@ var _launch_started_at_usec := 0
 var _active_config_path := ""
 
 
-func configure(plugin: EditorPlugin, bridge: Object, artifact_store: Object) -> void:
+func configure(plugin: EditorPlugin, bridge: Object, artifact_store: ScenegraphAutomationArtifactStore) -> void:
 	_plugin = plugin
 	_bridge = bridge
 	_artifact_store = artifact_store
@@ -303,7 +304,7 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 		"completedAt": InspectionConstants.utc_timestamp_now(),
 	}
 	if failure_kind == InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD:
-		var normalized_build_failure := _artifact_store.normalize_build_failure_payload(build_failure)
+		var normalized_build_failure: Dictionary = _artifact_store.normalize_build_failure_payload(build_failure)
 		result["buildFailurePhase"] = normalized_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
 		result["buildDiagnostics"] = normalized_build_failure.get("buildDiagnostics", []).duplicate(true)
 		result["rawBuildOutput"] = normalized_build_failure.get("rawBuildOutput", []).duplicate(true)

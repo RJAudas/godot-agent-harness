@@ -342,7 +342,7 @@ func _inspect_resource_path(resource_path: String) -> Dictionary:
 
 
 func _inspect_script_resource(resource_path: String) -> Dictionary:
-	var script = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	var script: Script = ResourceLoader.load(resource_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP) as Script
 	if script == null:
 		var missing_message := "Failed to load script before starting the autonomous run."
 		return _artifact_store.build_build_diagnostic(
@@ -356,7 +356,7 @@ func _inspect_script_resource(resource_path: String) -> Dictionary:
 			"%s: %s" % [resource_path, missing_message]
 		)
 
-	var reload_error := script.reload(false)
+	var reload_error: int = script.reload(false)
 	if reload_error == OK:
 		return {}
 

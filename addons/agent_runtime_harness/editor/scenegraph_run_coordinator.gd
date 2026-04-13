@@ -534,10 +534,15 @@ func _resolve_manifest_repo_path() -> String:
 
 
 func _resolve_expected_manifest_resource_path() -> String:
-	var artifact_root := String(_active_request.get("artifactRoot", "")).trim_prefix("res://")
-	if not artifact_root.is_empty():
-		return "res://%s" % artifact_root.path_join("evidence-manifest.json")
-	return String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)).path_join("evidence-manifest.json")
+	var output_directory := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	if not output_directory.is_empty():
+		return output_directory.path_join("evidence-manifest.json")
+
+	var artifact_root := String(_active_request.get("artifactRoot", ""))
+	if artifact_root.begins_with("res://"):
+		return artifact_root.path_join("evidence-manifest.json")
+
+	return InspectionConstants.DEFAULT_OUTPUT_DIRECTORY.path_join("evidence-manifest.json")
 
 
 func _dedupe_strings(values: Array) -> Array:

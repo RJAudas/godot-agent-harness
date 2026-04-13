@@ -5,6 +5,12 @@ class_name ScenegraphAutomationBroker
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
 const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
 const ScenegraphRunCoordinator = preload("res://addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd")
+const SCRIPT_ERROR_SUMMARY_PATTERNS := [
+	"^Error at \\(\\[hint=Line (\\d+), column (\\d+)\\][^\\]]+\\[/hint\\]\\):\\s*(.+)$",
+	"^Error at \\(Line (\\d+), column (\\d+)\\):\\s*(.+)$",
+	"^Error at \\((\\d+),\\s*(\\d+)\\):\\s*(.+)$",
+]
+const SCRIPT_ERROR_LINE_PATTERN := "^Line\\s+(\\d+):\\s*(.*)$"
 
 signal capability_updated(result)
 signal run_result_updated(result)
@@ -16,6 +22,8 @@ var _run_coordinator := ScenegraphRunCoordinator.new()
 var _config_path := "res://harness/inspection-run-config.json"
 var _poll_timer: Timer
 var _last_capability_signature := ""
+var _script_error_summary_regexes: Array[RegEx] = []
+var _script_error_line_regex = null
 
 
 func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res://harness/inspection-run-config.json") -> void:
@@ -521,14 +529,7 @@ func _parse_script_editor_diagnostics(default_resource_path: String, text: Strin
 
 
 func _match_script_error_summary(line_text: String) -> Dictionary:
-	for pattern in [
-		"^Error at \\(\\[hint=Line (\\d+), column (\\d+)\\][^\\]]+\\[/hint\\]\\):\\s*(.+)$",
-		"^Error at \\(Line (\\d+), column (\\d+)\\):\\s*(.+)$",
-		"^Error at \\((\\d+),\\s*(\\d+)\\):\\s*(.+)$",
-	]:
-		var regex := RegEx.new()
-		if regex.compile(pattern) != OK:
-			continue
+	for regex in _get_script_error_summary_regexes():
 		var match := regex.search(line_text)
 		if match == null:
 			continue
@@ -541,8 +542,8 @@ func _match_script_error_summary(line_text: String) -> Dictionary:
 
 
 func _match_script_error_line(line_text: String) -> Dictionary:
-	var regex := RegEx.new()
-	if regex.compile("^Line\\s+(\\d+):\\s*(.*)$") != OK:
+	var regex = _get_script_error_line_regex()
+	if regex == null:
 		return {}
 	var match := regex.search(line_text)
 	if match == null:
@@ -551,6 +552,24 @@ func _match_script_error_line(line_text: String) -> Dictionary:
 		"line": int(match.get_string(1)),
 		"message": String(match.get_string(2)).strip_edges(),
 	}
+
+
+func _get_script_error_summary_regexes() -> Array[RegEx]:
+	if _script_error_summary_regexes.is_empty():
+		for pattern in SCRIPT_ERROR_SUMMARY_PATTERNS:
+			var regex := RegEx.new()
+			if regex.compile(pattern) == OK:
+				_script_error_summary_regexes.append(regex)
+	return _script_error_summary_regexes
+
+
+func _get_script_error_line_regex():
+	if _script_error_line_regex == null:
+		var regex := RegEx.new()
+		if regex.compile(SCRIPT_ERROR_LINE_PATTERN) != OK:
+			return null
+		_script_error_line_regex = regex
+	return _script_error_line_regex
 
 
 func _classify_build_source_kind(resource_path: String) -> String:

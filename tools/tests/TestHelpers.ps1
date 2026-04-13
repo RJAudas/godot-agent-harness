@@ -80,7 +80,7 @@ function Assert-BuildDiagnostic {
     )
 
     $Diagnostic.message | Should -Not -BeNullOrEmpty
-    $Diagnostic.severity | Should -BeIn @('error', 'warning', 'unknown')
+    $Diagnostic.severity | Should -Be 'error'
     $Diagnostic.sourceKind | Should -BeIn @('script', 'scene', 'resource', 'unknown')
     $Diagnostic.PSObject.Properties.Name | Should -Contain 'resourcePath'
     $Diagnostic.PSObject.Properties.Name | Should -Contain 'line'
@@ -90,6 +90,7 @@ function Assert-BuildDiagnostic {
 
     if ($PSBoundParameters.ContainsKey('ExpectedResourcePath')) {
         $Diagnostic.resourcePath | Should -Be $ExpectedResourcePath
+        $Diagnostic.rawExcerpt | Should -Match ([regex]::Escape($ExpectedResourcePath))
     }
 
     if ($PSBoundParameters.ContainsKey('ExpectedSourceKind')) {
@@ -172,44 +173,4 @@ function New-RepoSandboxDirectory {
     $sandboxPath = Join-Path $sandboxRoot ([guid]::NewGuid().Guid)
     New-Item -ItemType Directory -Path $sandboxPath -Force | Out-Null
     return $sandboxPath
-}
-
-function Assert-BuildDiagnostic {
-    param(
-        [Parameter(Mandatory = $true)]
-        [psobject]$Diagnostic,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedResourcePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedSourceKind
-    )
-
-    $Diagnostic.resourcePath | Should -Be $ExpectedResourcePath
-    $Diagnostic.message | Should -Not -BeNullOrEmpty
-    $Diagnostic.severity | Should -Be 'error'
-    $Diagnostic.sourceKind | Should -Be $ExpectedSourceKind
-    $Diagnostic.rawExcerpt | Should -Match ([regex]::Escape($ExpectedResourcePath))
-}
-
-function Assert-BuildFailureRunResult {
-    param(
-        [Parameter(Mandatory = $true)]
-        [psobject]$Result,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedPhase,
-
-        [Parameter(Mandatory = $true)]
-        [int]$ExpectedDiagnosticCount
-    )
-
-    $Result.finalStatus | Should -Be 'failed'
-    $Result.failureKind | Should -Be 'build'
-    $Result.buildFailurePhase | Should -Be $ExpectedPhase
-    @($Result.buildDiagnostics).Count | Should -Be $ExpectedDiagnosticCount
-    @($Result.rawBuildOutput).Count | Should -BeGreaterThan 0
-    $Result.manifestPath | Should -BeNullOrEmpty
-    $Result.validationResult.manifestExists | Should -BeFalse
 }

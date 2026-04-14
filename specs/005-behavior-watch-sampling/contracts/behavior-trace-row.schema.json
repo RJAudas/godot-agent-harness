@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/005-behavior-watch-sampling/contracts/behavior-trace-row.schema.json",
+  "title": "Behavior Trace Row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "frame",
+    "timestampMs",
+    "nodePath"
+  ],
+  "properties": {
+    "frame": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestampMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nodePath": {
+      "type": "string",
+      "pattern": "^/.*",
+      "minLength": 2
+    },
+    "position": {
+      "$ref": "#/$defs/vector2"
+    },
+    "velocity": {
+      "$ref": "#/$defs/vector2"
+    },
+    "intendedVelocity": {
+      "$ref": "#/$defs/vector2"
+    },
+    "collisionState": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lastCollider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "movementVector": {
+      "$ref": "#/$defs/vector2"
+    },
+    "speed": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "overlapFrames": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "vector2": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

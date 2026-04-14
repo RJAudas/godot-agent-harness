@@ -61,6 +61,7 @@ The implemented v1 control surface remains the plugin-owned file broker and the 
 - Rows must be flat JSON objects, one row per sampled target per sampled frame.
 - Rows must include `frame`, `timestampMs`, and `nodePath`.
 - Rows must include only the fields explicitly requested for that target.
+- Vector-valued trace fields are `Vector2`-shaped in v1; `Node3D` positions and `Vector3` properties are treated as unavailable instead of widening the row schema.
 - Rows must not include unrelated nodes or fields.
 
 ## Manifest Rules

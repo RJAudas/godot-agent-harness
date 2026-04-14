@@ -3,19 +3,33 @@ class_name BehaviorWatchSampler
 
 var _applied_watch := {}
 var _rows: Array = []
-var _missing_targets: Array = []
-var _missing_properties := {}
 var _sampled_frames := {}
 var _target_state := {}
+var _target_observations := {}
 
 
 func configure(applied_watch: Dictionary) -> void:
 	_applied_watch = applied_watch.duplicate(true)
 	_rows.clear()
-	_missing_targets.clear()
-	_missing_properties.clear()
 	_sampled_frames.clear()
 	_target_state.clear()
+	_target_observations.clear()
+
+	for target_value in _applied_watch.get("targets", []):
+		if typeof(target_value) != TYPE_DICTIONARY:
+			continue
+		var target: Dictionary = target_value
+		var node_path := String(target.get("nodePath", ""))
+		if node_path.is_empty():
+			continue
+		var properties: Array = []
+		for property_name_value in target.get("properties", []):
+			properties.append(String(property_name_value))
+		_target_observations[node_path] = {
+			"sampleCount": 0,
+			"properties": properties,
+			"propertyHits": _build_property_hits(properties),
+		}
 
 
 func is_enabled() -> bool:
@@ -37,9 +51,8 @@ func capture_frame(context_node: Node, frame: int, timestamp_ms: int) -> void:
 		var node_path := String(target.get("nodePath", ""))
 		var target_node := context_node.get_node_or_null(NodePath(node_path))
 		if target_node == null:
-			if not node_path in _missing_targets:
-				_missing_targets.append(node_path)
 			continue
+		_record_target_sample(node_path)
 		_rows.append(_build_row_for_target(target_node, target, frame, timestamp_ms))
 
 
@@ -52,7 +65,7 @@ func build_outcomes() -> Dictionary:
 		"sampleCount": _rows.size(),
 		"sampledFrameCount": _sampled_frames.size(),
 		"noSamples": _rows.is_empty(),
-		"missingTargets": _missing_targets.duplicate(true),
+		"missingTargets": _serialize_missing_targets(),
 		"missingProperties": _serialize_missing_properties(),
 	}
 
@@ -82,39 +95,45 @@ func _build_row_for_target(node: Node, target: Dictionary, frame: int, timestamp
 		match property_name:
 			"position":
 				var position_value = _extract_position(node)
-				row[property_name] = position_value
-				if position_value == null:
-					_record_missing_property(node_path, property_name)
+				_assign_sampled_property(row, node_path, property_name, position_value, position_value != null)
 			"velocity":
-				row[property_name] = velocity_value
-				if velocity_value == null:
-					_record_missing_property(node_path, property_name)
+				_assign_sampled_property(row, node_path, property_name, velocity_value, velocity_value != null)
 			"intendedVelocity":
-				row[property_name] = intended_velocity_value
-				if intended_velocity_value == null:
-					_record_missing_property(node_path, property_name)
+				_assign_sampled_property(row, node_path, property_name, intended_velocity_value, intended_velocity_value != null)
 			"collisionState":
-				row[property_name] = collision.get("collisionState", null)
-				if not bool(collision.get("available", false)):
-					_record_missing_property(node_path, property_name)
+				var collision_available := bool(collision.get("available", false))
+				_assign_sampled_property(
+					row,
+					node_path,
+					property_name,
+					collision.get("collisionState", null),
+					collision_available
+				)
 			"lastCollider":
-				row[property_name] = collision.get("lastCollider", null)
-				if not bool(collision.get("available", false)):
-					_record_missing_property(node_path, property_name)
+				var collider_available := bool(collision.get("available", false))
+				_assign_sampled_property(
+					row,
+					node_path,
+					property_name,
+					collision.get("lastCollider", null),
+					collider_available
+				)
 			"movementVector":
-				row[property_name] = movement_vector_value
-				if movement_vector_value == null:
-					_record_missing_property(node_path, property_name)
+				_assign_sampled_property(row, node_path, property_name, movement_vector_value, movement_vector_value != null)
 			"speed":
 				if velocity_value == null:
-					row[property_name] = null
-					_record_missing_property(node_path, property_name)
+					_assign_sampled_property(row, node_path, property_name, null, false)
 				else:
-					row[property_name] = _vector_length(velocity_value)
+					_assign_sampled_property(row, node_path, property_name, _vector_length(velocity_value), true)
 			"overlapFrames":
-				row[property_name] = collision.get("overlapFrames", null)
-				if not bool(collision.get("available", false)):
-					_record_missing_property(node_path, property_name)
+				var overlap_available := bool(collision.get("available", false))
+				_assign_sampled_property(
+					row,
+					node_path,
+					property_name,
+					collision.get("overlapFrames", null),
+					overlap_available
+				)
 
 	return row
 
@@ -173,8 +192,6 @@ func _extract_collider_identity(collision) -> Variant:
 func _extract_position(node: Node) -> Variant:
 	if node is Node2D:
 		return [node.position.x, node.position.y]
-	if node is Node3D:
-		return [node.position.x, node.position.y, node.position.z]
 	return null
 
 
@@ -186,8 +203,6 @@ func _extract_vector2_property(node: Object, property_names: Array) -> Variant:
 		var property_value = node.get(property_name)
 		if typeof(property_value) == TYPE_VECTOR2:
 			return [property_value.x, property_value.y]
-		if typeof(property_value) == TYPE_VECTOR3:
-			return [property_value.x, property_value.y, property_value.z]
 		return null
 	return null
 
@@ -208,27 +223,74 @@ func _vector_length(vector_value: Variant) -> Variant:
 	return sqrt(pow(float(values[0]), 2.0) + pow(float(values[1]), 2.0))
 
 
-func _record_missing_property(node_path: String, property_name: String) -> void:
-	var properties: Array = _missing_properties.get(node_path, [])
-	if property_name in properties:
-		return
-	properties.append(property_name)
-	_missing_properties[node_path] = properties
+func _assign_sampled_property(
+	row: Dictionary,
+	node_path: String,
+	property_name: String,
+	value: Variant,
+	sampled: bool
+) -> void:
+	row[property_name] = value
+	if sampled:
+		_record_property_hit(node_path, property_name)
 
 
 func _serialize_missing_properties() -> Array:
 	var serialized: Array = []
-	var node_paths: Array = _missing_properties.keys()
+	var node_paths: Array = _target_observations.keys()
 	node_paths.sort()
 	for node_path_value in node_paths:
 		var node_path := String(node_path_value)
-		var properties: Array = _missing_properties.get(node_path, []).duplicate(true)
+		var observation: Dictionary = _target_observations.get(node_path, {})
+		var property_hits: Dictionary = observation.get("propertyHits", {})
+		var properties: Array = []
+		for property_name_value in observation.get("properties", []):
+			var property_name := String(property_name_value)
+			if bool(property_hits.get(property_name, false)):
+				continue
+			properties.append(property_name)
+		if properties.is_empty():
+			continue
 		properties.sort()
 		serialized.append({
 			"nodePath": node_path,
 			"properties": properties,
 		})
 	return serialized
+
+
+func _serialize_missing_targets() -> Array:
+	var missing_targets: Array = []
+	var node_paths: Array = _target_observations.keys()
+	node_paths.sort()
+	for node_path_value in node_paths:
+		var node_path := String(node_path_value)
+		var observation: Dictionary = _target_observations.get(node_path, {})
+		if int(observation.get("sampleCount", 0)) > 0:
+			continue
+		missing_targets.append(node_path)
+	return missing_targets
+
+
+func _build_property_hits(properties: Array) -> Dictionary:
+	var property_hits := {}
+	for property_name_value in properties:
+		property_hits[String(property_name_value)] = false
+	return property_hits
+
+
+func _record_target_sample(node_path: String) -> void:
+	var observation: Dictionary = _target_observations.get(node_path, {})
+	observation["sampleCount"] = int(observation.get("sampleCount", 0)) + 1
+	_target_observations[node_path] = observation
+
+
+func _record_property_hit(node_path: String, property_name: String) -> void:
+	var observation: Dictionary = _target_observations.get(node_path, {})
+	var property_hits: Dictionary = observation.get("propertyHits", {})
+	property_hits[property_name] = true
+	observation["propertyHits"] = property_hits
+	_target_observations[node_path] = observation
 
 
 func _is_before_window(frame: int) -> bool:

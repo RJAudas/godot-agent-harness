@@ -213,7 +213,7 @@ func _normalize_non_negative_int(
 ) -> int:
 	if value == null:
 		return 0
-	if typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+	if not _is_integral_numeric(value):
 		errors.append(_build_error(code, field, message))
 		return 0
 	var normalized_value := int(value)
@@ -231,7 +231,7 @@ func _normalize_positive_int(
 	errors: Array,
 	minimum := 1
 ) -> int:
-	if value == null or typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+	if value == null or not _is_integral_numeric(value):
 		errors.append(_build_error(code, field, message))
 		return 0
 	var normalized_value := int(value)
@@ -239,6 +239,14 @@ func _normalize_positive_int(
 		errors.append(_build_error(code, field, message))
 		return 0
 	return normalized_value
+
+
+func _is_integral_numeric(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	if typeof(value) != TYPE_FLOAT:
+		return false
+	return is_equal_approx(float(value), round(float(value)))
 
 
 func _collect_unknown_keys(errors: Array, keys: Array, supported_keys: PackedStringArray, field_prefix: String) -> void:

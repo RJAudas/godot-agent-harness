@@ -28,7 +28,7 @@ var _run_started_at_msec := 0
 
 
 func _ready() -> void:
-	set_physics_process(true)
+	set_physics_process(false)
 	if _session_context.is_empty():
 		configure_session({})
 	_register_debugger_transport()
@@ -67,6 +67,7 @@ func configure_session(session_context: Dictionary) -> void:
 		_applied_watch = session_context.get("behavior_watch", {}).get("appliedWatch", {}).duplicate(true)
 
 	_behavior_watch_sampler.configure(_applied_watch)
+	set_physics_process(_behavior_watch_sampler.is_enabled())
 
 	if session_context.has("config_path"):
 		_load_session_config(String(session_context.get("config_path")))
@@ -141,7 +142,7 @@ func _capture_startup_if_enabled() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if _applied_watch.is_empty():
+	if not _behavior_watch_sampler.is_enabled():
 		return
 	_behavior_watch_sampler.capture_frame(self, Engine.get_process_frames(), _elapsed_run_time_msec())
 

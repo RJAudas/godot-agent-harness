@@ -71,6 +71,7 @@
 - **Validation Rules**:
   - Must include only fields requested for the current target.
   - Must remain flat and machine-readable with no nested opaque blobs.
+  - Vector-valued fields remain 2-element arrays in v1; targets that expose `Node3D` positions or `Vector3` properties report those fields as unavailable rather than widening the contract.
 
 ### Behavior Trace Artifact
 

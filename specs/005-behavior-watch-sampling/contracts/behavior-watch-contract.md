@@ -21,9 +21,10 @@ The implemented v1 control surface remains the plugin-owned file broker and the 
 - **Embedded in**: Existing automation run request under `overrides.behaviorWatchRequest`.
 - **Minimum fields**:
   - `targets`
-  - `cadence`
-  - `startFrameOffset`
   - `frameCount`
+- **Defaults when omitted**:
+  - `cadence.mode = every_frame`
+  - `startFrameOffset = 0`
 
 ### Applied Watch Summary
 

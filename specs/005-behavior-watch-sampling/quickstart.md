@@ -7,7 +7,7 @@ Implement a plugin-first bounded watch-sampling flow that lets an agent request 
 ## Implementation Outline
 
 1. Extend the current automation run request so a run-scoped `behaviorWatchRequest` can be passed without creating a second broker entrypoint.
-2. Normalize and validate that watch request before sampling begins, rejecting unsupported selectors, later-slice fields, or zero-sample windows with machine-readable errors.
+2. Normalize and validate that watch request before sampling begins, defaulting omitted cadence to `every_frame` and omitted `startFrameOffset` to `0`, while still rejecting unsupported selectors, later-slice fields, or zero-sample windows with machine-readable errors.
 3. Sample only the requested node paths and requested properties during the bounded watch window, using every-frame or every-N-frame cadence.
 4. Persist a fixed `trace.jsonl` file in the current run's output directory and add a `trace` artifact reference to the current manifest.
 5. Reuse the current run-result and manifest-first workflow so agents can inspect the run result, then the manifest, then the trace artifact.
@@ -76,11 +76,13 @@ pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples
 3. Submit a run request through the existing automation helper:
 
 ```powershell
-pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.json
+pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-frame.json
 ```
 
+If you want to compose a watch fragment onto an existing healthy run fixture instead of using a precomposed request file, pass `-BehaviorWatchRequestFixturePath examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json`.
+
 4. Read `harness/automation/results/run-result.json` first. If the run completed and produced a manifest, open the persisted `evidence-manifest.json`.
-5. Confirm the manifest references `trace.jsonl` for the current run and that `trace.jsonl` contains only the requested fields for `/root/Main/Ball`.
+5. Confirm the manifest references `trace.jsonl` for the current run, exposes the normalized `appliedWatch` summary for that run, and that `trace.jsonl` contains only the requested fields for `/root/Main/Ball`.
 6. Validate the manifest and referenced files:
 
 ```powershell
@@ -93,4 +95,4 @@ pwsh ./tools/tests/run-tool-tests.ps1
 - Valid watch requests normalize into an applied-watch summary before sampling starts.
 - Invalid watch requests fail with a machine-readable rejection and do not start capture.
 - Successful watch runs persist a fixed `trace.jsonl` file for the current run only.
-- The current run manifest references the trace artifact, and the agent can inspect it without reading unrelated full-scene logs.
+- The current run manifest references the trace artifact, includes the normalized `appliedWatch` summary, and lets the agent inspect the trace without reading unrelated full-scene logs.

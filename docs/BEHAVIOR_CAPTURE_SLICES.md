@@ -55,7 +55,7 @@ This is the foundation for every later slice. Without it, the harness has no sta
 **Implementation instructions**
 
 1. Add a behavior-capture request contract that can be passed through session config or per-run override data.
-2. Normalize the request at runtime so missing values become explicit defaults instead of implicit behavior.
+2. Normalize the request at runtime so missing values become explicit defaults instead of implicit behavior. In the first release, omitted cadence defaults to `every_frame` and omitted `startFrameOffset` defaults to `0`.
 3. Keep the request independent from one specific game so the same contract works for Pong and later projects.
 4. Reject unsupported selectors, properties, or trigger types with explicit machine-readable errors.
 
@@ -94,7 +94,7 @@ This is the first slice that produces the time-series evidence needed to explain
 2. Support `every_frame` and `every_n_frames` modes.
 3. Cap total frames or duration so traces stay bounded.
 4. Write the result as a stable machine-readable trace artifact, ideally `trace.jsonl`.
-5. Keep serialization flat and agent-readable. Prefer explicit fields over opaque blobs.
+5. Keep serialization flat and agent-readable. Prefer explicit fields over opaque blobs, and keep the normalized `appliedWatch` summary in the persisted manifest so the trace contract stays self-describing.
 
 **Testable deliverables**
 

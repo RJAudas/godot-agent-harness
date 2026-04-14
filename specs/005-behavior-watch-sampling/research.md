@@ -54,3 +54,10 @@
 - `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd` already owns session configuration and persistence handoff, making it the natural place to initialize and expose normalized watch state.
 - `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd` already builds artifact references into `evidence-manifest.json`, so the trace artifact should be added there rather than through a second manifest writer for v1.
 - The existing Pong testbed already provides stable `/root/Main/Ball` identity and run-request fixtures that make deterministic bounded sampling validation practical.
+
+## Validation Notes
+
+- `pwsh ./tools/tests/run-tool-tests.ps1` passed after the behavior-watch request schema, request helper, fixtures, manifests, and PowerShell regression coverage were updated.
+- `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/evidence-manifest.json` passed for the seeded behavior-watch bundle.
+- `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-frame.json -PassThru` wrote a schema-valid broker request artifact for the example project.
+- `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples/pong-testbed` reported that no live `harness/automation/results/capability.json` artifact was present from this checkout, so full runtime verification stayed blocked until an editor session publishes capability and run-result artifacts.

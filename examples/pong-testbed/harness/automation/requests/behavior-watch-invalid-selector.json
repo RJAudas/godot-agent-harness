@@ -1,0 +1,9 @@
+{
+  "targets": [
+    {
+      "nodePath": "Main/Ball",
+      "properties": ["position", "velocity"]
+    }
+  ],
+  "frameCount": 4
+}

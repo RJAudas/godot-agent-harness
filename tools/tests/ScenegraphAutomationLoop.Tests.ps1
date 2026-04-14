@@ -64,6 +64,91 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
+    It 'accepts a run request payload with behavior-watch overrides' {
+        $payloadPath = Join-Path $TestDrive 'automation-run-request.behavior-watch.json'
+        @{
+            requestId = 'pong-request-watch-001'
+            scenarioId = 'pong-behavior-watch'
+            runId = 'pong-watch-run-001'
+            targetScene = 'res://scenes/main.tscn'
+            outputDirectory = 'res://evidence/automation/pong-watch-run-001'
+            artifactRoot = 'examples/pong-testbed/evidence/automation/pong-watch-run-001'
+            expectationFiles = @('res://harness/expectations/common.json')
+            capturePolicy = @{
+                startup = $true
+                manual = $true
+                failure = $true
+            }
+            stopPolicy = @{
+                stopAfterValidation = $true
+            }
+            requestedBy = 'scenegraph-automation-test'
+            createdAt = '2026-04-14T00:01:00Z'
+            overrides = @{
+                behaviorWatchRequest = @{
+                    targets = @(
+                        @{
+                            nodePath = '/root/Main/Ball'
+                            properties = @('position', 'velocity', 'collisionState', 'lastCollider')
+                        }
+                    )
+                    frameCount = 4
+                }
+            }
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
+    It 'rejects a run request payload with later-slice behavior-watch fields' {
+        $payloadPath = Join-Path $TestDrive 'automation-run-request.behavior-watch.invalid.json'
+        @{
+            requestId = 'pong-request-watch-002'
+            scenarioId = 'pong-behavior-watch'
+            runId = 'pong-watch-run-002'
+            targetScene = 'res://scenes/main.tscn'
+            outputDirectory = 'res://evidence/automation/pong-watch-run-002'
+            artifactRoot = 'examples/pong-testbed/evidence/automation/pong-watch-run-002'
+            expectationFiles = @('res://harness/expectations/common.json')
+            capturePolicy = @{
+                startup = $true
+                manual = $true
+                failure = $true
+            }
+            stopPolicy = @{
+                stopAfterValidation = $true
+            }
+            requestedBy = 'scenegraph-automation-test'
+            createdAt = '2026-04-14T00:02:00Z'
+            overrides = @{
+                behaviorWatchRequest = @{
+                    targets = @(
+                        @{
+                            nodePath = '/root/Main/Ball'
+                            properties = @('position')
+                        }
+                    )
+                    frameCount = 4
+                    triggers = @('wall_contact')
+                }
+            }
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 1
+        $result.ParsedOutput.valid | Should -BeFalse
+    }
+
     It 'accepts a lifecycle status payload' {
         $payloadPath = Join-Path $TestDrive 'automation-lifecycle-status.json'
         @{
@@ -241,6 +326,56 @@ Describe 'examples/pong-testbed automation fixtures' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
+    It 'accepts the behavior-watch request fragment fixture with normalization defaults' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json',
+            '-SchemaPath', 'specs/005-behavior-watch-sampling/contracts/behavior-watch-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
+    It 'rejects the invalid-selector behavior-watch request fragment fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-selector.json',
+            '-SchemaPath', 'specs/005-behavior-watch-sampling/contracts/behavior-watch-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 1
+        $result.ParsedOutput.valid | Should -BeFalse
+    }
+
+    It 'rejects the invalid-window behavior-watch request fragment fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-window.json',
+            '-SchemaPath', 'specs/005-behavior-watch-sampling/contracts/behavior-watch-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 1
+        $result.ParsedOutput.valid | Should -BeFalse
+    }
+
+    It 'accepts the every-frame behavior-watch automation request fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-frame.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
+    It 'accepts the every-n behavior-watch automation request fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-n.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
     It 'accepts the capability options fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
             '-InputPath', 'examples/pong-testbed/harness/automation/results/capability-options.expected.json',
@@ -264,6 +399,45 @@ Describe 'examples/pong-testbed automation fixtures' {
         $result.ParsedOutput.valid | Should -BeTrue
         $manifestValidation.ExitCode | Should -Be 0
         $manifestValidation.ParsedOutput.bundleValid | Should -BeTrue
+    }
+
+    It 'accepts the every-frame behavior-watch run-result fixture, manifest, and trace rows' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.behavior-watch.every-frame.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $manifestValidation = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @(
+            '-ManifestPath', 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/evidence-manifest.json'
+        )
+        $manifest = Read-RepoJson -Path 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/evidence-manifest.json'
+        $traceRows = @(Read-RepoJsonLines -Path 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/trace.jsonl')
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+        $manifestValidation.ExitCode | Should -Be 0
+        $manifestValidation.ParsedOutput.bundleValid | Should -BeTrue
+        Assert-BehaviorWatchAppliedWatch -AppliedWatch $manifest.appliedWatch -ExpectedRunId 'pong-behavior-watch-wall-bounce-every-frame-run-01' -ExpectedNodePath '/root/Main/Ball' -ExpectedProperties @('position', 'velocity', 'collisionState', 'lastCollider') -ExpectedMode 'every_frame' -ExpectedStartFrameOffset 12 -ExpectedFrameCount 4 -ExpectedSampleCount 4
+        Assert-BehaviorWatchTraceRows -Rows $traceRows -ExpectedNodePath '/root/Main/Ball' -ExpectedProperties @('position', 'velocity', 'collisionState', 'lastCollider') -ExpectedFrames @(12, 13, 14, 15)
+    }
+
+    It 'accepts the every-n behavior-watch run-result fixture, manifest, and trace rows' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.behavior-watch.every-n.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+        $manifestValidation = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @(
+            '-ManifestPath', 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/evidence-manifest.json'
+        )
+        $manifest = Read-RepoJson -Path 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/evidence-manifest.json'
+        $traceRows = @(Read-RepoJsonLines -Path 'examples/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/trace.jsonl')
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+        $manifestValidation.ExitCode | Should -Be 0
+        $manifestValidation.ParsedOutput.bundleValid | Should -BeTrue
+        Assert-BehaviorWatchAppliedWatch -AppliedWatch $manifest.appliedWatch -ExpectedRunId 'pong-behavior-watch-wall-bounce-every-n-run-01' -ExpectedNodePath '/root/Main/Ball' -ExpectedProperties @('position', 'velocity', 'speed') -ExpectedMode 'every_n_frames' -ExpectedStartFrameOffset 20 -ExpectedFrameCount 6 -ExpectedSampleCount 3
+        $manifest.appliedWatch.cadence.everyNFrames | Should -Be 2
+        Assert-BehaviorWatchTraceRows -Rows $traceRows -ExpectedNodePath '/root/Main/Ball' -ExpectedProperties @('position', 'velocity', 'speed') -ExpectedFrames @(20, 22, 24)
     }
 
     It 'accepts the build-failure lifecycle and run-result fixtures' {

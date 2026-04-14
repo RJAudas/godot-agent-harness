@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "headline": "Behavior watch captured the Pong ball at every-N-frame cadence.",
+  "outcome": "The bounded watch trace recorded only the requested cadence-aligned Ball fields for the current run.",
+  "keyFindings": [
+    "Behavior watch samples: 3",
+    "Targeted node: /root/Main/Ball",
+    "Window: frames 20 through 25 sampled every 2 frames"
+  ],
+  "latestSnapshotId": "pong-behavior-watch-wall-bounce-every-n-snapshot-01",
+  "diagnosticCount": 0
+}

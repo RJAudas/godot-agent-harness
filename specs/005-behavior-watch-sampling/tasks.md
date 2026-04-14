@@ -17,9 +17,9 @@
 
 **Purpose**: Create the deterministic fixture and regression scaffolding needed for behavior-watch implementation work.
 
-- [ ] T001 Create behavior-watch request fixture scaffolding in `examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json` and `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-selector.json`
-- [ ] T002 [P] Add behavior-watch regression grouping scaffolds in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
-- [ ] T003 [P] Create behavior-watch expected-output scaffolding in `examples/pong-testbed/evidence/automation/` and `examples/pong-testbed/harness/automation/results/`
+- [X] T001 Create behavior-watch request fixture scaffolding in `examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json` and `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-selector.json`
+- [X] T002 [P] Add behavior-watch regression grouping scaffolds in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
+- [X] T003 [P] Create behavior-watch expected-output scaffolding in `examples/pong-testbed/evidence/automation/` and `examples/pong-testbed/harness/automation/results/`
 
 ---
 
@@ -29,10 +29,10 @@
 
 **CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T004 Extend `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json` and `tools/automation/request-editor-evidence-run.ps1` to accept `overrides.behaviorWatchRequest`
-- [ ] T005 [P] Add shared behavior-watch constants and artifact metadata in `addons/agent_runtime_harness/shared/inspection_constants.gd` and `tools/evidence/artifact-registry.ps1`
-- [ ] T006 [P] Create the shared request-validation helper in `addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`
-- [ ] T007 [P] Add run-scoped watch-session plumbing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`, `addons/agent_runtime_harness/editor/scenegraph_debugger_bridge.gd`, and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
+- [X] T004 Extend `specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json` and `tools/automation/request-editor-evidence-run.ps1` to accept `overrides.behaviorWatchRequest`
+- [X] T005 [P] Add shared behavior-watch constants and artifact metadata in `addons/agent_runtime_harness/shared/inspection_constants.gd` and `tools/evidence/artifact-registry.ps1`
+- [X] T006 [P] Create the shared request-validation helper in `addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`
+- [X] T007 [P] Add run-scoped watch-session plumbing in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`, `addons/agent_runtime_harness/editor/scenegraph_debugger_bridge.gd`, and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
 
 **Checkpoint**: Shared behavior-watch plumbing is ready; story work can now proceed.
 
@@ -46,15 +46,15 @@
 
 ### Validation for User Story 1
 
-- [ ] T008 [P] [US1] Add valid and invalid request fixtures in `examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json`, `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-selector.json`, and `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-window.json`
-- [ ] T009 [P] [US1] Add normalization and rejection coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1` for unsupported selectors, later-slice fields, and zero-sample windows
+- [X] T008 [P] [US1] Add valid and invalid request fixtures in `examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json`, `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-selector.json`, and `examples/pong-testbed/harness/automation/requests/behavior-watch-invalid-window.json`
+- [X] T009 [P] [US1] Add normalization and rejection coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1` for unsupported selectors, later-slice fields, and zero-sample windows
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement watch-request normalization defaults and rejection rules in `addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`
-- [ ] T011 [P] [US1] Publish invalid watch-request failures before playtest launch in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
-- [ ] T012 [P] [US1] Expose the normalized applied-watch summary in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
-- [ ] T013 [US1] Align request-contract documentation and examples in `specs/005-behavior-watch-sampling/contracts/behavior-watch-contract.md` and `specs/005-behavior-watch-sampling/quickstart.md`
+- [X] T010 [US1] Implement watch-request normalization defaults and rejection rules in `addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`
+- [X] T011 [P] [US1] Publish invalid watch-request failures before playtest launch in `addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
+- [X] T012 [P] [US1] Expose the normalized applied-watch summary in `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd` and `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
+- [X] T013 [US1] Align request-contract documentation and examples in `specs/005-behavior-watch-sampling/contracts/behavior-watch-contract.md` and `specs/005-behavior-watch-sampling/quickstart.md`
 
 **Checkpoint**: User Story 1 is complete when behavior-watch requests are deterministically normalized or rejected before runtime sampling starts.
 
@@ -68,16 +68,16 @@
 
 ### Validation for User Story 2
 
-- [ ] T014 [P] [US2] Add deterministic Pong watch-run fixtures in `examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-frame.json` and `examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-n.json`
-- [ ] T015 [P] [US2] Add bounded-trace sampling coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1` for cadence, frame-window enforcement, requested-fields-only rows, and no-sample outcomes
+- [X] T014 [P] [US2] Add deterministic Pong watch-run fixtures in `examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-frame.json` and `examples/pong-testbed/harness/automation/requests/behavior-watch-wall-bounce.every-n.json`
+- [X] T015 [P] [US2] Add bounded-trace sampling coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1` for cadence, frame-window enforcement, requested-fields-only rows, and no-sample outcomes
 
 ### Implementation for User Story 2
 
-- [ ] T016 [P] [US2] Implement bounded watch-sampling state in `addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd`
-- [ ] T017 [US2] Wire start-frame offset and cadence enforcement into `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
-- [ ] T018 [P] [US2] Implement flat `trace.jsonl` row serialization in `addons/agent_runtime_harness/runtime/behavior_trace_writer.gd`
-- [ ] T019 [US2] Persist the current run's `trace.jsonl` artifact through `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd` and `addons/agent_runtime_harness/runtime/behavior_trace_writer.gd`
-- [ ] T020 [US2] Report missing-target, missing-property, and no-sample outcomes in `addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
+- [X] T016 [P] [US2] Implement bounded watch-sampling state in `addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd`
+- [X] T017 [US2] Wire start-frame offset and cadence enforcement into `addons/agent_runtime_harness/runtime/scenegraph_runtime.gd`
+- [X] T018 [P] [US2] Implement flat `trace.jsonl` row serialization in `addons/agent_runtime_harness/runtime/behavior_trace_writer.gd`
+- [X] T019 [US2] Persist the current run's `trace.jsonl` artifact through `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd` and `addons/agent_runtime_harness/runtime/behavior_trace_writer.gd`
+- [X] T020 [US2] Report missing-target, missing-property, and no-sample outcomes in `addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd` and `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd`
 
 **Checkpoint**: User Story 2 is complete when a deterministic Pong run produces a bounded `trace.jsonl` artifact for the requested watch scope only.
 
@@ -91,15 +91,15 @@
 
 ### Validation for User Story 3
 
-- [ ] T021 [P] [US3] Add expected manifest and result fixtures for behavior-watch runs in `examples/pong-testbed/evidence/automation/` and `examples/pong-testbed/harness/automation/results/`
-- [ ] T022 [P] [US3] Add manifest-reference and stale-trace regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
+- [X] T021 [P] [US3] Add expected manifest and result fixtures for behavior-watch runs in `examples/pong-testbed/evidence/automation/` and `examples/pong-testbed/harness/automation/results/`
+- [X] T022 [P] [US3] Add manifest-reference and stale-trace regression coverage in `tools/tests/ScenegraphAutomationLoop.Tests.ps1` and `tools/tests/AutomationTools.Tests.ps1`
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Register behavior-watch trace artifact metadata in `tools/evidence/artifact-registry.ps1` and `addons/agent_runtime_harness/shared/inspection_constants.gd`
-- [ ] T024 [US3] Add `trace.jsonl` artifact references and applied-watch summary output in `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd`
-- [ ] T025 [P] [US3] Align run-result-to-manifest handoff behavior in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
-- [ ] T026 [US3] Document manifest-first trace consumption in `docs/AGENT_TOOLING_FOUNDATION.md` and `specs/005-behavior-watch-sampling/contracts/behavior-watch-contract.md`
+- [X] T023 [US3] Register behavior-watch trace artifact metadata in `tools/evidence/artifact-registry.ps1` and `addons/agent_runtime_harness/shared/inspection_constants.gd`
+- [X] T024 [US3] Add `trace.jsonl` artifact references and applied-watch summary output in `addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd`
+- [X] T025 [P] [US3] Align run-result-to-manifest handoff behavior in `addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd` and `addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd`
+- [X] T026 [US3] Document manifest-first trace consumption in `docs/AGENT_TOOLING_FOUNDATION.md` and `specs/005-behavior-watch-sampling/contracts/behavior-watch-contract.md`
 
 **Checkpoint**: User Story 3 is complete when behavior-watch traces are consumed through the same manifest-centered evidence flow as the rest of the harness.
 
@@ -109,10 +109,10 @@
 
 **Purpose**: Finish shared documentation, run full validation, and capture follow-up notes from the quickstart flow.
 
-- [ ] T027 [P] Update slice-1 and slice-2 guidance in `docs/BEHAVIOR_CAPTURE_SLICES.md` and `docs/AGENT_RUNTIME_HARNESS.md`
-- [ ] T028 Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched contracts
-- [ ] T029 [P] Run `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <generated-manifest>` against the behavior-watch fixture output and record notes in `specs/005-behavior-watch-sampling/research.md`
-- [ ] T030 [P] Execute the validation flow in `specs/005-behavior-watch-sampling/quickstart.md` against `examples/pong-testbed/` and record follow-up notes in `specs/005-behavior-watch-sampling/research.md`
+- [X] T027 [P] Update slice-1 and slice-2 guidance in `docs/BEHAVIOR_CAPTURE_SLICES.md` and `docs/AGENT_RUNTIME_HARNESS.md`
+- [X] T028 Run `pwsh ./tools/tests/run-tool-tests.ps1` and fix regressions in `tools/tests/ScenegraphAutomationLoop.Tests.ps1`, `tools/tests/AutomationTools.Tests.ps1`, and any touched contracts
+- [X] T029 [P] Run `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <generated-manifest>` against the behavior-watch fixture output and record notes in `specs/005-behavior-watch-sampling/research.md`
+- [X] T030 [P] Execute the validation flow in `specs/005-behavior-watch-sampling/quickstart.md` against `examples/pong-testbed/` and record follow-up notes in `specs/005-behavior-watch-sampling/research.md`
 
 ---
 

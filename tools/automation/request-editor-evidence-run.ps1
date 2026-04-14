@@ -4,6 +4,7 @@ param(
     [string]$ConfigPath,
     [string]$RequestPath,
     [string]$RequestFixturePath,
+    [string]$BehaviorWatchRequestFixturePath,
     [string]$RequestId,
     [string]$ScenarioId,
     [string]$RunId,
@@ -140,6 +141,13 @@ $defaultRequest = if ($PSBoundParameters.ContainsKey('RequestFixturePath')) {
 else {
     [pscustomobject]@{}
 }
+$behaviorWatchRequest = if ($PSBoundParameters.ContainsKey('BehaviorWatchRequestFixturePath')) {
+    $fixturePath = Resolve-RepoPath -Path $BehaviorWatchRequestFixturePath
+    Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json -Depth 100
+}
+else {
+    $null
+}
 
 $requestDocument = [ordered]@{
     requestId = if ($PSBoundParameters.ContainsKey('RequestId')) { $RequestId } elseif ($defaultRequest.requestId) { $defaultRequest.requestId } else { [guid]::NewGuid().Guid }
@@ -156,7 +164,14 @@ $requestDocument = [ordered]@{
 }
 
 if ($defaultRequest.PSObject.Properties.Name -contains 'overrides') {
-    $requestDocument.overrides = $defaultRequest.overrides
+    $requestDocument.overrides = $defaultRequest.overrides | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100 -AsHashtable
+}
+
+if ($null -ne $behaviorWatchRequest) {
+    if (-not $requestDocument.Contains('overrides')) {
+        $requestDocument.overrides = [ordered]@{}
+    }
+    $requestDocument.overrides.behaviorWatchRequest = $behaviorWatchRequest
 }
 
 $resolvedRequestPath = if ($PSBoundParameters.ContainsKey('RequestPath')) {

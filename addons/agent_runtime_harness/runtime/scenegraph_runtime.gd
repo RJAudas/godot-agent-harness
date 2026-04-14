@@ -9,19 +9,26 @@ const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/i
 const ScenegraphCaptureService = preload("res://addons/agent_runtime_harness/runtime/scenegraph_capture_service.gd")
 const ScenegraphDiagnosticSerializer = preload("res://addons/agent_runtime_harness/runtime/scenegraph_diagnostic_serializer.gd")
 const ScenegraphArtifactWriter = preload("res://addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd")
+const BehaviorWatchSampler = preload("res://addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd")
+const BehaviorTraceWriter = preload("res://addons/agent_runtime_harness/runtime/behavior_trace_writer.gd")
 
 var _capture_service := ScenegraphCaptureService.new()
 var _diagnostic_serializer := ScenegraphDiagnosticSerializer.new()
 var _artifact_writer := ScenegraphArtifactWriter.new()
+var _behavior_watch_sampler := BehaviorWatchSampler.new()
+var _behavior_trace_writer := BehaviorTraceWriter.new()
 
 var _session_context := {}
 var _expectations: Array = []
 var _latest_snapshot := {}
 var _latest_diagnostics: Array = []
 var _identifier_sequence := 0
+var _applied_watch := {}
+var _run_started_at_msec := 0
 
 
 func _ready() -> void:
+	set_physics_process(true)
 	if _session_context.is_empty():
 		configure_session({})
 	_register_debugger_transport()
@@ -34,6 +41,7 @@ func _exit_tree() -> void:
 
 
 func configure_session(session_context: Dictionary) -> void:
+	_run_started_at_msec = Time.get_ticks_msec()
 	_session_context = {
 		"session_id": session_context.get("session_id", _build_identifier("session")),
 		"request_id": session_context.get("request_id", _build_identifier("request")),
@@ -51,6 +59,14 @@ func configure_session(session_context: Dictionary) -> void:
 			"stopAfterValidation": true,
 		}),
 	}
+	_applied_watch = {}
+
+	if session_context.has("applied_watch") and typeof(session_context.get("applied_watch")) == TYPE_DICTIONARY:
+		_applied_watch = session_context.get("applied_watch", {}).duplicate(true)
+	elif session_context.has("behavior_watch") and typeof(session_context.get("behavior_watch")) == TYPE_DICTIONARY:
+		_applied_watch = session_context.get("behavior_watch", {}).get("appliedWatch", {}).duplicate(true)
+
+	_behavior_watch_sampler.configure(_applied_watch)
 
 	if session_context.has("config_path"):
 		_load_session_config(String(session_context.get("config_path")))
@@ -93,7 +109,22 @@ func persist_latest_bundle() -> Dictionary:
 	if _latest_snapshot.is_empty():
 		return {}
 
-	var result := _artifact_writer.persist_bundle(_latest_snapshot, _latest_diagnostics, _session_context)
+	var session_context := _session_context.duplicate(true)
+	if not _applied_watch.is_empty():
+		var trace_result := _behavior_trace_writer.persist_trace(_behavior_watch_sampler.get_rows(), session_context)
+		if trace_result.has("error"):
+			_emit_runtime_error(String(trace_result.get("error", "Behavior trace persistence failed.")))
+			return trace_result
+
+		var applied_watch := _applied_watch.duplicate(true)
+		applied_watch["traceArtifact"] = String(trace_result.get("artifactPath", InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)).get_file()
+		applied_watch["outcomes"] = _behavior_watch_sampler.build_outcomes()
+		session_context["behavior_watch"] = {
+			"appliedWatch": applied_watch,
+			"traceArtifactPath": trace_result.get("artifactPath", ""),
+		}
+
+	var result := _artifact_writer.persist_bundle(_latest_snapshot, _latest_diagnostics, session_context)
 	if result.has("error"):
 		_emit_runtime_error(String(result.get("error", "Scenegraph bundle persistence failed.")))
 		return result
@@ -107,6 +138,12 @@ func _capture_startup_if_enabled() -> void:
 	var capture_policy: Dictionary = _session_context.get("capture_policy", {})
 	if capture_policy.get("startup", false):
 		capture_scenegraph(InspectionConstants.TRIGGER_STARTUP, "session_started")
+
+
+func _physics_process(_delta: float) -> void:
+	if _applied_watch.is_empty():
+		return
+	_behavior_watch_sampler.capture_frame(self, Engine.get_process_frames(), _elapsed_run_time_msec())
 
 
 func _resolve_root_node() -> Node:
@@ -192,13 +229,20 @@ func _send_debugger_message(message_name: String, data: Array) -> void:
 
 
 func _build_session_configuration_event() -> Dictionary:
-	return {
+	var event := {
 		"request_id": String(_session_context.get("request_id", "")),
 		"session_id": String(_session_context.get("session_id", "")),
 		"run_id": String(_session_context.get("run_id", "")),
 		"scenario_id": String(_session_context.get("scenario_id", "")),
 		"stop_policy": _session_context.get("stop_policy", {}).duplicate(true),
 	}
+	if not _applied_watch.is_empty():
+		event["appliedWatch"] = _applied_watch.duplicate(true)
+	return event
+
+
+func _elapsed_run_time_msec() -> int:
+	return max(Time.get_ticks_msec() - _run_started_at_msec, 0)
 
 
 func _emit_runtime_error(message: String) -> void:

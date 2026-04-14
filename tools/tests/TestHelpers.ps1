@@ -152,6 +152,94 @@ function Assert-BuildFailureRunResult {
     @($Result.buildDiagnostics).Count | Should -Be $ExpectedDiagnosticCount
 }
 
+function Read-RepoJsonLines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    return Get-Content -LiteralPath (Get-RepoPath -Path $Path) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+        $_ | ConvertFrom-Json -Depth 100
+    }
+}
+
+function Assert-BehaviorWatchAppliedWatch {
+    param(
+        [Parameter(Mandatory = $true)]
+        $AppliedWatch,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedRunId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedNodePath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$ExpectedProperties,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedMode,
+
+        [Parameter(Mandatory = $true)]
+        [int]$ExpectedStartFrameOffset,
+
+        [Parameter(Mandatory = $true)]
+        [int]$ExpectedFrameCount,
+
+        [int]$ExpectedSampleCount = -1
+    )
+
+    $AppliedWatch.runId | Should -Be $ExpectedRunId
+    $AppliedWatch.traceArtifact | Should -Be 'trace.jsonl'
+    @($AppliedWatch.targets).Count | Should -Be 1
+    $AppliedWatch.targets[0].nodePath | Should -Be $ExpectedNodePath
+    @($AppliedWatch.targets[0].properties) | Should -Be $ExpectedProperties
+    $AppliedWatch.cadence.mode | Should -Be $ExpectedMode
+    $AppliedWatch.startFrameOffset | Should -Be $ExpectedStartFrameOffset
+    $AppliedWatch.frameCount | Should -Be $ExpectedFrameCount
+
+    if ($ExpectedMode -eq 'every_frame') {
+        $AppliedWatch.cadence.everyNFrames | Should -BeNullOrEmpty
+    }
+
+    if ($ExpectedSampleCount -ge 0) {
+        $AppliedWatch.outcomes.sampleCount | Should -Be $ExpectedSampleCount
+        $AppliedWatch.outcomes.noSamples | Should -BeFalse
+    }
+}
+
+function Assert-BehaviorWatchTraceRows {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Rows,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedNodePath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$ExpectedProperties,
+
+        [int[]]$ExpectedFrames = @()
+    )
+
+    @($Rows).Count | Should -BeGreaterThan 0
+    $allowedKeys = @('frame', 'timestampMs', 'nodePath') + $ExpectedProperties
+
+    foreach ($row in @($Rows)) {
+        $row.nodePath | Should -Be $ExpectedNodePath
+        foreach ($propertyName in $ExpectedProperties) {
+            $row.PSObject.Properties.Name | Should -Contain $propertyName
+        }
+        foreach ($propertyName in $row.PSObject.Properties.Name) {
+            $propertyName | Should -BeIn $allowedKeys
+        }
+    }
+
+    if ($ExpectedFrames.Count -gt 0) {
+        @($Rows | ForEach-Object { [int]$_.frame }) | Should -Be $ExpectedFrames
+    }
+}
+
 function Invoke-RepoScriptPassThru {
     param(
         [Parameter(Mandatory = $true)]

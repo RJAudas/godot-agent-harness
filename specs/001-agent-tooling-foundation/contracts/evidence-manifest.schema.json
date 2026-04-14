@@ -85,6 +85,120 @@
         }
       }
     },
+    "appliedWatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "targets",
+        "cadence",
+        "startFrameOffset",
+        "frameCount",
+        "traceArtifact"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["nodePath", "properties"],
+            "properties": {
+              "nodePath": {
+                "type": "string",
+                "pattern": "^/.*",
+                "minLength": 2
+              },
+              "properties": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "cadence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "everyNFrames"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["every_frame", "every_n_frames"]
+            },
+            "everyNFrames": {
+              "type": ["integer", "null"],
+              "minimum": 2
+            }
+          }
+        },
+        "startFrameOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frameCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "traceArtifact": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcomes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sampleCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sampledFrameCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "noSamples": {
+              "type": "boolean"
+            },
+            "missingTargets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "missingProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["nodePath", "properties"],
+                "properties": {
+                  "nodePath": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "properties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "artifactRefs": {
       "type": "array",
       "minItems": 1,

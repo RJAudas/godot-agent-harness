@@ -41,6 +41,10 @@ config/name="Sandbox Game"
         $copilotInstructions = Get-Content -LiteralPath (Join-Path $gameRoot '.github/copilot-instructions.md') -Raw
         $copilotInstructions | Should -Match 'BEGIN AGENT_RUNTIME_HARNESS'
         $copilotInstructions | Should -Match 'evidence/scenegraph/latest/evidence-manifest.json'
+        $copilotInstructions | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
+
+        $agentsContent = Get-Content -LiteralPath (Join-Path $gameRoot 'AGENTS.md') -Raw
+        $agentsContent | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
     }
 
     It 'preserves an existing harness config file' {
@@ -56,6 +60,42 @@ config/name="Sandbox Game"
         } | Out-Null
 
         (Get-Content -LiteralPath $configPath -Raw) | Should -Be '{"scenarioId":"custom"}'
+    }
+
+    It 'updates existing managed Copilot and AGENTS blocks in place' {
+        $gameRoot = New-RepoSandboxDirectory
+        $projectPath = Join-Path $gameRoot 'project.godot'
+        Set-Content -LiteralPath $projectPath -Value 'config_version=5' -NoNewline
+        New-Item -ItemType Directory -Path (Join-Path $gameRoot '.github') -Force | Out-Null
+
+        Set-Content -LiteralPath (Join-Path $gameRoot '.github/copilot-instructions.md') -Value @'
+# Copilot Instructions
+
+<!-- BEGIN AGENT_RUNTIME_HARNESS -->
+old copilot block
+<!-- END AGENT_RUNTIME_HARNESS -->
+'@ -NoNewline
+
+        Set-Content -LiteralPath (Join-Path $gameRoot 'AGENTS.md') -Value @'
+# AGENTS.md
+
+<!-- BEGIN AGENT_RUNTIME_HARNESS -->
+old agents block
+<!-- END AGENT_RUNTIME_HARNESS -->
+'@ -NoNewline
+
+        Invoke-RepoScriptPassThru -ScriptPath 'tools/deploy-game-harness.ps1' -Parameters @{
+            GameRoot = $gameRoot
+            PassThru = $true
+        } | Out-Null
+
+        $copilotInstructions = Get-Content -LiteralPath (Join-Path $gameRoot '.github/copilot-instructions.md') -Raw
+        $copilotInstructions | Should -Not -Match 'old copilot block'
+        $copilotInstructions | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
+
+        $agentsContent = Get-Content -LiteralPath (Join-Path $gameRoot 'AGENTS.md') -Raw
+        $agentsContent | Should -Not -Match 'old agents block'
+        $agentsContent | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
     }
 
     It 'reports skipped operations when run with WhatIf' {

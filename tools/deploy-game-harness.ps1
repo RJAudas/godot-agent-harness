@@ -101,7 +101,7 @@ function Set-OrAppendManagedBlock {
         $pattern = [regex]::Escape($beginMarker) + '.*?' + [regex]::Escape($endMarker)
         if ([regex]::IsMatch($existing, $pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
             $updated = [regex]::Replace($existing, $pattern, $managedBlock.TrimEnd(), [System.Text.RegularExpressions.RegexOptions]::Singleline)
-            Write-Utf8NoBomFile -Path $Path -Content $updated.TrimEnd() + [Environment]::NewLine
+            Write-Utf8NoBomFile -Path $Path -Content ($updated.TrimEnd() + [Environment]::NewLine)
             return 'updated'
         }
 

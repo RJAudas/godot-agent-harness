@@ -125,6 +125,34 @@ function Get-ValidationMessage {
     return $FailureMessage
 }
 
+function Get-OptionalPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$InputObject,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName
+    )
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        if ($InputObject.Contains($PropertyName)) {
+            return $InputObject[$PropertyName]
+        }
+        return $null
+    }
+
+    $property = $InputObject.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 $resolvedProjectRoot = Resolve-RepoPath -Path $ProjectRoot
 $resolvedConfigPath = if ($PSBoundParameters.ContainsKey('ConfigPath')) {
     Resolve-ProjectResourcePath -ProjectRootPath $resolvedProjectRoot -Path $ConfigPath
@@ -148,23 +176,32 @@ $behaviorWatchRequest = if ($PSBoundParameters.ContainsKey('BehaviorWatchRequest
 else {
     $null
 }
+$defaultRequestId = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'requestId'
+$defaultScenarioId = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'scenarioId'
+$defaultRunId = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'runId'
+$defaultTargetScene = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'targetScene'
+$defaultOutputDirectory = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'outputDirectory'
+$defaultArtifactRoot = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'artifactRoot'
+$defaultExpectationFiles = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'expectationFiles'
+$defaultCapturePolicy = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'capturePolicy'
+$defaultOverrides = Get-OptionalPropertyValue -InputObject $defaultRequest -PropertyName 'overrides'
 
 $requestDocument = [ordered]@{
-    requestId = if ($PSBoundParameters.ContainsKey('RequestId')) { $RequestId } elseif ($defaultRequest.requestId) { $defaultRequest.requestId } else { [guid]::NewGuid().Guid }
-    scenarioId = if ($PSBoundParameters.ContainsKey('ScenarioId')) { $ScenarioId } elseif ($defaultRequest.scenarioId) { $defaultRequest.scenarioId } else { $config.scenarioId }
-    runId = if ($PSBoundParameters.ContainsKey('RunId')) { $RunId } elseif ($defaultRequest.runId) { $defaultRequest.runId } else { ('run-' + [guid]::NewGuid().Guid) }
-    targetScene = if ($PSBoundParameters.ContainsKey('TargetScene')) { $TargetScene } elseif ($defaultRequest.targetScene) { $defaultRequest.targetScene } else { $config.targetScene }
-    outputDirectory = if ($PSBoundParameters.ContainsKey('OutputDirectory')) { $OutputDirectory } elseif ($defaultRequest.outputDirectory) { $defaultRequest.outputDirectory } else { $config.outputDirectory }
-    artifactRoot = if ($PSBoundParameters.ContainsKey('ArtifactRoot')) { $ArtifactRoot } elseif ($defaultRequest.artifactRoot) { $defaultRequest.artifactRoot } else { $config.artifactRoot }
-    expectationFiles = if ($ExpectationFiles.Count -gt 0) { Convert-ToStringArray $ExpectationFiles } elseif ($defaultRequest.expectationFiles) { Convert-ToStringArray $defaultRequest.expectationFiles } else { Convert-ToStringArray $config.expectationFiles }
-    capturePolicy = if ($defaultRequest.capturePolicy) { $defaultRequest.capturePolicy } else { $config.capturePolicy }
+    requestId = if ($PSBoundParameters.ContainsKey('RequestId')) { $RequestId } elseif ($defaultRequestId) { $defaultRequestId } else { [guid]::NewGuid().Guid }
+    scenarioId = if ($PSBoundParameters.ContainsKey('ScenarioId')) { $ScenarioId } elseif ($defaultScenarioId) { $defaultScenarioId } else { $config.scenarioId }
+    runId = if ($PSBoundParameters.ContainsKey('RunId')) { $RunId } elseif ($defaultRunId) { $defaultRunId } else { ('run-' + [guid]::NewGuid().Guid) }
+    targetScene = if ($PSBoundParameters.ContainsKey('TargetScene')) { $TargetScene } elseif ($defaultTargetScene) { $defaultTargetScene } else { $config.targetScene }
+    outputDirectory = if ($PSBoundParameters.ContainsKey('OutputDirectory')) { $OutputDirectory } elseif ($defaultOutputDirectory) { $defaultOutputDirectory } else { $config.outputDirectory }
+    artifactRoot = if ($PSBoundParameters.ContainsKey('ArtifactRoot')) { $ArtifactRoot } elseif ($defaultArtifactRoot) { $defaultArtifactRoot } else { $config.artifactRoot }
+    expectationFiles = if ($ExpectationFiles.Count -gt 0) { Convert-ToStringArray $ExpectationFiles } elseif ($defaultExpectationFiles) { Convert-ToStringArray $defaultExpectationFiles } else { Convert-ToStringArray $config.expectationFiles }
+    capturePolicy = if ($defaultCapturePolicy) { $defaultCapturePolicy } else { $config.capturePolicy }
     stopPolicy = [ordered]@{ stopAfterValidation = $StopAfterValidation }
     requestedBy = $RequestedBy
     createdAt = [DateTime]::UtcNow.ToString('o')
 }
 
-if ($defaultRequest.PSObject.Properties.Name -contains 'overrides') {
-    $requestDocument.overrides = $defaultRequest.overrides | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100 -AsHashtable
+if ($null -ne $defaultOverrides) {
+    $requestDocument.overrides = $defaultOverrides | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100 -AsHashtable
 }
 
 if ($null -ne $behaviorWatchRequest) {

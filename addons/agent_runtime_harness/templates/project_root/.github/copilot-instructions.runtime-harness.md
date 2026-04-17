@@ -14,3 +14,4 @@
 - For runtime verification requests, prefer proving behavior from the persisted scenegraph artifacts instead of relying on a human description of what happened in the editor.
 - For end-to-end runtime verification, read `harness/automation/results/capability.json` first, request or inspect a brokered run under `harness/automation/requests/` and `harness/automation/results/`, then inspect the persisted bundle manifest.
 - When asked whether a runtime node exists, report the manifest status first, then the node path if found, and then any diagnostic or capture limitation that affects confidence.
+- Report harness bugs or automation-contract defects at `https://github.com/RJAudas/godot-agent-harness/issues`.

@@ -240,11 +240,15 @@ func _request_stop() -> void:
 	var editor_interface = _get_editor_interface()
 	if editor_interface != null:
 		editor_interface.stop_playing_scene()
+	if not _active or not _awaiting_stop:
+		return
 	if not _is_playing_scene():
 		_finalize_after_stop(InspectionConstants.AUTOMATION_TERMINATION_STOPPED_CLEANLY)
 
 
 func _finalize_after_stop(termination_status: String) -> void:
+	if not _active:
+		return
 	_awaiting_stop = false
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
@@ -353,6 +357,23 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 		result["buildFailurePhase"] = normalized_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
 		result["buildDiagnostics"] = normalized_build_failure.get("buildDiagnostics", []).duplicate(true)
 		result["rawBuildOutput"] = normalized_build_failure.get("rawBuildOutput", []).duplicate(true)
+	var terminal_extras := {}
+	if manifest_path != null:
+		terminal_extras["evidenceRefs"] = [String(manifest_path)]
+	if failure_kind != null:
+		terminal_extras["failureKind"] = failure_kind
+	if failure_kind == InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD:
+		terminal_extras["buildFailurePhase"] = result.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
+		terminal_extras["buildDiagnosticCount"] = result.get("buildDiagnostics", []).size()
+		terminal_extras["rawBuildOutputAvailable"] = not result.get("rawBuildOutput", []).is_empty()
+	var terminal_status := InspectionConstants.AUTOMATION_STATUS_COMPLETED
+	var terminal_details := "Autonomous run completed."
+	if final_status != "completed":
+		terminal_status = InspectionConstants.AUTOMATION_STATUS_FAILED
+		terminal_details = "Autonomous run failed."
+	if not note.is_empty():
+		terminal_details = note
+	_emit_status(terminal_status, terminal_details, terminal_extras)
 	_artifact_store.write_run_result(_active_config, result)
 	emit_signal("run_completed", result)
 	_reset_state()

@@ -18,3 +18,4 @@
 - Read `harness/automation/results/capability.json` or the latest final run result before opening raw evidence files.
 - If `run-result.json` reports `failureKind = build`, use the build diagnostics and raw build output there, report `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest for that run.
 - Treat blocked capability or run results as explicit unsupported-state signals; do not guess around them with hidden editor interaction.
+- Report harness bugs or automation-contract defects at `https://github.com/RJAudas/godot-agent-harness/issues`.

@@ -194,6 +194,27 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
+    It 'accepts a completed lifecycle status payload' {
+        $payloadPath = Join-Path $TestDrive 'automation-lifecycle-status.completed.json'
+        @{
+            requestId = 'pong-request-001'
+            runId = 'pong-run-001'
+            status = 'completed'
+            details = 'Autonomous run completed.'
+            timestamp = '2026-04-17T17:55:00Z'
+            controlPath = 'file_broker'
+            evidenceRefs = @('examples/pong-testbed/harness/expected-evidence-manifest.json')
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
     It 'accepts a completed run result payload' {
         $payloadPath = Join-Path $TestDrive 'automation-run-result.json'
         @{
@@ -458,6 +479,16 @@ Describe 'examples/pong-testbed automation fixtures' {
         Assert-BuildFailureRunResult -Result $runResult -ExpectedPhase 'launching' -ExpectedDiagnosticCount 2
         Assert-BuildDiagnostic -Diagnostic $runResult.buildDiagnostics[0] -ExpectedResourcePath 'res://scripts/build_failures/syntax_error_root.gd' -ExpectedSourceKind 'script'
         Assert-BuildDiagnostic -Diagnostic $runResult.buildDiagnostics[1] -ExpectedResourcePath 'res://scripts/build_failures/syntax_error_child.gd' -ExpectedSourceKind 'script'
+    }
+
+    It 'accepts the completed lifecycle fixture' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', 'examples/pong-testbed/harness/automation/results/lifecycle-status.completed.expected.json',
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
     }
 
     It 'accepts each failure and blocked run result fixture' {

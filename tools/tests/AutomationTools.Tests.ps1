@@ -289,6 +289,32 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         }
     }
 
+    It 'writes a schema-valid request artifact without a fixture' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RequestedBy = 'automation-tools-default-request-test'
+                PassThru = $true
+            }
+
+            $result.schemaValid | Should -BeTrue
+            $config = Get-Content -LiteralPath (Join-Path $harnessPath 'inspection-run-config.json') -Raw | ConvertFrom-Json -Depth 100
+            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
+            $request.requestedBy | Should -Be 'automation-tools-default-request-test'
+            $request.scenarioId | Should -Be $config.scenarioId
+            $request.targetScene | Should -Be $config.targetScene
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'writes a schema-valid request artifact with a behavior-watch override fixture' {
         $sandboxPath = New-RepoSandboxDirectory
 

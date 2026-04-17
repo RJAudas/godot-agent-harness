@@ -8,6 +8,7 @@ const RUNTIME_TO_EDITOR_CHANNEL := "agent_runtime_harness/scenegraph/capture"
 const ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT := "scenegraph-snapshot"
 const ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS := "scenegraph-diagnostics"
 const ARTIFACT_KIND_SCENEGRAPH_SUMMARY := "scenegraph-summary"
+const ARTIFACT_KIND_TRACE := "trace"
 const ARTIFACT_KIND_AUTOMATION_CAPABILITY := "automation-capability"
 const ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS := "automation-lifecycle-status"
 const ARTIFACT_KIND_AUTOMATION_RUN_RESULT := "automation-run-result"
@@ -85,6 +86,7 @@ const DEFAULT_AUTOMATION_RESULTS_DIRECTORY := "res://harness/automation/results"
 const DEFAULT_AUTOMATION_CAPABILITY_RESULT_PATH := "res://harness/automation/results/capability.json"
 const DEFAULT_AUTOMATION_LIFECYCLE_STATUS_PATH := "res://harness/automation/results/lifecycle-status.json"
 const DEFAULT_AUTOMATION_RUN_RESULT_PATH := "res://harness/automation/results/run-result.json"
+const DEFAULT_BEHAVIOR_WATCH_TRACE_FILE := "trace.jsonl"
 
 
 static func supported_artifact_kinds() -> PackedStringArray:
@@ -92,6 +94,7 @@ static func supported_artifact_kinds() -> PackedStringArray:
 		ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT,
 		ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS,
 		ARTIFACT_KIND_SCENEGRAPH_SUMMARY,
+		ARTIFACT_KIND_TRACE,
 		ARTIFACT_KIND_AUTOMATION_CAPABILITY,
 		ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS,
 		ARTIFACT_KIND_AUTOMATION_RUN_RESULT,

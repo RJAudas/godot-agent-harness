@@ -88,6 +88,9 @@
         },
         "stopPolicy": {
           "$ref": "#/$defs/stopPolicy"
+        },
+        "behaviorWatchRequest": {
+          "$ref": "#/$defs/behaviorWatchRequest"
         }
       }
     }
@@ -118,6 +121,119 @@
           "type": "boolean"
         }
       }
+    },
+    "behaviorWatchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targets",
+        "frameCount"
+      ],
+      "properties": {
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/watchTarget"
+          }
+        },
+        "cadence": {
+          "$ref": "#/$defs/watchCadence"
+        },
+        "startFrameOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frameCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "watchTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodePath",
+        "properties"
+      ],
+      "properties": {
+        "nodePath": {
+          "type": "string",
+          "pattern": "^/.*",
+          "minLength": 2
+        },
+        "properties": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "position",
+              "velocity",
+              "intendedVelocity",
+              "collisionState",
+              "lastCollider",
+              "movementVector",
+              "speed",
+              "overlapFrames"
+            ]
+          }
+        }
+      }
+    },
+    "watchCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "every_frame",
+            "every_n_frames"
+          ]
+        },
+        "everyNFrames": {
+          "type": "integer",
+          "minimum": 2
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "every_frame"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "everyNFrames"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "every_n_frames"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "everyNFrames"
+            ]
+          }
+        }
+      ]
     }
   }
 }

@@ -289,6 +289,34 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         }
     }
 
+    It 'writes a schema-valid request artifact with a behavior-watch override fixture' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
+                BehaviorWatchRequestFixturePath = 'examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json'
+                RequestedBy = 'automation-tools-behavior-watch-test'
+                PassThru = $true
+            }
+
+            $result.schemaValid | Should -BeTrue
+            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
+            $request.requestedBy | Should -Be 'automation-tools-behavior-watch-test'
+            $request.overrides.behaviorWatchRequest.targets[0].nodePath | Should -Be '/root/Main/Ball'
+            $request.overrides.behaviorWatchRequest.frameCount | Should -Be 4
+            $request.overrides.behaviorWatchRequest.PSObject.Properties.Name | Should -Not -Contain 'cadence'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'writes a schema-valid build-failure request artifact for a sandbox project' {
         $sandboxPath = New-RepoSandboxDirectory
 

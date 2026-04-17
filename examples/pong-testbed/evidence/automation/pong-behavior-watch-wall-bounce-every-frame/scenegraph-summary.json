@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "headline": "Behavior watch captured the Pong ball across the requested frame window.",
+  "outcome": "The bounded watch trace recorded only the requested Ball fields for the current run.",
+  "keyFindings": [
+    "Behavior watch samples: 4",
+    "Targeted node: /root/Main/Ball",
+    "Window: frames 12 through 15"
+  ],
+  "latestSnapshotId": "pong-behavior-watch-wall-bounce-every-frame-snapshot-01",
+  "diagnosticCount": 0
+}

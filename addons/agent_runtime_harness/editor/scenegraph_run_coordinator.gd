@@ -4,6 +4,7 @@ class_name ScenegraphRunCoordinator
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
 const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
+const BehaviorWatchRequestValidator = preload("res://addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd")
 
 signal lifecycle_status_written(payload)
 signal run_completed(result)
@@ -26,6 +27,7 @@ var _awaiting_stop := false
 var _stop_requested := false
 var _launch_started_at_usec := 0
 var _active_config_path := ""
+var _watch_request_validator := BehaviorWatchRequestValidator.new()
 
 
 func configure(plugin: EditorPlugin, bridge: Object, artifact_store: ScenegraphAutomationArtifactStore) -> void:
@@ -57,6 +59,10 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, 
 	_pending_failure_message = ""
 	_stop_requested = false
 	_awaiting_stop = false
+
+	var watch_validation := _active_request.get("behaviorWatchValidation", {})
+	if not watch_validation.is_empty() and not bool(watch_validation.get("accepted", false)):
+		return _finish_invalid_request(watch_validation)
 
 	var blocked_reasons := _collect_blocked_reasons(capability)
 	if not blocked_reasons.is_empty():
@@ -167,6 +173,13 @@ func handle_manifest_persisted(manifest: Dictionary) -> void:
 	_finalize_run("completed", null, InspectionConstants.AUTOMATION_TERMINATION_RUNNING)
 
 
+func handle_runtime_session_configured(session_context: Dictionary) -> void:
+	if not _active:
+		return
+	if session_context.has("appliedWatch") and typeof(session_context.get("appliedWatch")) == TYPE_DICTIONARY:
+		_active_request["appliedWatch"] = session_context.get("appliedWatch", {}).duplicate(true)
+
+
 func handle_transport_error(message: String) -> void:
 	if not _active:
 		return
@@ -265,6 +278,38 @@ func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
 	return result
 
 
+func _finish_invalid_request(validation_result: Dictionary) -> Dictionary:
+	var request_id := String(_active_request.get("requestId", "request-invalid"))
+	var run_id := String(_active_request.get("runId", "run-invalid"))
+	var notes := _artifact_store.build_behavior_watch_validation_notes(validation_result)
+	_emit_status(
+		InspectionConstants.AUTOMATION_STATUS_FAILED,
+		"Behavior watch request was rejected before playtest launch.",
+		_artifact_store.build_behavior_watch_failure_status_extras(validation_result)
+	)
+	var result := {
+		"requestId": request_id,
+		"runId": run_id,
+		"finalStatus": "failed",
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+		"manifestPath": null,
+		"outputDirectory": String(_active_request.get("outputDirectory", "")),
+		"validationResult": _build_validation_result(false, 0, [], false, notes),
+		"terminationStatus": InspectionConstants.AUTOMATION_TERMINATION_NOT_STARTED,
+		"blockedReasons": [],
+		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
+		"completedAt": InspectionConstants.utc_timestamp_now(),
+	}
+	_artifact_store.write_run_result(_active_config, result)
+	emit_signal("run_completed", result)
+	_reset_state()
+	return {
+		"ok": false,
+		"requestId": request_id,
+		"runId": run_id,
+	}
+
+
 func _fail_run(failure_kind: String, message: String) -> void:
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_FAILED, message, {
 		"failureKind": failure_kind,
@@ -342,7 +387,7 @@ func _resolve_active_config_path() -> String:
 
 
 func _build_session_context() -> Dictionary:
-	return {
+	var context := {
 		"config_path": _resolve_active_config_path(),
 		"session_id": String(_active_request.get("requestId", "")),
 		"request_id": String(_active_request.get("requestId", "")),
@@ -354,6 +399,9 @@ func _build_session_context() -> Dictionary:
 		"capture_policy": _active_request.get("capturePolicy", {}).duplicate(true),
 		"stop_policy": _active_request.get("stopPolicy", {}).duplicate(true),
 	}
+	if _active_request.has("appliedWatch"):
+		context["applied_watch"] = _active_request.get("appliedWatch", {}).duplicate(true)
+	return context
 
 
 func _collect_blocked_reasons(capability: Dictionary) -> Array:
@@ -416,6 +464,36 @@ func _resolve_request(config: Dictionary, request: Dictionary) -> Dictionary:
 	_merge_nested_override(resolved, "capturePolicy", overrides.get("capturePolicy", {}))
 	_merge_nested_override(resolved, "stopPolicy", overrides.get("stopPolicy", {}))
 
+	var behavior_watch_request := _resolve_behavior_watch_request(default_overrides, request, overrides)
+	if not behavior_watch_request.is_empty():
+		var watch_validation := _watch_request_validator.normalize_request(behavior_watch_request, String(resolved.get("runId", "")))
+		resolved["behaviorWatchValidation"] = watch_validation
+		if bool(watch_validation.get("accepted", false)):
+			resolved["behaviorWatchRequest"] = watch_validation.get("request", {}).duplicate(true)
+			resolved["appliedWatch"] = watch_validation.get("appliedWatch", {}).duplicate(true)
+
+	return resolved
+
+
+func _resolve_behavior_watch_request(default_overrides: Dictionary, request: Dictionary, overrides: Dictionary) -> Dictionary:
+	var resolved := {}
+	for source_value in [
+		default_overrides.get("behaviorWatchRequest", null),
+		request.get("behaviorWatchRequest", null),
+		overrides.get("behaviorWatchRequest", null),
+	]:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		for key_value in source.keys():
+			var key := String(key_value)
+			if key == "cadence" and typeof(source.get(key)) == TYPE_DICTIONARY:
+				var cadence: Dictionary = resolved.get("cadence", {}).duplicate(true)
+				for cadence_key in source.get(key, {}).keys():
+					cadence[cadence_key] = source.get(key, {}).get(cadence_key)
+				resolved["cadence"] = cadence
+				continue
+			resolved[key] = source.get(key)
 	return resolved
 
 
@@ -491,6 +569,31 @@ func _validate_manifest(manifest: Dictionary) -> Dictionary:
 	if missing_artifacts.is_empty():
 		notes.append("Manifest and referenced scenegraph artifacts exist for the active run.")
 
+	if not _active_request.get("appliedWatch", {}).is_empty():
+		var trace_path := _resolve_trace_repo_path()
+		var trace_artifact_ref := _find_artifact_ref(manifest.get("artifactRefs", []), InspectionConstants.ARTIFACT_KIND_TRACE)
+		var manifest_applied_watch: Dictionary = manifest.get("appliedWatch", {})
+		var applied_watch_valid := true
+		if trace_artifact_ref.is_empty():
+			applied_watch_valid = false
+			notes.append("Manifest did not include a trace artifact reference for the active behavior watch.")
+		elif String(trace_artifact_ref.get("path", "")) != trace_path:
+			applied_watch_valid = false
+			notes.append("Manifest trace artifact path did not match the active run's trace.jsonl path.")
+		if manifest_applied_watch.is_empty():
+			applied_watch_valid = false
+			notes.append("Manifest did not include the applied behavior-watch summary for the active run.")
+		elif String(manifest_applied_watch.get("runId", "")) != String(_active_request.get("runId", "")):
+			applied_watch_valid = false
+			notes.append("Manifest appliedWatch.runId did not match the active automation request.")
+		for manifest_note_value in manifest.get("validation", {}).get("notes", []):
+			var manifest_note := String(manifest_note_value)
+			if manifest_note.is_empty() or manifest_note in notes:
+				continue
+			notes.append(manifest_note)
+		var bundle_valid := run_id_matches and scenario_matches and missing_artifacts.is_empty() and bool(manifest.get("validation", {}).get("bundleValid", false)) and applied_watch_valid
+		return _build_validation_result(true, artifact_refs.size(), missing_artifacts, bundle_valid, notes)
+
 	var bundle_valid := run_id_matches and scenario_matches and missing_artifacts.is_empty() and bool(manifest.get("validation", {}).get("bundleValid", false))
 	return _build_validation_result(true, artifact_refs.size(), missing_artifacts, bundle_valid, notes)
 
@@ -533,6 +636,13 @@ func _resolve_manifest_repo_path() -> String:
 	return artifact_root.path_join("evidence-manifest.json")
 
 
+func _resolve_trace_repo_path() -> String:
+	var artifact_root := String(_active_request.get("artifactRoot", ""))
+	if artifact_root.is_empty():
+		artifact_root = String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)).trim_prefix("res://")
+	return artifact_root.path_join(InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)
+
+
 func _resolve_expected_manifest_resource_path() -> String:
 	var output_directory := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
 	if not output_directory.is_empty():
@@ -553,6 +663,14 @@ func _dedupe_strings(values: Array) -> Array:
 			continue
 		deduped.append(text)
 	return deduped
+
+
+func _find_artifact_ref(artifact_refs: Array, kind: String) -> Dictionary:
+	for artifact_ref_value in artifact_refs:
+		var artifact_ref: Dictionary = artifact_ref_value
+		if String(artifact_ref.get("kind", "")) == kind:
+			return artifact_ref
+	return {}
 
 
 func _get_editor_interface():

@@ -105,6 +105,38 @@ func build_validation_result(manifest: Dictionary, missing_artifacts: Array, bun
 	}
 
 
+func build_behavior_watch_failure_status_extras(validation_result: Dictionary) -> Dictionary:
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+		"evidenceRefs": build_behavior_watch_validation_refs(validation_result),
+	}
+
+
+func build_behavior_watch_validation_refs(validation_result: Dictionary) -> Array:
+	var refs: Array = []
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		refs.append(
+			"behavior-watch:%s:%s" % [
+				String(error_value.get("code", "invalid_request")),
+				String(error_value.get("field", "behaviorWatchRequest")),
+			]
+		)
+	return refs
+
+
+func build_behavior_watch_validation_notes(validation_result: Dictionary) -> Array:
+	var notes: Array = [
+		"Behavior watch request was rejected before the playtest started.",
+	]
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		notes.append(String(error_value.get("message", "Behavior watch request validation failed.")))
+	return notes
+
+
 func build_build_diagnostic(resource_path, message: String, severity: String, line = null, column = null, source_kind: String = InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN, code = null, raw_excerpt = null) -> Dictionary:
 	return {
 		"resourcePath": _normalize_optional_string(resource_path),

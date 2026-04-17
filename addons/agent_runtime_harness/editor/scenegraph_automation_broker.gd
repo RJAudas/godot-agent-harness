@@ -37,6 +37,7 @@ func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res:
 		_bridge.session_state_changed.connect(_run_coordinator.handle_session_state_changed)
 		_bridge.capture_updated.connect(_run_coordinator.handle_capture_updated)
 		_bridge.manifest_persisted.connect(_run_coordinator.handle_manifest_persisted)
+		_bridge.automation_session_configured.connect(_run_coordinator.handle_runtime_session_configured)
 		_bridge.transport_error.connect(_run_coordinator.handle_transport_error)
 
 	if _poll_timer == null:

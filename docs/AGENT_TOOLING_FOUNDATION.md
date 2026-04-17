@@ -69,6 +69,7 @@ pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root>
 ```
 
 Use this when you want to submit a machine-readable request into the plugin-owned file broker without editing the request JSON by hand. Use it after a ready capability check when a task needs Scenegraph Harness runtime verification.
+When you want to layer a behavior-watch fragment onto an existing run request fixture, pass `-BehaviorWatchRequestFixturePath <fixture-path>` and the helper will emit `overrides.behaviorWatchRequest` in the generated request artifact.
 
 ### Run the automated PowerShell tool tests
 
@@ -208,6 +209,8 @@ That keeps the plugin self-sufficient after it has been copied into another game
 5. If the run completed and reported a manifest, read the persisted `evidence-manifest.json`; if `failureKind = build`, use the run result instead, surfacing `details`, `resourcePath`, and `line`/`column` when available alongside the raw build output.
 6. Read summary, diagnostics, and snapshot artifacts only as needed.
 7. Report blocked capability, blocked runs, build-failed runs without manifests, or missing persisted bundles explicitly instead of guessing from editor narration.
+
+For behavior-watch runs, the persisted manifest now carries an `appliedWatch` summary plus a `trace` artifact reference. Agents should still read `run-result.json` first, then the manifest, and only then open `trace.jsonl`.
 
 ### When authoring a new prompt or agent artifact
 

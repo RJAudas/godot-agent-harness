@@ -2,6 +2,8 @@
 extends VBoxContainer
 class_name ScenegraphDock
 
+const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+
 var _bridge = null
 var _agent_asset_deployer = null
 var _status_label: Label
@@ -10,6 +12,7 @@ var _diagnostics_label: RichTextLabel
 var _capture_button: Button
 var _persist_button: Button
 var _deploy_assets_button: Button
+var _support_label: Label
 
 
 func _ready() -> void:
@@ -62,6 +65,11 @@ func _build_ui() -> void:
 	_deploy_assets_button.text = "Deploy Agent Assets"
 	_deploy_assets_button.pressed.connect(_on_deploy_assets_button_pressed)
 	add_child(_deploy_assets_button)
+
+	_support_label = Label.new()
+	_support_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_support_label.text = "Report harness issues: %s" % InspectionConstants.CANONICAL_ISSUE_TRACKER_URL
+	add_child(_support_label)
 
 	var summary_heading := Label.new()
 	summary_heading.text = "Latest Snapshot"

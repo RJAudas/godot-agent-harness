@@ -87,6 +87,7 @@ const DEFAULT_AUTOMATION_CAPABILITY_RESULT_PATH := "res://harness/automation/res
 const DEFAULT_AUTOMATION_LIFECYCLE_STATUS_PATH := "res://harness/automation/results/lifecycle-status.json"
 const DEFAULT_AUTOMATION_RUN_RESULT_PATH := "res://harness/automation/results/run-result.json"
 const DEFAULT_BEHAVIOR_WATCH_TRACE_FILE := "trace.jsonl"
+const CANONICAL_ISSUE_TRACKER_URL := "https://github.com/RJAudas/godot-agent-harness/issues"
 
 
 static func supported_artifact_kinds() -> PackedStringArray:

@@ -3,10 +3,10 @@ class_name BehaviorWatchRequestValidator
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
 
-const SUPPORTED_TARGET_KEYS := PackedStringArray(["nodePath", "properties"])
-const SUPPORTED_CADENCE_KEYS := PackedStringArray(["mode", "everyNFrames"])
-const SUPPORTED_REQUEST_KEYS := PackedStringArray(["targets", "cadence", "startFrameOffset", "frameCount"])
-const SUPPORTED_PROPERTIES := PackedStringArray([
+const SUPPORTED_TARGET_KEYS := ["nodePath", "properties"]
+const SUPPORTED_CADENCE_KEYS := ["mode", "everyNFrames"]
+const SUPPORTED_REQUEST_KEYS := ["targets", "cadence", "startFrameOffset", "frameCount"]
+const SUPPORTED_PROPERTIES := [
 	"position",
 	"velocity",
 	"intendedVelocity",
@@ -15,15 +15,15 @@ const SUPPORTED_PROPERTIES := PackedStringArray([
 	"movementVector",
 	"speed",
 	"overlapFrames",
-])
-const LATER_SLICE_KEYS := PackedStringArray([
+]
+const LATER_SLICE_KEYS := [
 	"triggers",
 	"invariants",
 	"scriptProbes",
 	"probeScripts",
 	"fullSceneCapture",
 	"fullSceneLogging",
-])
+]
 
 
 func normalize_request(request_value: Variant, run_id: String) -> Dictionary:
@@ -249,7 +249,7 @@ func _is_integral_numeric(value: Variant) -> bool:
 	return is_equal_approx(float(value), round(float(value)))
 
 
-func _collect_unknown_keys(errors: Array, keys: Array, supported_keys: PackedStringArray, field_prefix: String) -> void:
+func _collect_unknown_keys(errors: Array, keys: Array, supported_keys: Array, field_prefix: String) -> void:
 	for key_value in keys:
 		var key := String(key_value)
 		if key in supported_keys:

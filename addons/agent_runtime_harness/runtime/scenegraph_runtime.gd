@@ -70,7 +70,7 @@ func configure_session(session_context: Dictionary) -> void:
 	set_physics_process(_behavior_watch_sampler.is_enabled())
 
 	if session_context.has("config_path"):
-		_load_session_config(String(session_context.get("config_path")))
+		_load_session_config(String(session_context.get("config_path")), session_context)
 
 	_send_debugger_message("session_configured", [_build_session_configuration_event()])
 
@@ -155,7 +155,7 @@ func _resolve_root_node() -> Node:
 	return get_tree().root
 
 
-func _load_session_config(config_path: String) -> void:
+func _load_session_config(config_path: String, caller_supplied: Dictionary = {}) -> void:
 	if not FileAccess.file_exists(config_path):
 		return
 
@@ -166,12 +166,18 @@ func _load_session_config(config_path: String) -> void:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
 
-	_session_context["run_id"] = parsed.get("runId", _session_context.get("run_id", _build_identifier("run")))
-	_session_context["scenario_id"] = parsed.get("scenarioId", _session_context.get("scenario_id", InspectionConstants.DEFAULT_SCENARIO_ID))
-	_session_context["artifact_root"] = parsed.get("artifactRoot", _session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
-	_session_context["output_directory"] = parsed.get("outputDirectory", _session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
-	_session_context["capture_policy"] = parsed.get("capturePolicy", _session_context.get("capture_policy", {}))
-	_session_context["stop_policy"] = parsed.get("defaultRequestOverrides", {}).get("stopPolicy", _session_context.get("stop_policy", {}))
+	if not caller_supplied.has("run_id"):
+		_session_context["run_id"] = parsed.get("runId", _session_context.get("run_id", _build_identifier("run")))
+	if not caller_supplied.has("scenario_id"):
+		_session_context["scenario_id"] = parsed.get("scenarioId", _session_context.get("scenario_id", InspectionConstants.DEFAULT_SCENARIO_ID))
+	if not caller_supplied.has("artifact_root"):
+		_session_context["artifact_root"] = parsed.get("artifactRoot", _session_context.get("artifact_root", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT))
+	if not caller_supplied.has("output_directory"):
+		_session_context["output_directory"] = parsed.get("outputDirectory", _session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	if not caller_supplied.has("capture_policy"):
+		_session_context["capture_policy"] = parsed.get("capturePolicy", _session_context.get("capture_policy", {}))
+	if not caller_supplied.has("stop_policy"):
+		_session_context["stop_policy"] = parsed.get("defaultRequestOverrides", {}).get("stopPolicy", _session_context.get("stop_policy", {}))
 
 	_expectations.clear()
 	for expectation_path_value in parsed.get("expectationFiles", []):

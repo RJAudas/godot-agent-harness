@@ -23,7 +23,7 @@ var _config_path := "res://harness/inspection-run-config.json"
 var _poll_timer: Timer
 var _last_capability_signature := ""
 var _script_error_summary_regexes: Array[RegEx] = []
-var _script_error_line_regex = null
+var _script_error_line_regex: RegEx = null
 
 
 func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res://harness/inspection-run-config.json") -> void:
@@ -531,7 +531,7 @@ func _parse_script_editor_diagnostics(default_resource_path: String, text: Strin
 
 func _match_script_error_summary(line_text: String) -> Dictionary:
 	for regex in _get_script_error_summary_regexes():
-		var match := regex.search(line_text)
+		var match: RegExMatch = regex.search(line_text)
 		if match == null:
 			continue
 		return {
@@ -543,10 +543,10 @@ func _match_script_error_summary(line_text: String) -> Dictionary:
 
 
 func _match_script_error_line(line_text: String) -> Dictionary:
-	var regex = _get_script_error_line_regex()
+	var regex: RegEx = _get_script_error_line_regex()
 	if regex == null:
 		return {}
-	var match := regex.search(line_text)
+	var match: RegExMatch = regex.search(line_text)
 	if match == null:
 		return {}
 	return {
@@ -564,7 +564,7 @@ func _get_script_error_summary_regexes() -> Array[RegEx]:
 	return _script_error_summary_regexes
 
 
-func _get_script_error_line_regex():
+func _get_script_error_line_regex() -> RegEx:
 	if _script_error_line_regex == null:
 		var regex := RegEx.new()
 		if regex.compile(SCRIPT_ERROR_LINE_PATTERN) != OK:

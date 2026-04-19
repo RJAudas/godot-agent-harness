@@ -17,7 +17,6 @@ var _active_config := {}
 var _active_request := {}
 var _last_manifest := {}
 var _last_validation := {}
-var _last_build_failure := {}
 var _pending_failure_kind: Variant = null
 var _pending_failure_message := ""
 var _active := false
@@ -56,7 +55,6 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, 
 	_active_config_path = config_path
 	_last_manifest = {}
 	_last_validation = _build_validation_result(false, 0, [], false, ["Validation has not completed yet."])
-	_last_build_failure = {}
 	_pending_failure_kind = null
 	_pending_failure_message = ""
 	_stop_requested = false
@@ -198,27 +196,10 @@ func handle_transport_error(message: String) -> void:
 		_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY, message)
 
 
-func handle_build_failed(payload: Dictionary) -> void:
-	if not _active:
-		return
-
-	_last_build_failure = _artifact_store.normalize_build_failure_payload(payload)
-	_awaiting_runtime = false
-	_awaiting_capture = false
-	_awaiting_manifest = false
-
-	var details := String(_last_build_failure.get("details", "Build diagnostics were detected before runtime attachment."))
-	_last_validation = _build_build_failure_validation_result(details)
-	_emit_status(
-		InspectionConstants.AUTOMATION_STATUS_FAILED,
-		details,
-		_artifact_store.build_build_failure_status_extras(
-			String(_last_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
-			_last_build_failure.get("buildDiagnostics", []),
-			_last_build_failure.get("rawBuildOutput", [])
-		)
-	)
-	_finalize_run("failed", InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD, _derive_build_failure_termination_status(), details, _last_build_failure)
+func handle_build_failed(_payload: Dictionary) -> void:
+	# Build-failure reporting was removed in the schema refactor; this stub
+	# preserves the call surface in case external callers still invoke it.
+	return
 
 
 func _on_runtime_attached() -> void:
@@ -291,11 +272,25 @@ func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
 func _finish_invalid_request(validation_result: Dictionary) -> Dictionary:
 	var request_id := String(_active_request.get("requestId", "request-invalid"))
 	var run_id := String(_active_request.get("runId", "run-invalid"))
-	var notes := _artifact_store.build_behavior_watch_validation_notes(validation_result)
+	var notes: Array = []
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		var error: Dictionary = error_value
+		notes.append("Behavior watch rejection: %s [%s] %s" % [
+			String(error.get("code", "")),
+			String(error.get("field", "")),
+			String(error.get("message", "")),
+		])
+	if notes.is_empty():
+		notes.append("Behavior watch request was rejected before playtest launch.")
 	_emit_status(
 		InspectionConstants.AUTOMATION_STATUS_FAILED,
 		"Behavior watch request was rejected before playtest launch.",
-		_artifact_store.build_behavior_watch_failure_status_extras(validation_result)
+		{
+			"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+			"behaviorWatchValidation": validation_result.duplicate(true),
+		}
 	)
 	var result := {
 		"requestId": request_id,
@@ -334,7 +329,7 @@ func _fail_run(failure_kind: String, message: String) -> void:
 	_finalize_run("failed", failure_kind, _derive_failure_termination_status(), message)
 
 
-func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "", build_failure := {}) -> void:
+func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "") -> void:
 	var manifest_path = null
 	if not _last_manifest.is_empty():
 		manifest_path = _resolve_manifest_repo_path()
@@ -358,20 +353,11 @@ func _finalize_run(final_status: String, failure_kind, termination_status: Strin
 		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 		"completedAt": InspectionConstants.utc_timestamp_now(),
 	}
-	if failure_kind == InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD:
-		var normalized_build_failure: Dictionary = _artifact_store.normalize_build_failure_payload(build_failure)
-		result["buildFailurePhase"] = normalized_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
-		result["buildDiagnostics"] = normalized_build_failure.get("buildDiagnostics", []).duplicate(true)
-		result["rawBuildOutput"] = normalized_build_failure.get("rawBuildOutput", []).duplicate(true)
 	var terminal_extras := {}
 	if manifest_path != null:
 		terminal_extras["evidenceRefs"] = [String(manifest_path)]
 	if failure_kind != null:
 		terminal_extras["failureKind"] = failure_kind
-	if failure_kind == InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD:
-		terminal_extras["buildFailurePhase"] = result.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)
-		terminal_extras["buildDiagnosticCount"] = result.get("buildDiagnostics", []).size()
-		terminal_extras["rawBuildOutputAvailable"] = not result.get("rawBuildOutput", []).is_empty()
 	var terminal_status := InspectionConstants.AUTOMATION_STATUS_COMPLETED
 	var terminal_details := "Autonomous run completed."
 	if final_status != "completed":
@@ -646,18 +632,6 @@ func _build_validation_result(manifest_exists: bool, artifact_refs_checked: int,
 	}
 
 
-func _build_build_failure_validation_result(note: String) -> Dictionary:
-	var notes: Array = [
-		"No new evidence manifest was produced because the run failed during build before runtime capture.",
-	]
-	var expected_manifest_path := _resolve_expected_manifest_resource_path()
-	if FileAccess.file_exists(expected_manifest_path):
-		notes.append("An existing manifest file was ignored so stale evidence would not be reported for this build-failed run.")
-	if not note.is_empty():
-		notes.append(note)
-	return _build_validation_result(false, 0, [], false, notes)
-
-
 func _validate_manifest(manifest: Dictionary) -> Dictionary:
 	if manifest.is_empty():
 		return _build_validation_result(false, 0, [], false, ["No manifest was produced for the autonomous run."])
@@ -681,31 +655,6 @@ func _validate_manifest(manifest: Dictionary) -> Dictionary:
 	if missing_artifacts.is_empty():
 		notes.append("Manifest and referenced scenegraph artifacts exist for the active run.")
 
-	if not _active_request.get("appliedWatch", {}).is_empty():
-		var trace_path := _resolve_trace_repo_path()
-		var trace_artifact_ref := _find_artifact_ref(manifest.get("artifactRefs", []), InspectionConstants.ARTIFACT_KIND_TRACE)
-		var manifest_applied_watch: Dictionary = manifest.get("appliedWatch", {})
-		var applied_watch_valid := true
-		if trace_artifact_ref.is_empty():
-			applied_watch_valid = false
-			notes.append("Manifest did not include a trace artifact reference for the active behavior watch.")
-		elif String(trace_artifact_ref.get("path", "")) != trace_path:
-			applied_watch_valid = false
-			notes.append("Manifest trace artifact path did not match the active run's trace.jsonl path.")
-		if manifest_applied_watch.is_empty():
-			applied_watch_valid = false
-			notes.append("Manifest did not include the applied behavior-watch summary for the active run.")
-		elif String(manifest_applied_watch.get("runId", "")) != String(_active_request.get("runId", "")):
-			applied_watch_valid = false
-			notes.append("Manifest appliedWatch.runId did not match the active automation request.")
-		for manifest_note_value in manifest.get("validation", {}).get("notes", []):
-			var manifest_note := String(manifest_note_value)
-			if manifest_note.is_empty() or manifest_note in notes:
-				continue
-			notes.append(manifest_note)
-		var bundle_valid := run_id_matches and scenario_matches and missing_artifacts.is_empty() and bool(manifest.get("validation", {}).get("bundleValid", false)) and applied_watch_valid
-		return _build_validation_result(true, artifact_refs.size(), missing_artifacts, bundle_valid, notes)
-
 	var bundle_valid := run_id_matches and scenario_matches and missing_artifacts.is_empty() and bool(manifest.get("validation", {}).get("bundleValid", false))
 	return _build_validation_result(true, artifact_refs.size(), missing_artifacts, bundle_valid, notes)
 
@@ -727,15 +676,6 @@ func _derive_failure_termination_status() -> String:
 	return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
 
 
-func _derive_build_failure_termination_status() -> String:
-	var build_failure_phase := String(_last_build_failure.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING))
-	if _is_playing_scene():
-		return InspectionConstants.AUTOMATION_TERMINATION_RUNNING
-	if build_failure_phase == InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_AWAITING_RUNTIME:
-		return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
-	return InspectionConstants.AUTOMATION_TERMINATION_NOT_STARTED
-
-
 func _should_stop_after_validation() -> bool:
 	var stop_policy: Dictionary = _active_request.get("stopPolicy", {})
 	return bool(stop_policy.get("stopAfterValidation", true))
@@ -748,25 +688,6 @@ func _resolve_manifest_repo_path() -> String:
 	return artifact_root.path_join("evidence-manifest.json")
 
 
-func _resolve_trace_repo_path() -> String:
-	var artifact_root := String(_active_request.get("artifactRoot", ""))
-	if artifact_root.is_empty():
-		artifact_root = String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)).trim_prefix("res://")
-	return artifact_root.path_join(InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)
-
-
-func _resolve_expected_manifest_resource_path() -> String:
-	var output_directory := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
-	if not output_directory.is_empty():
-		return output_directory.path_join("evidence-manifest.json")
-
-	var artifact_root := String(_active_request.get("artifactRoot", ""))
-	if artifact_root.begins_with("res://"):
-		return artifact_root.path_join("evidence-manifest.json")
-
-	return InspectionConstants.DEFAULT_OUTPUT_DIRECTORY.path_join("evidence-manifest.json")
-
-
 func _dedupe_strings(values: Array) -> Array:
 	var deduped: Array = []
 	for value in values:
@@ -775,14 +696,6 @@ func _dedupe_strings(values: Array) -> Array:
 			continue
 		deduped.append(text)
 	return deduped
-
-
-func _find_artifact_ref(artifact_refs: Array, kind: String) -> Dictionary:
-	for artifact_ref_value in artifact_refs:
-		var artifact_ref: Dictionary = artifact_ref_value
-		if String(artifact_ref.get("kind", "")) == kind:
-			return artifact_ref
-	return {}
 
 
 func _get_editor_interface():
@@ -807,7 +720,6 @@ func _reset_state() -> void:
 	_stop_requested = false
 	_pending_failure_kind = null
 	_pending_failure_message = ""
-	_last_build_failure = {}
 	_active_config = {}
 	_active_request = {}
 	_last_manifest = {}

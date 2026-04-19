@@ -7,8 +7,15 @@ param(
 
     [switch]$SkipProjectSettings,
 
+    [switch]$AddonOnly,
+
     [switch]$PassThru
 )
+
+if ($AddonOnly) {
+    $SkipAgentAssets = $true
+    $SkipProjectSettings = $true
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -328,22 +335,24 @@ else {
 }
 Add-Operation -Operations $operations -Path $addonDestinationPath -Action $copyAddonAction
 
-Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
-Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
-
 $configPath = Join-Path $resolvedGameRoot 'harness/inspection-run-config.json'
-if (-not (Test-Path -LiteralPath $configPath)) {
-    if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {
-        Set-FileContent -Path $configPath -Content (Get-InspectionRunConfigContent)
-        $configAction = 'created-config'
+if (-not $AddonOnly) {
+    Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
+    Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
+
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {
+            Set-FileContent -Path $configPath -Content (Get-InspectionRunConfigContent)
+            $configAction = 'created-config'
+        }
+        else {
+            $configAction = 'skipped-create-config'
+        }
+        Add-Operation -Operations $operations -Path $configPath -Action $configAction
     }
     else {
-        $configAction = 'skipped-create-config'
+        Add-Operation -Operations $operations -Path $configPath -Action 'preserved-config'
     }
-    Add-Operation -Operations $operations -Path $configPath -Action $configAction
-}
-else {
-    Add-Operation -Operations $operations -Path $configPath -Action 'preserved-config'
 }
 
 if (-not $SkipProjectSettings) {

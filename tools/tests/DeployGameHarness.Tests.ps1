@@ -98,6 +98,26 @@ old agents block
         $agentsContent | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
     }
 
+    It 'copies only the addon when -AddonOnly is set' {
+        $gameRoot = New-RepoSandboxDirectory
+        $projectPath = Join-Path $gameRoot 'project.godot'
+        Set-Content -LiteralPath $projectPath -Value 'config_version=5' -NoNewline
+
+        Invoke-RepoScriptPassThru -ScriptPath 'tools/deploy-game-harness.ps1' -Parameters @{
+            GameRoot = $gameRoot
+            AddonOnly = $true
+            PassThru = $true
+        } | Out-Null
+
+        (Join-Path $gameRoot 'addons/agent_runtime_harness/plugin.cfg') | Should -Exist
+        (Join-Path $gameRoot 'harness') | Should -Not -Exist
+        (Join-Path $gameRoot 'evidence') | Should -Not -Exist
+        (Join-Path $gameRoot '.github') | Should -Not -Exist
+        (Join-Path $gameRoot 'AGENTS.md') | Should -Not -Exist
+
+        (Get-Content -LiteralPath $projectPath -Raw) | Should -Be 'config_version=5'
+    }
+
     It 'reports skipped operations when run with WhatIf' {
         $gameRoot = New-RepoSandboxDirectory
         $projectPath = Join-Path $gameRoot 'project.godot'

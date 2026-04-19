@@ -174,7 +174,7 @@ func normalize_request(
 				))
 				continue
 		elif kind == "action":
-			if not declared_action_set.is_empty() and not declared_action_set.has(identifier):
+			if not declared_action_set.has(identifier):
 				errors.append(_build_error(
 					InspectionConstants.INPUT_DISPATCH_REJECTION_UNSUPPORTED_IDENTIFIER,
 					field_prefix + ".identifier",
@@ -252,7 +252,12 @@ func _check_capability(capability: Dictionary) -> Dictionary:
 		return {}
 	if bool(capability.get("supported", true)):
 		return {}
-	var reason := String(capability.get("reason", "capability_unsupported")).strip_edges()
+	var reason := ""
+	var blocked_reasons: Variant = capability.get("blockedReasons", [])
+	if typeof(blocked_reasons) == TYPE_ARRAY and not (blocked_reasons as Array).is_empty():
+		reason = ", ".join(blocked_reasons)
+	else:
+		reason = String(capability.get("reason", "capability_unsupported")).strip_edges()
 	if reason.is_empty():
 		reason = "capability_unsupported"
 	return _build_error(

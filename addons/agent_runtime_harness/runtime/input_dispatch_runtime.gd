@@ -12,6 +12,7 @@ var _run_id := ""
 var _start_frame := 0
 var _started := false
 var _completed := false
+var _last_relative_frame := -1
 
 
 func configure(script_dict: Dictionary, run_id: String) -> void:
@@ -20,6 +21,7 @@ func configure(script_dict: Dictionary, run_id: String) -> void:
 	_next_event_index = 0
 	_completed = false
 	_started = false
+	_last_relative_frame = -1
 	set_process(not _events.is_empty())
 
 
@@ -39,6 +41,7 @@ func _process(_delta: float) -> void:
 		_started = true
 
 	var current_relative_frame := int(Engine.get_process_frames()) - _start_frame
+	_last_relative_frame = max(_last_relative_frame, current_relative_frame)
 	while _next_event_index < _events.size():
 		var event: Dictionary = _events[_next_event_index]
 		var declared_frame := int(event.get("frame", 0))
@@ -55,7 +58,13 @@ func _process(_delta: float) -> void:
 func dispatch_remaining_as_skipped(reason_code: String) -> void:
 	while _next_event_index < _events.size():
 		var event: Dictionary = _events[_next_event_index]
-		_emit_outcome(event, int(event.get("frame", 0)), -1, InspectionConstants.INPUT_DISPATCH_STATUS_SKIPPED_RUN_ENDED, reason_code, "Run ended before event could dispatch.")
+		var declared_frame := int(event.get("frame", 0))
+		var status := InspectionConstants.INPUT_DISPATCH_STATUS_SKIPPED_RUN_ENDED
+		var reason_message := "Run ended before event could dispatch."
+		if _last_relative_frame < 0 or declared_frame > _last_relative_frame:
+			status = InspectionConstants.INPUT_DISPATCH_STATUS_SKIPPED_FRAME_UNREACHED
+			reason_message = "Run ended before the requested frame was reached."
+		_emit_outcome(event, declared_frame, -1, status, reason_code, reason_message)
 		_next_event_index += 1
 	_completed = true
 	set_process(false)

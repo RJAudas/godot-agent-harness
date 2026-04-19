@@ -205,6 +205,42 @@ Describe 'tools/tests/fixtures/pong-testbed automation fixtures' {
             $result.ParsedOutput.valid | Should -BeTrue
         }
     }
+
+    It 'accepts the build-failure lifecycle status fixture' {
+        $fixturePath = 'tools/tests/fixtures/pong-testbed/harness/automation/results/lifecycle-status.build-failure.expected.json'
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $fixturePath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-lifecycle-status.schema.json'
+        )
+        $status = Get-Content -LiteralPath (Get-RepoPath -Path $fixturePath) -Raw | ConvertFrom-Json -Depth 20
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+        Assert-BuildFailureLifecycleStatus -Status $status -ExpectedPhase 'launching' -MinimumDiagnosticCount 2
+    }
+
+    It 'accepts each build-failure run result fixture' {
+        $fixtures = @(
+            @{ Path = 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.build-failure.expected.json'; Phase = 'launching'; Count = 2 },
+            @{ Path = 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.build-failure.multi-diagnostic.expected.json'; Phase = 'launching'; Count = 3 },
+            @{ Path = 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.build-failure.partial-metadata.expected.json'; Phase = 'awaiting_runtime'; Count = 1 },
+            @{ Path = 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.build-failure.resource-load.expected.json'; Phase = 'launching'; Count = 1 },
+            @{ Path = 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.build-failure.stale-manifest.expected.json'; Phase = 'awaiting_runtime'; Count = 1 }
+        )
+
+        foreach ($fixture in $fixtures) {
+            $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+                '-InputPath', $fixture.Path,
+                '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+            )
+            $runResult = Get-Content -LiteralPath (Get-RepoPath -Path $fixture.Path) -Raw | ConvertFrom-Json -Depth 20
+
+            $result.ExitCode | Should -Be 0
+            $result.ParsedOutput.valid | Should -BeTrue
+            Assert-BuildFailureRunResult -Result $runResult -ExpectedPhase $fixture.Phase -ExpectedDiagnosticCount $fixture.Count
+        }
+    }
 }
 
 Describe 'inspection-run config automation defaults' {

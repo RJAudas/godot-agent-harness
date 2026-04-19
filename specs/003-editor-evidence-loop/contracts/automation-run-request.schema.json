@@ -89,9 +89,11 @@
         "stopPolicy": {
           "$ref": "#/$defs/stopPolicy"
         },
+        "behaviorWatchRequest": {
+          "$ref": "#/$defs/behaviorWatchRequest"
+        },
         "inputDispatchScript": {
-          "type": "object",
-          "description": "Optional runtime input-dispatch script. Validated structurally by InputDispatchRequestValidator before runtime execution. See specs/006-input-dispatch/contracts/input-dispatch-script.schema.json for the authoritative shape."
+          "$ref": "#/$defs/inputDispatchScript"
         }
       }
     }
@@ -120,6 +122,174 @@
       "properties": {
         "stopAfterValidation": {
           "type": "boolean"
+        }
+      }
+    },
+    "behaviorWatchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targets",
+        "frameCount"
+      ],
+      "properties": {
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/watchTarget"
+          }
+        },
+        "cadence": {
+          "$ref": "#/$defs/watchCadence"
+        },
+        "startFrameOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frameCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "watchTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodePath",
+        "properties"
+      ],
+      "properties": {
+        "nodePath": {
+          "type": "string",
+          "pattern": "^/.*",
+          "minLength": 2
+        },
+        "properties": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "position",
+              "velocity",
+              "intendedVelocity",
+              "collisionState",
+              "lastCollider",
+              "movementVector",
+              "speed",
+              "overlapFrames"
+            ]
+          }
+        }
+      }
+    },
+    "watchCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "every_frame",
+            "every_n_frames"
+          ]
+        },
+        "everyNFrames": {
+          "type": "integer",
+          "minimum": 2
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "every_frame"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "everyNFrames"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "every_n_frames"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "everyNFrames"
+            ]
+          }
+        }
+      ]
+    },
+    "inputDispatchScript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events"
+      ],
+      "properties": {
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/inputDispatchEvent"
+          }
+        }
+      }
+    },
+    "inputDispatchEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "identifier",
+        "phase",
+        "frame"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "key",
+            "action"
+          ]
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "press",
+            "release"
+          ]
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }

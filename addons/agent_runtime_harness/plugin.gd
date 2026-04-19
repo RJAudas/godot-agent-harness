@@ -46,3 +46,9 @@ func _exit_tree() -> void:
 		remove_debugger_plugin(_bridge)
 	_bridge = null
 	_agent_asset_deployer = null
+
+
+func _build() -> bool:
+	if _automation_broker == null:
+		return true
+	return _automation_broker.handle_editor_build()

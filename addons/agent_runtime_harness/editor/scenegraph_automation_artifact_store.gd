@@ -87,6 +87,7 @@ func build_status_payload(request_id: String, run_id: String, status: String, de
 		"status": status,
 		"details": details,
 		"timestamp": InspectionConstants.utc_timestamp_now(),
+		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 	}
 	for key in extras.keys():
 		payload[key] = extras[key]
@@ -102,6 +103,172 @@ func build_validation_result(manifest: Dictionary, missing_artifacts: Array, bun
 		"notes": notes.duplicate(true),
 		"validatedAt": InspectionConstants.utc_timestamp_now(),
 	}
+
+
+func build_behavior_watch_validation_refs(validation_result: Dictionary) -> Array:
+	var refs: Array = []
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		refs.append("behavior-watch:%s:%s" % [
+			String(error_value.get("code", "invalid_request")),
+			String(error_value.get("field", "behaviorWatchRequest")),
+		])
+	return refs
+
+
+func build_behavior_watch_failure_status_extras(validation_result: Dictionary) -> Dictionary:
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+		"evidenceRefs": build_behavior_watch_validation_refs(validation_result),
+	}
+
+
+func build_behavior_watch_validation_notes(validation_result: Dictionary) -> Array:
+	var notes: Array = []
+	var raw_notes: Variant = validation_result.get("notes", [])
+	if typeof(raw_notes) == TYPE_ARRAY:
+		notes = (raw_notes as Array).duplicate(true)
+
+	var missing_artifacts: Variant = validation_result.get("missingArtifacts", [])
+	if typeof(missing_artifacts) == TYPE_ARRAY and not (missing_artifacts as Array).is_empty():
+		notes.append("Missing artifacts: %s" % JSON.stringify(missing_artifacts))
+
+	if not bool(validation_result.get("bundleValid", true)):
+		notes.append("Behavior watch evidence bundle validation failed.")
+
+	if notes.is_empty():
+		notes.append("Behavior watch request was rejected before the playtest started.")
+		for error_value in validation_result.get("errors", []):
+			if typeof(error_value) != TYPE_DICTIONARY:
+				continue
+			notes.append(String(error_value.get("message", "Behavior watch request validation failed.")))
+	return notes
+
+
+func build_build_diagnostic(resource_path, message: String, severity: String, line = null, column = null, source_kind: String = InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN, code = null, raw_excerpt = null) -> Dictionary:
+	return {
+		"resourcePath": _normalize_optional_string(resource_path),
+		"message": message,
+		"severity": _normalize_build_severity(severity),
+		"line": _normalize_optional_positive_int(line),
+		"column": _normalize_optional_positive_int(column),
+		"sourceKind": _normalize_build_source_kind(source_kind),
+		"code": _normalize_optional_string(code),
+		"rawExcerpt": _normalize_optional_string(raw_excerpt),
+	}
+
+
+func build_build_failure_payload(build_failure_phase: String, diagnostics: Array, raw_build_output: Array, details: String) -> Dictionary:
+	return normalize_build_failure_payload({
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": build_failure_phase,
+		"buildDiagnostics": diagnostics,
+		"rawBuildOutput": raw_build_output,
+		"details": details,
+	})
+
+
+func build_build_failure_status_extras(build_failure_phase: Variant, diagnostics: Array = [], raw_build_output: Array = []) -> Dictionary:
+	var normalized := normalize_build_failure_payload({
+		"buildFailurePhase": build_failure_phase,
+		"buildDiagnostics": diagnostics,
+		"rawBuildOutput": raw_build_output,
+	})
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": String(normalized.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+		"buildDiagnosticCount": int(normalized.get("buildDiagnostics", []).size()),
+		"rawBuildOutputAvailable": not (normalized.get("rawBuildOutput", []) as Array).is_empty(),
+	}
+
+
+func normalize_build_failure_payload(payload: Variant) -> Dictionary:
+	if payload == null:
+		return {
+			"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+			"buildFailurePhase": InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING,
+			"buildDiagnostics": [],
+			"rawBuildOutput": [],
+			"details": "Build diagnostics were detected before runtime attachment.",
+		}
+
+	var source := {}
+	if typeof(payload) == TYPE_DICTIONARY:
+		source = (payload as Dictionary).duplicate(true)
+	elif typeof(payload) == TYPE_STRING:
+		source = {"details": String(payload)}
+	else:
+		source = {"details": String(payload)}
+
+	var normalized_diagnostics: Array = []
+	for diagnostic_value in source.get("buildDiagnostics", []):
+		if typeof(diagnostic_value) != TYPE_DICTIONARY:
+			continue
+		normalized_diagnostics.append(build_build_diagnostic(
+			diagnostic_value.get("resourcePath", null),
+			String(diagnostic_value.get("message", "")),
+			String(diagnostic_value.get("severity", InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN)),
+			diagnostic_value.get("line", null),
+			diagnostic_value.get("column", null),
+			String(diagnostic_value.get("sourceKind", InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN)),
+			diagnostic_value.get("code", null),
+			diagnostic_value.get("rawExcerpt", null)
+		))
+
+	var normalized_output: Array = []
+	for output_value in source.get("rawBuildOutput", []):
+		var output_line := String(output_value)
+		if output_line.is_empty():
+			continue
+		normalized_output.append(output_line)
+
+	return {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+		"buildFailurePhase": String(source.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+		"buildDiagnostics": normalized_diagnostics,
+		"rawBuildOutput": normalized_output,
+		"details": String(source.get("details", "Build diagnostics were detected before runtime attachment.")),
+	}
+
+
+func _normalize_build_severity(severity: String) -> String:
+	if severity in [
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_ERROR,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_WARNING,
+		InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN,
+	]:
+		return severity
+	return InspectionConstants.BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN
+
+
+func _normalize_build_source_kind(source_kind: String) -> String:
+	if source_kind in [
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_SCENE,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_RESOURCE,
+		InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN,
+	]:
+		return source_kind
+	return InspectionConstants.BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN
+
+
+func _normalize_optional_positive_int(value):
+	if value == null:
+		return null
+	var integer_value := int(value)
+	if integer_value <= 0:
+		return null
+	return integer_value
+
+
+func _normalize_optional_string(value):
+	if value == null:
+		return null
+	var text := String(value)
+	if text.is_empty():
+		return null
+	return text
 
 
 func _write_json_atomically(path: String, payload: Variant) -> Dictionary:

@@ -26,6 +26,30 @@ Describe 'tools/automation/validate-write-boundary.ps1' {
         $result.ParsedOutput.requestAllowed | Should -BeTrue
     }
 
+    It 'accepts wildcard-matched integration-testing request paths' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/automation/validate-write-boundary.ps1' -Arguments @(
+            '-ArtifactId', 'editor-evidence-run-request.helper',
+            '-RequestedPath', 'integration-testing/pong-input-dispatch/harness/automation/requests/run-request.json',
+            '-RequestedEditType', 'update'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.requestAllowed | Should -BeTrue
+    }
+
+    It 'rejects broader integration-testing writes outside the request subtree' {
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/automation/validate-write-boundary.ps1' -Arguments @(
+            '-ArtifactId', 'editor-evidence-run-request.helper',
+            '-RequestedPath', 'integration-testing/pong-input-dispatch/project.godot',
+            '-RequestedEditType', 'update',
+            '-AllowViolation'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.requestAllowed | Should -BeFalse
+        $result.ParsedOutput.violations[0].reason | Should -Match 'outside the declared write boundary'
+    }
+
     It 'reports violations for out-of-bound requests when AllowViolation is set' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/automation/validate-write-boundary.ps1' -Arguments @(
             '-ArtifactId', 'godot-evidence-triage.agent',

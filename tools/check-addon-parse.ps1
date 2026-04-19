@@ -61,7 +61,7 @@ if (-not (Test-Path -LiteralPath $projectFile)) {
 # a junction (Windows) or symlink so Godot resolves those paths without us
 # having to copy the whole addon for every parse check.
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$addonSource = Join-Path $repoRoot 'addons\agent_runtime_harness'
+$addonSource = [System.IO.Path]::Combine($repoRoot, 'addons', 'agent_runtime_harness')
 $projectAddons = Join-Path $projectFull 'addons'
 $projectAddonLink = Join-Path $projectAddons 'agent_runtime_harness'
 $createdLink = $false

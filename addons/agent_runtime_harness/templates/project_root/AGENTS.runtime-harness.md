@@ -16,3 +16,4 @@
 - For autonomous editor evidence runs, prefer the file-broker path under `harness/automation/requests/` and `harness/automation/results/` before considering fallback surfaces.
 - Read `harness/automation/results/capability.json` or the latest final run result before opening raw evidence files.
 - Treat blocked capability or run results as explicit unsupported-state signals; do not guess around them with hidden editor interaction.
+- Report harness bugs or automation-contract defects at `https://github.com/RJAudas/godot-agent-harness/issues`.

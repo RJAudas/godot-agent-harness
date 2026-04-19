@@ -8,6 +8,7 @@ const RUNTIME_TO_EDITOR_CHANNEL := "agent_runtime_harness/scenegraph/capture"
 const ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT := "scenegraph-snapshot"
 const ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS := "scenegraph-diagnostics"
 const ARTIFACT_KIND_SCENEGRAPH_SUMMARY := "scenegraph-summary"
+const ARTIFACT_KIND_TRACE := "trace"
 const ARTIFACT_KIND_AUTOMATION_CAPABILITY := "automation-capability"
 const ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS := "automation-lifecycle-status"
 const ARTIFACT_KIND_AUTOMATION_RUN_RESULT := "automation-run-result"
@@ -83,11 +84,15 @@ const AUTOMATION_STATUS_FAILED := "failed"
 
 const AUTOMATION_FAILURE_KIND_LAUNCH := "launch"
 const AUTOMATION_FAILURE_KIND_ATTACHMENT := "attachment"
+const AUTOMATION_FAILURE_KIND_BUILD := "build"
 const AUTOMATION_FAILURE_KIND_CAPTURE := "capture"
 const AUTOMATION_FAILURE_KIND_PERSISTENCE := "persistence"
 const AUTOMATION_FAILURE_KIND_VALIDATION := "validation"
 const AUTOMATION_FAILURE_KIND_SHUTDOWN := "shutdown"
 const AUTOMATION_FAILURE_KIND_GAMEPLAY := "gameplay"
+
+const AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING := "launching"
+const AUTOMATION_BUILD_FAILURE_PHASE_AWAITING_RUNTIME := "awaiting_runtime"
 
 const AUTOMATION_TERMINATION_NOT_STARTED := "not_started"
 const AUTOMATION_TERMINATION_RUNNING := "running"
@@ -103,6 +108,15 @@ const DIAGNOSTIC_KIND_MISSING_NODE := "missing_node"
 const DIAGNOSTIC_KIND_HIERARCHY_MISMATCH := "hierarchy_mismatch"
 const DIAGNOSTIC_KIND_CAPTURE_ERROR := "capture_error"
 
+const BUILD_DIAGNOSTIC_SEVERITY_ERROR := "error"
+const BUILD_DIAGNOSTIC_SEVERITY_WARNING := "warning"
+const BUILD_DIAGNOSTIC_SEVERITY_UNKNOWN := "unknown"
+
+const BUILD_DIAGNOSTIC_SOURCE_KIND_SCRIPT := "script"
+const BUILD_DIAGNOSTIC_SOURCE_KIND_SCENE := "scene"
+const BUILD_DIAGNOSTIC_SOURCE_KIND_RESOURCE := "resource"
+const BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN := "unknown"
+
 const DEFAULT_SCENARIO_ID := "runtime-smoke-test"
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"
 const DEFAULT_MANIFEST_ARTIFACT_ROOT := ""
@@ -111,6 +125,7 @@ const DEFAULT_AUTOMATION_RESULTS_DIRECTORY := "res://harness/automation/results"
 const DEFAULT_AUTOMATION_CAPABILITY_RESULT_PATH := "res://harness/automation/results/capability.json"
 const DEFAULT_AUTOMATION_LIFECYCLE_STATUS_PATH := "res://harness/automation/results/lifecycle-status.json"
 const DEFAULT_AUTOMATION_RUN_RESULT_PATH := "res://harness/automation/results/run-result.json"
+const CANONICAL_ISSUE_TRACKER_URL := "https://github.com/RJAudas/godot-agent-harness/issues"
 
 
 static func supported_artifact_kinds() -> PackedStringArray:
@@ -118,6 +133,7 @@ static func supported_artifact_kinds() -> PackedStringArray:
 		ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT,
 		ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS,
 		ARTIFACT_KIND_SCENEGRAPH_SUMMARY,
+		ARTIFACT_KIND_TRACE,
 		ARTIFACT_KIND_AUTOMATION_CAPABILITY,
 		ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS,
 		ARTIFACT_KIND_AUTOMATION_RUN_RESULT,

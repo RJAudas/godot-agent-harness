@@ -9,7 +9,6 @@
     "chat.tools.terminal.autoApprove": {
         ".specify/scripts/bash/": true,
         ".specify/scripts/powershell/": true
-    },
-    "godotTools.editorPath.godot4": "d:\\gameDev\\Godot_v4.6.2\\Godot_v4.6.2-stable_win64.exe"
+    }
 }
 

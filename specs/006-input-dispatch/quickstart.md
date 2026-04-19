@@ -40,7 +40,7 @@ Add a run-scoped input-dispatch script to an existing automation request fixture
   "runId": "pong-input-dispatch-run-001",
   "targetScene": "res://scenes/title.tscn",
   "outputDirectory": "res://evidence/automation/pong-input-dispatch-run-001",
-  "artifactRoot": "examples/pong-testbed/evidence/automation/pong-input-dispatch-run-001",
+  "artifactRoot": "integration-testing/pong-input-dispatch/evidence/automation/pong-input-dispatch-run-001",
   "expectationFiles": [],
   "capturePolicy": {
     "startup": true,
@@ -76,16 +76,17 @@ Add a run-scoped input-dispatch script to an existing automation request fixture
 ## Recommended Validation Flow
 
 1. Validate request fixtures for one valid Pong numpad-Enter script and at least one invalid script per rejection code (`unsupported_identifier`, `unmatched_release`, `script_too_long`, `later_slice_field`, `invalid_phase`, `invalid_frame`).
-2. Run the existing capability check for the example project and confirm `inputDispatch.supported = true`:
+2. Create an `integration-testing/pong-input-dispatch/` sandbox using the documented integration-testing flow, deploy the harness into it, then run the capability check and confirm `inputDispatch.supported = true`:
 
 ```powershell
-pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples/pong-testbed
+pwsh ./tools/deploy-game-harness.ps1 -GameRoot integration-testing/pong-input-dispatch
+pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot integration-testing/pong-input-dispatch
 ```
 
 3. Submit the input-dispatch request through the existing automation helper:
 
 ```powershell
-pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/input-dispatch/valid-numpad-enter.json
+pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot integration-testing/pong-input-dispatch -RequestFixturePath tools/tests/fixtures/pong-testbed/harness/automation/requests/input-dispatch/valid-numpad-enter.json
 ```
 
 4. Read `harness/automation/results/run-result.json` first. If the run completed (or crashed as expected for issue #12), open the persisted `evidence-manifest.json`.

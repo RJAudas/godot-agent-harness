@@ -1,16 +1,18 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 -> 1.1.0
+Version change: 1.1.0 -> 1.2.0
 Modified principles:
-- (none renamed)
+- III. Test-Backed Agent Loops (expanded: mandates headless GDScript parse check after addon edits)
 Added sections:
-- VI. Documentation Synchronization
+- None
 Removed sections:
 - None
 Templates requiring updates:
 - ✅ updated: .specify/memory/constitution.md
-- ✅ updated: .specify/templates/plan-template.md (Constitution Check gate adds docs-sync row)
-- ✅ updated: .specify/templates/tasks-template.md (Polish phase calls out agent-facing surfaces)
+- ✅ updated: .specify/templates/plan-template.md (Constitution Check gate adds parse-check row)
+- ✅ updated: .specify/templates/tasks-template.md (Polish phase lists parse-check task)
+- ✅ updated: AGENTS.md (Validation expectations call out check-addon-parse.ps1)
+- ✅ updated: .github/copilot-instructions.md (Validation commands list check-addon-parse.ps1)
 - ⚠ pending: .specify/templates/spec-template.md (no constitution-bound section needed; revisit if scope expands)
 - ⚠ pending: .specify/templates/commands/ (directory still absent in this checkout)
 Follow-up TODOs:
@@ -44,6 +46,16 @@ runtime assertions, or automated tests that produce machine-readable pass/fail o
 Manual observation MAY supplement these checks but MUST NOT be the only proof. The
 rationale is simple: agents improve fastest when code changes can be closed against a
 repeatable test loop rather than a human narrative.
+
+Any change that adds, removes, or edits GDScript files under
+`addons/agent_runtime_harness/` MUST be validated with
+`pwsh ./tools/check-addon-parse.ps1` before the change is considered complete.
+The script opens a minimal headless Godot project and surfaces parse, compile, or
+script-load errors that would otherwise only appear after a manual deploy and editor
+reload. Contributors MUST run it locally (and MAY wire it into pre-commit or CI) and
+MUST treat any non-zero exit as a blocking failure. The rationale is that addon
+GDScript breakage is invisible to PowerShell unit tests but renders the harness
+unusable for downstream agents the moment they enable the plugin.
 
 ### IV. Runtime Evidence as the Product Surface
 Features MUST produce structured runtime artifacts that agents can consume directly,
@@ -109,11 +121,14 @@ Implementation tasks MUST remain traceable to independently testable user storie
 Tasks for a story MUST include the scenario execution or automated verification needed
 to prove the story with runtime evidence, and the task set MUST contain explicit
 documentation-synchronization tasks for every agent-facing surface affected by the
-change. Reviews MUST reject work that lacks cited references, bypasses supported
-Godot extension layers without written justification, depends on manual-only
-validation for behavior agents are expected to diagnose, or ships a behavior change
-without the matching updates to docs, instructions, prompts, skills, or deployable
-agent assets.
+change. Tasks that touch addon GDScript MUST also include a parse-check task
+(`pwsh ./tools/check-addon-parse.ps1`) and MUST NOT be marked complete while the
+script reports parse, compile, or script-load errors. Reviews MUST reject work that
+lacks cited references, bypasses supported Godot extension layers without written
+justification, depends on manual-only validation for behavior agents are expected to
+diagnose, ships a behavior change without the matching updates to docs, instructions,
+prompts, skills, or deployable agent assets, or merges addon GDScript edits without a
+clean parse-check run.
 
 ## Governance
 
@@ -130,4 +145,4 @@ for every spec, plan, and task set: reviewers MUST confirm reference coverage,
 plugin-first justification, test-backed validation, machine-readable runtime
 evidence, and documentation-synchronization coverage before approval.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-19
+**Version**: 1.2.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-19

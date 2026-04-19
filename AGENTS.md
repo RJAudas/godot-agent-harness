@@ -33,6 +33,7 @@ Use this file as the agent-facing operating guide for work in this repository.
 - Validate repository JSON outputs with `pwsh ./tools/validate-json.ps1` and the matching schema.
 - Validate manifests with `pwsh ./tools/evidence/validate-evidence-manifest.ps1`.
 - Validate autonomous write requests with `pwsh ./tools/automation/validate-write-boundary.ps1` before recording a run as compliant.
+- After editing any GDScript under `addons/agent_runtime_harness/`, run `pwsh ./tools/check-addon-parse.ps1`. A non-zero exit is a blocking failure that MUST be resolved before the change is considered complete.
 - Record story-level eval results in `tools/evals/001-agent-tooling-foundation/` as machine-readable JSON.
 
 ## Path defaults

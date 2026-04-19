@@ -158,6 +158,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Extend automated coverage or scenario depth where evidence is still weak
+- [ ] TXXX Run `pwsh ./tools/check-addon-parse.ps1` and resolve any GDScript parse, compile, or script-load errors before sign-off (mandatory whenever addon GDScript was touched)
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
 

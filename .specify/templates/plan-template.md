@@ -53,6 +53,9 @@ and the runtime evidence this feature must produce]
       .github/prompts/, .github/agents/, addons/agent_runtime_harness/templates/
       project_root/, and the feature quickstart) that will be updated alongside the
       code, or explains why a given surface is unaffected.
+- [ ] Addon parse-check planned: any task touching GDScript under
+      `addons/agent_runtime_harness/` includes a step to run
+      `pwsh ./tools/check-addon-parse.ps1` and treats a non-zero exit as blocking.
 
 ## Project Structure
 

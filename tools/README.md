@@ -20,8 +20,10 @@ accept repository-relative paths so they compose cleanly in CI and agent flows.
 ## `check-addon-parse.ps1`
 
 Catches GDScript parse and compile errors in the addon without a manual
-deploy + editor reload cycle. Opens `examples/pong-testbed` in headless
-editor mode, lets it parse every script, then exits.
+deploy + editor reload cycle. Opens a minimal fixture project
+(`tools/fixtures/addon-parse-check/`) in headless editor mode with the
+addon junctioned into its own `addons/` directory, lets Godot parse every
+script, then exits.
 
 ```pwsh
 pwsh ./tools/check-addon-parse.ps1

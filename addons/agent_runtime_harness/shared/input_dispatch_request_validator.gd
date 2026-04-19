@@ -2,6 +2,7 @@ extends RefCounted
 class_name InputDispatchRequestValidator
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+const KeyIdentifierResolver = preload("res://addons/agent_runtime_harness/shared/key_identifier_resolver.gd")
 
 
 func normalize_request(
@@ -300,8 +301,7 @@ func _is_supported_key_identifier(identifier: String) -> bool:
 		var is_underscore := ascii == 95
 		if not (is_upper or is_digit or is_underscore):
 			return false
-	var key_value: Variant = ClassDB.class_get_integer_constant("@GlobalScope", "KEY_%s" % identifier)
-	return typeof(key_value) == TYPE_INT and int(key_value) != 0
+	return KeyIdentifierResolver.is_supported(identifier)
 
 
 func _is_integral_numeric(value: Variant) -> bool:

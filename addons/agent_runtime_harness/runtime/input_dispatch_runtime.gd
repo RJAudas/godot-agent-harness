@@ -4,6 +4,7 @@ class_name InputDispatchRuntime
 signal outcome_recorded(outcome)
 
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+const KeyIdentifierResolver = preload("res://addons/agent_runtime_harness/shared/key_identifier_resolver.gd")
 
 var _events: Array = []
 var _next_event_index := 0
@@ -68,12 +69,12 @@ func _dispatch_event(event: Dictionary, declared_frame: int, dispatched_frame: i
 	var failure_message := ""
 
 	if kind == "key":
-		var key_value: Variant = ClassDB.class_get_integer_constant("@GlobalScope", "KEY_%s" % identifier)
-		if typeof(key_value) != TYPE_INT or int(key_value) == 0:
+		if not KeyIdentifierResolver.is_supported(identifier):
 			_emit_outcome(event, declared_frame, dispatched_frame, InspectionConstants.INPUT_DISPATCH_STATUS_FAILED, InspectionConstants.INPUT_DISPATCH_REJECTION_UNSUPPORTED_IDENTIFIER, "Key identifier '%s' not resolvable at runtime." % identifier)
 			return
+		var key_value := KeyIdentifierResolver.resolve(identifier)
 		var key_event := InputEventKey.new()
-		key_event.keycode = int(key_value)
+		key_event.keycode = key_value
 		key_event.pressed = pressed
 		key_event.echo = false
 		Input.parse_input_event(key_event)

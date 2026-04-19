@@ -74,3 +74,77 @@ export GODOT_BIN=/opt/godot/Godot_v4.6.2-stable_linux.x86_64
 - `0` — no parse or compile errors detected.
 - `1` — errors detected (script prints the offending lines) or Godot
   could not be located / timed out.
+
+## End-to-end plugin testing against `examples/pong-testbed`
+
+Once Godot is on `PATH` (or `GODOT_BIN` is set — see above), the full
+broker → playtest → evidence loop can be exercised without hardcoded
+install paths. All commands assume the repo root as the working directory.
+
+### 1. Parse-check the addon
+
+```pwsh
+pwsh ./tools/check-addon-parse.ps1
+```
+
+Fix anything it reports before continuing.
+
+### 2. Launch the editor against the testbed
+
+```pwsh
+godot --editor --path examples/pong-testbed
+```
+
+If `godot` is not on `PATH` for the current shell, fall back to
+`& $env:GODOT_BIN --editor --path examples/pong-testbed`. Do **not**
+embed an absolute install path in checked-in scripts or docs — the
+parse-check helper resolves the binary the same way and is the
+canonical lookup.
+
+When the editor finishes loading with the **Agent Runtime Harness**
+plugin enabled, the broker writes
+`examples/pong-testbed/harness/automation/results/capability.json`.
+
+### 3. Confirm the capability advertisement
+
+```pwsh
+pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples/pong-testbed
+```
+
+Look for `inputDispatch.supported = true` (and any other capability
+flag relevant to the change under test).
+
+### 4. Submit a fixture request
+
+With the editor still open:
+
+```pwsh
+pwsh ./tools/automation/request-editor-evidence-run.ps1 `
+    -ProjectRoot examples/pong-testbed `
+    -RequestFixturePath examples/pong-testbed/harness/automation/requests/input-dispatch/valid-numpad-enter.json
+```
+
+Substitute any other fixture under
+`examples/pong-testbed/harness/automation/requests/` to exercise a
+different code path. The helper writes the request file the broker
+watches; the broker (running inside the editor) launches the playtest
+and persists evidence.
+
+### 5. Read the results
+
+```pwsh
+Get-Content examples/pong-testbed/harness/automation/results/run-result.json |
+    ConvertFrom-Json | Format-List
+```
+
+Then open the `evidence-manifest.json` it points at and inspect the
+referenced artifacts (`input-dispatch-outcomes.jsonl` for input-dispatch
+runs).
+
+### 6. Validate the manifest and re-run the regression suite
+
+```pwsh
+pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>
+pwsh ./tools/tests/run-tool-tests.ps1
+```
+

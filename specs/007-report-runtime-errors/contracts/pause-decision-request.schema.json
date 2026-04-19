@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/007-report-runtime-errors/contracts/pause-decision-request.schema.json",
+  "title": "Pause Decision Request",
+  "description": "Agent-supplied decision for an outstanding pause. Written to harness/automation/requests/pause-decision.json and consumed by the plugin-owned broker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "pauseId",
+    "decision",
+    "submittedBy",
+    "submittedAt"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pauseId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["continue", "stop"]
+    },
+    "submittedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "submittedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -18,6 +18,7 @@ Use this file as the agent-facing operating guide for work in this repository.
 - Keep agent-tooling assets inside the established Copilot-first surfaces: `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, and `.github/agents/`.
 - Do not duplicate large guidance blocks across files. Link or point to the canonical layer instead.
 - Treat `../godot` as reference-only unless the task explicitly asks for engine investigation.
+- For any work that requires a real running Godot editor (manual feature validation, broker smoke tests, evidence reproduction, input-dispatch verification, "test the plugin", "test key input"), follow the sandbox flow in `docs/INTEGRATION_TESTING.md` and the "End-to-end plugin testing" section of `tools/README.md`: scaffold under `integration-testing/<name>/`, deploy with `tools/deploy-game-harness.ps1`, parse-check, then run the broker loop. Resolve the Godot binary the same way `tools/check-addon-parse.ps1` does (`$env:GODOT_BIN`, then `godot`/`godot4`/`Godot*` on `PATH`); if neither resolves in the current shell, check the User-scope environment before concluding Godot is missing. Never download a Godot binary into the repo and never hard-code an install path in checked-in scripts.
 
 ## Validation routing
 

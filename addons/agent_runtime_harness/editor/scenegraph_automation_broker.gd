@@ -109,9 +109,25 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 		"shutdownControlAvailable": shutdown_control_available,
 		"blockedReasons": deduped_blocked_reasons,
 		"recommendedControlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
+		"inputDispatch": _build_input_dispatch_capability(runtime_bridge_available),
 		"notes": [
 			"The preferred v1 control surface is the plugin-owned workspace file broker."
 		],
+	}
+
+
+func _build_input_dispatch_capability(runtime_bridge_available: bool) -> Dictionary:
+	var supported := runtime_bridge_available
+	var blocked: Array = []
+	if not runtime_bridge_available:
+		blocked.append("runtime_bridge_unavailable")
+	return {
+		"supported": supported,
+		"maxEvents": InspectionConstants.INPUT_DISPATCH_MAX_EVENTS,
+		"supportedKinds": InspectionConstants.INPUT_DISPATCH_SUPPORTED_KINDS,
+		"supportedPhases": InspectionConstants.INPUT_DISPATCH_SUPPORTED_PHASES,
+		"laterSliceFields": InspectionConstants.INPUT_DISPATCH_LATER_SLICE_FIELDS,
+		"blockedReasons": blocked,
 	}
 
 
@@ -378,7 +394,7 @@ func _inspect_script_resource(resource_path: String) -> Array:
 			"%s: %s" % [resource_path, missing_message]
 		)]
 
-	var reload_error: int = script.reload(false)
+	var reload_error := script.reload(false)
 	if reload_error == OK:
 		return []
 

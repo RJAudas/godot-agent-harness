@@ -1,0 +1,33 @@
+{
+  "scenarioId": "pong-scenegraph-happy-path",
+  "runId": "pong-scenegraph-happy-path-run-01",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence",
+  "artifactRoot": "tools/tests/fixtures/pong-testbed/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "automation": {
+    "requestPath": "res://harness/automation/requests/run-request.json",
+    "requestsDirectory": "res://harness/automation/requests",
+    "resultsDirectory": "res://harness/automation/results",
+    "capabilityResultPath": "res://harness/automation/results/capability.json",
+    "lifecycleStatusPath": "res://harness/automation/results/lifecycle-status.json",
+    "runResultPath": "res://harness/automation/results/run-result.json"
+  },
+  "defaultRequestOverrides": {
+    "capturePolicy": {
+      "startup": true,
+      "manual": true,
+      "failure": true
+    },
+    "stopPolicy": {
+      "stopAfterValidation": true
+    }
+  },
+  "expectationFiles": [
+    "res://harness/expectations/common.json"
+  ]
+}

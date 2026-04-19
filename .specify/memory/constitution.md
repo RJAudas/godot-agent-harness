@@ -1,24 +1,20 @@
 <!--
 Sync Impact Report
-Version change: unversioned template -> 1.0.0
+Version change: 1.1.0 -> 1.2.0
 Modified principles:
-- Template principle 1 -> I. Plugin-First Interop
-- Template principle 2 -> II. Reference-Driven Design
-- Template principle 3 -> III. Test-Backed Agent Loops
-- Template principle 4 -> IV. Runtime Evidence as the Product Surface
-- Template principle 5 -> V. Reuse Before Reinvention
+- III. Test-Backed Agent Loops (expanded: mandates headless GDScript parse check after addon edits)
 Added sections:
-- Engineering Boundaries
-- Workflow and Quality Gates
+- None
 Removed sections:
 - None
 Templates requiring updates:
-- ✅ updated: .specify/templates/plan-template.md
-- ✅ updated: .specify/templates/spec-template.md
-- ✅ updated: .specify/templates/tasks-template.md
-- ✅ updated: README.md
-- ✅ updated: docs/AGENT_RUNTIME_HARNESS.md
-- ⚠ pending: .specify/templates/commands/ (directory not present; no command templates were available to validate)
+- ✅ updated: .specify/memory/constitution.md
+- ✅ updated: .specify/templates/plan-template.md (Constitution Check gate adds parse-check row)
+- ✅ updated: .specify/templates/tasks-template.md (Polish phase lists parse-check task)
+- ✅ updated: AGENTS.md (Validation expectations call out check-addon-parse.ps1)
+- ✅ updated: .github/copilot-instructions.md (Validation commands list check-addon-parse.ps1)
+- ⚠ pending: .specify/templates/spec-template.md (no constitution-bound section needed; revisit if scope expands)
+- ⚠ pending: .specify/templates/commands/ (directory still absent in this checkout)
 Follow-up TODOs:
 - None
 -->
@@ -51,6 +47,16 @@ Manual observation MAY supplement these checks but MUST NOT be the only proof. T
 rationale is simple: agents improve fastest when code changes can be closed against a
 repeatable test loop rather than a human narrative.
 
+Any change that adds, removes, or edits GDScript files under
+`addons/agent_runtime_harness/` MUST be validated with
+`pwsh ./tools/check-addon-parse.ps1` before the change is considered complete.
+The script opens a minimal headless Godot project and surfaces parse, compile, or
+script-load errors that would otherwise only appear after a manual deploy and editor
+reload. Contributors MUST run it locally (and MAY wire it into pre-commit or CI) and
+MUST treat any non-zero exit as a blocking failure. The rationale is that addon
+GDScript breakage is invisible to PowerShell unit tests but renders the harness
+unusable for downstream agents the moment they enable the plugin.
+
 ### IV. Runtime Evidence as the Product Surface
 Features MUST produce structured runtime artifacts that agents can consume directly,
 including summaries, traces, scene snapshots, events, or invariant results as needed
@@ -66,6 +72,25 @@ abstractions. Any new subsystem MUST explain why available Godot functionality,
 project tooling, or reference patterns were insufficient. This project is about
 surfacing and packaging Godot runtime information for agents, not rebuilding broad
 engine-adjacent infrastructure from scratch.
+
+### VI. Documentation Synchronization
+Any change that adds, removes, or alters an agent-observable feature, contract,
+artifact, capability flag, command, prompt, skill, or workflow MUST land together
+with the corresponding updates to the agent-facing surfaces that teach game-coding
+agents how to use it. In the same change set, contributors MUST update, at minimum,
+the affected entries under: docs/ (notably docs/AGENT_RUNTIME_HARNESS.md and
+docs/AI_TOOLING_AUTOMATION_MATRIX.md when routing or runtime behavior is touched),
+.github/copilot-instructions.md and the relevant .github/instructions/*.md path
+scopes, .github/prompts/ and .github/agents/ assets that mention the feature, the
+deployable templates under addons/agent_runtime_harness/templates/project_root/, and
+the feature's own quickstart.md. Schemas, fixtures, capability advertisements, and
+rejection codes MUST be linked from the prose rather than duplicated. A change is
+not complete while a downstream agent could discover the new behavior only by
+reading source code, and reviews MUST reject feature work whose docs, instructions,
+prompts, or skills still describe the prior contract. The rationale is that this
+repository's product is the agent's ability to operate the harness correctly;
+runtime evidence is wasted if the agent cannot find out the feature exists or how
+to invoke it.
 
 ## Engineering Boundaries
 
@@ -88,14 +113,22 @@ of this repository.
 Each feature spec MUST identify the internal docs, external docs, and source
 references used during discovery. Each implementation plan MUST include a
 Constitution Check that confirms plugin-first scope, cites the relevant references,
-documents the planned runtime artifacts, and explains any escalation to GDExtension
-or engine changes.
+documents the planned runtime artifacts, explains any escalation to GDExtension or
+engine changes, and enumerates the agent-facing documentation, instructions,
+prompts, skills, and deployable templates that will be updated alongside the code.
 
 Implementation tasks MUST remain traceable to independently testable user stories.
 Tasks for a story MUST include the scenario execution or automated verification needed
-to prove the story with runtime evidence. Reviews MUST reject work that lacks cited
-references, bypasses supported Godot extension layers without written justification,
-or depends on manual-only validation for behavior agents are expected to diagnose.
+to prove the story with runtime evidence, and the task set MUST contain explicit
+documentation-synchronization tasks for every agent-facing surface affected by the
+change. Tasks that touch addon GDScript MUST also include a parse-check task
+(`pwsh ./tools/check-addon-parse.ps1`) and MUST NOT be marked complete while the
+script reports parse, compile, or script-load errors. Reviews MUST reject work that
+lacks cited references, bypasses supported Godot extension layers without written
+justification, depends on manual-only validation for behavior agents are expected to
+diagnose, ships a behavior change without the matching updates to docs, instructions,
+prompts, skills, or deployable agent assets, or merges addon GDScript edits without a
+clean parse-check run.
 
 ## Governance
 
@@ -109,7 +142,7 @@ to principle removals or incompatible reinterpretations, MINOR increments apply 
 new principles or materially expanded obligations, and PATCH increments apply to
 clarifications that do not change expected behavior. Compliance review is mandatory
 for every spec, plan, and task set: reviewers MUST confirm reference coverage,
-plugin-first justification, test-backed validation, and machine-readable runtime
-evidence before approval.
+plugin-first justification, test-backed validation, machine-readable runtime
+evidence, and documentation-synchronization coverage before approval.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-11
+**Version**: 1.2.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-19

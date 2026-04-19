@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-watch-every-n-001",
+  "runId": "pong-behavior-watch-wall-bounce-every-n-run-01",
+  "finalStatus": "completed",
+  "failureKind": null,
+  "manifestPath": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/evidence-manifest.json",
+  "outputDirectory": "res://evidence/automation/pong-behavior-watch-wall-bounce-every-n",
+  "validationResult": {
+    "manifestExists": true,
+    "artifactRefsChecked": 4,
+    "missingArtifacts": [],
+    "bundleValid": true,
+    "notes": [
+      "Manifest and behavior-watch trace artifacts passed validation."
+    ],
+    "validatedAt": "2026-04-14T00:31:05Z"
+  },
+  "terminationStatus": "stopped_cleanly",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-14T00:31:10Z"
+}

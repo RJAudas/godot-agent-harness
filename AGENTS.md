@@ -18,6 +18,7 @@ Use this file as the agent-facing operating guide for work in this repository.
 - Keep agent-tooling assets inside the established Copilot-first surfaces: `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, and `.github/agents/`.
 - Do not duplicate large guidance blocks across files. Link or point to the canonical layer instead.
 - Treat `../godot` as reference-only unless the task explicitly asks for engine investigation.
+- For any work that requires a real running Godot editor (manual feature validation, broker smoke tests, evidence reproduction, input-dispatch verification, "test the plugin", "test key input"), follow the sandbox flow in `docs/INTEGRATION_TESTING.md` and the "End-to-end plugin testing" section of `tools/README.md`: scaffold under `integration-testing/<name>/`, deploy with `tools/deploy-game-harness.ps1`, parse-check, then run the broker loop. Resolve the Godot binary the same way `tools/check-addon-parse.ps1` does (`$env:GODOT_BIN`, then `godot`/`godot4`/`Godot*` on `PATH`); if neither resolves in the current shell, check the User-scope environment before concluding Godot is missing. Never download a Godot binary into the repo and never hard-code an install path in checked-in scripts.
 
 ## Validation routing
 
@@ -33,12 +34,13 @@ Use this file as the agent-facing operating guide for work in this repository.
 - Validate repository JSON outputs with `pwsh ./tools/validate-json.ps1` and the matching schema.
 - Validate manifests with `pwsh ./tools/evidence/validate-evidence-manifest.ps1`.
 - Validate autonomous write requests with `pwsh ./tools/automation/validate-write-boundary.ps1` before recording a run as compliant.
+- After editing any GDScript under `addons/agent_runtime_harness/`, run `pwsh ./tools/check-addon-parse.ps1`. A non-zero exit is a blocking failure that MUST be resolved before the change is considered complete.
 - Record story-level eval results in `tools/evals/001-agent-tooling-foundation/` as machine-readable JSON.
 
 ## Path defaults
 
 - Safe default write targets for agent-tooling work are `.github/`, `docs/`, `tools/`, and `specs/001-agent-tooling-foundation/`.
-- Avoid casual edits under `addons/agent_runtime_harness/`, `examples/`, and `scenarios/` unless the task needs runtime-facing behavior or deterministic fixture changes.
+- Avoid casual edits under `addons/agent_runtime_harness/` and `scenarios/` unless the task needs runtime-facing behavior or deterministic fixture changes. The git-ignored `integration-testing/` sandbox is yours to use freely; tracked test fixtures live under `tools/tests/fixtures/`.
 
 ## Autonomous artifacts
 

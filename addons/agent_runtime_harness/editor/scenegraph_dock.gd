@@ -68,7 +68,7 @@ func _build_ui() -> void:
 
 	_support_label = Label.new()
 	_support_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_support_label.text = "Report harness issues: %s" % InspectionConstants.CANONICAL_ISSUE_TRACKER_URL
+	_support_label.text = "Report harness issues: https://github.com/RJAudas/godot-agent-harness/issues"
 	add_child(_support_label)
 
 	var summary_heading := Label.new()

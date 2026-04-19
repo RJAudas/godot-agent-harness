@@ -7,8 +7,17 @@ param(
 
     [switch]$SkipProjectSettings,
 
+    [switch]$AddonOnly,
+
+    [string]$TargetScene,
+
     [switch]$PassThru
 )
+
+if ($AddonOnly) {
+    $SkipAgentAssets = $true
+    $SkipProjectSettings = $true
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -300,6 +309,25 @@ function Get-InspectionRunConfigContent {
     return (Get-TemplateContent -RelativePath 'harness/inspection-run-config.json')
 }
 
+function Set-InspectionConfigTargetScene {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ConfigPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetScene
+    )
+
+    $configJson = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json -Depth 100
+    if (-not ($configJson.PSObject.Properties.Name -contains 'targetScene')) {
+        Add-Member -InputObject $configJson -MemberType NoteProperty -Name 'targetScene' -Value $TargetScene -Force
+    }
+    else {
+        $configJson.targetScene = $TargetScene
+    }
+    Set-FileContent -Path $ConfigPath -Content (($configJson | ConvertTo-Json -Depth 100) + "`n")
+}
+
 $repoRoot = Get-RepoRoot
 $resolvedGameRoot = Resolve-AbsolutePath -Path $GameRoot
 $projectFilePath = Join-Path $resolvedGameRoot 'project.godot'
@@ -328,22 +356,35 @@ else {
 }
 Add-Operation -Operations $operations -Path $addonDestinationPath -Action $copyAddonAction
 
-Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
-Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
-
 $configPath = Join-Path $resolvedGameRoot 'harness/inspection-run-config.json'
-if (-not (Test-Path -LiteralPath $configPath)) {
-    if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {
-        Set-FileContent -Path $configPath -Content (Get-InspectionRunConfigContent)
-        $configAction = 'created-config'
+if (-not $AddonOnly) {
+    Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
+    Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
+
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {
+            Set-FileContent -Path $configPath -Content (Get-InspectionRunConfigContent)
+            if ($PSBoundParameters.ContainsKey('TargetScene') -and -not [string]::IsNullOrWhiteSpace($TargetScene)) {
+                Set-InspectionConfigTargetScene -ConfigPath $configPath -TargetScene $TargetScene
+            }
+            $configAction = 'created-config'
+        }
+        else {
+            $configAction = 'skipped-create-config'
+        }
+        Add-Operation -Operations $operations -Path $configPath -Action $configAction
     }
     else {
-        $configAction = 'skipped-create-config'
+        if ($PSBoundParameters.ContainsKey('TargetScene') -and -not [string]::IsNullOrWhiteSpace($TargetScene)) {
+            if ($PSCmdlet.ShouldProcess($configPath, 'Update inspection config targetScene')) {
+                Set-InspectionConfigTargetScene -ConfigPath $configPath -TargetScene $TargetScene
+                Add-Operation -Operations $operations -Path $configPath -Action 'updated-config-target-scene'
+            }
+        }
+        else {
+            Add-Operation -Operations $operations -Path $configPath -Action 'preserved-config'
+        }
     }
-    Add-Operation -Operations $operations -Path $configPath -Action $configAction
-}
-else {
-    Add-Operation -Operations $operations -Path $configPath -Action 'preserved-config'
 }
 
 if (-not $SkipProjectSettings) {

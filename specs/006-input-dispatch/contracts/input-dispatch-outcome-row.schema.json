@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/006-input-dispatch/contracts/input-dispatch-outcome-row.schema.json",
+  "title": "Input Dispatch Outcome Row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "eventIndex",
+    "declaredFrame",
+    "dispatchedFrame",
+    "kind",
+    "identifier",
+    "phase",
+    "status"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventIndex": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "declaredFrame": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "dispatchedFrame": {
+      "type": "integer",
+      "minimum": -1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "key",
+        "action"
+      ]
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "press",
+        "release"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "dispatched",
+        "skipped_frame_unreached",
+        "skipped_run_ended",
+        "failed"
+      ]
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reasonMessage": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -28,6 +28,7 @@ Use this matrix to decide whether a repository concern belongs in instructions, 
 | "Verify at runtime," "test the running code," "make sure the node appears in game," or another runtime-visible claim | Scenegraph Harness runtime verification | Runtime-verification prompt or agent plus the editor-evidence workflow | The task needs a brokered run and persisted runtime evidence. |
 | Runtime-visible behavior change plus an existing deterministic direct test surface | Combined validation | Ordinary tests plus runtime-verification workflow | The task needs both code-level and live-runtime proof. |
 | Existing evidence manifest with a request to diagnose the result | Evidence triage | Evidence-triage prompt or agent | A fresh run is unnecessary because the manifest-centered bundle already exists. |
+| Drive deterministic keyboard or input-action events through the running game | Scenegraph Harness runtime verification with an `inputDispatchScript` | Editor-evidence workflow plus the input-dispatch contract | The validator and runtime dispatch live inside the existing harness and persist a fixed `input-dispatch-outcomes.jsonl` artifact in the run's evidence bundle (see `specs/006-input-dispatch/`). |
 
 Runtime harness invocation is a routed workflow chosen by task intent.
 It is not a replacement for ordinary tests, and evidence triage is not a replacement for a fresh runtime-verification run.

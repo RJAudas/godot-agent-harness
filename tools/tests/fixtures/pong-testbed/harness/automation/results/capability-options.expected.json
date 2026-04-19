@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-04-12T12:26:00Z",
+  "projectIdentifier": "tools/tests/fixtures/pong-testbed",
+  "singleTargetReady": true,
+  "launchControlAvailable": true,
+  "runtimeBridgeAvailable": true,
+  "captureControlAvailable": true,
+  "persistenceAvailable": true,
+  "validationAvailable": true,
+  "shutdownControlAvailable": true,
+  "blockedReasons": [],
+  "recommendedControlPath": "file_broker",
+  "notes": [
+    "The plugin-owned file broker is the preferred v1 path.",
+    "Editor-script forwarding remains a documented fallback.",
+    "Local IPC is deferred and not part of the supported default path."
+  ]
+}

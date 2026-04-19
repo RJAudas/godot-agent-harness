@@ -1,0 +1,33 @@
+{
+  "requestId": "pong-request-watch-every-frame-001",
+  "scenarioId": "pong-behavior-watch-wall-bounce-every-frame",
+  "runId": "pong-behavior-watch-wall-bounce-every-frame-run-01",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/pong-behavior-watch-wall-bounce-every-frame",
+  "artifactRoot": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame",
+  "expectationFiles": [
+    "res://harness/expectations/common.json"
+  ],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "behavior-watch-fixture",
+  "createdAt": "2026-04-14T00:10:00Z",
+  "overrides": {
+    "behaviorWatchRequest": {
+      "targets": [
+        {
+          "nodePath": "/root/Main/Ball",
+          "properties": ["position", "velocity", "collisionState", "lastCollider"]
+        }
+      ],
+      "startFrameOffset": 12,
+      "frameCount": 4
+    }
+  }
+}

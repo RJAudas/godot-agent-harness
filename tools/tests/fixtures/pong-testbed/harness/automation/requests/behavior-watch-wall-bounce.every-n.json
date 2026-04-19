@@ -1,0 +1,37 @@
+{
+  "requestId": "pong-request-watch-every-n-001",
+  "scenarioId": "pong-behavior-watch-wall-bounce-every-n",
+  "runId": "pong-behavior-watch-wall-bounce-every-n-run-01",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/pong-behavior-watch-wall-bounce-every-n",
+  "artifactRoot": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n",
+  "expectationFiles": [
+    "res://harness/expectations/common.json"
+  ],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "behavior-watch-fixture",
+  "createdAt": "2026-04-14T00:11:00Z",
+  "overrides": {
+    "behaviorWatchRequest": {
+      "targets": [
+        {
+          "nodePath": "/root/Main/Ball",
+          "properties": ["position", "velocity", "speed"]
+        }
+      ],
+      "cadence": {
+        "mode": "every_n_frames",
+        "everyNFrames": 2
+      },
+      "startFrameOffset": 20,
+      "frameCount": 6
+    }
+  }
+}

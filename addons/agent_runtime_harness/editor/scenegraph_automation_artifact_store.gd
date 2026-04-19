@@ -105,6 +105,18 @@ func build_validation_result(manifest: Dictionary, missing_artifacts: Array, bun
 	}
 
 
+func build_behavior_watch_validation_refs(validation_result: Dictionary) -> Array:
+	var refs: Array = []
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		refs.append("behavior-watch:%s:%s" % [
+			String(error_value.get("code", "invalid_request")),
+			String(error_value.get("field", "behaviorWatchRequest")),
+		])
+	return refs
+
+
 func build_behavior_watch_failure_status_extras(validation_result: Dictionary) -> Dictionary:
 	return {
 		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
@@ -112,28 +124,25 @@ func build_behavior_watch_failure_status_extras(validation_result: Dictionary) -
 	}
 
 
-func build_behavior_watch_validation_refs(validation_result: Dictionary) -> Array:
-	var refs: Array = []
-	for error_value in validation_result.get("errors", []):
-		if typeof(error_value) != TYPE_DICTIONARY:
-			continue
-		refs.append(
-			"behavior-watch:%s:%s" % [
-				String(error_value.get("code", "invalid_request")),
-				String(error_value.get("field", "behaviorWatchRequest")),
-			]
-		)
-	return refs
-
-
 func build_behavior_watch_validation_notes(validation_result: Dictionary) -> Array:
-	var notes: Array = [
-		"Behavior watch request was rejected before the playtest started.",
-	]
-	for error_value in validation_result.get("errors", []):
-		if typeof(error_value) != TYPE_DICTIONARY:
-			continue
-		notes.append(String(error_value.get("message", "Behavior watch request validation failed.")))
+	var notes: Array = []
+	var raw_notes: Variant = validation_result.get("notes", [])
+	if typeof(raw_notes) == TYPE_ARRAY:
+		notes = (raw_notes as Array).duplicate(true)
+
+	var missing_artifacts: Variant = validation_result.get("missingArtifacts", [])
+	if typeof(missing_artifacts) == TYPE_ARRAY and not (missing_artifacts as Array).is_empty():
+		notes.append("Missing artifacts: %s" % JSON.stringify(missing_artifacts))
+
+	if not bool(validation_result.get("bundleValid", true)):
+		notes.append("Behavior watch evidence bundle validation failed.")
+
+	if notes.is_empty():
+		notes.append("Behavior watch request was rejected before the playtest started.")
+		for error_value in validation_result.get("errors", []):
+			if typeof(error_value) != TYPE_DICTIONARY:
+				continue
+			notes.append(String(error_value.get("message", "Behavior watch request validation failed.")))
 	return notes
 
 
@@ -160,18 +169,40 @@ func build_build_failure_payload(build_failure_phase: String, diagnostics: Array
 	})
 
 
-func build_build_failure_status_extras(build_failure_phase: String, diagnostics: Array, raw_build_output: Array) -> Dictionary:
+func build_build_failure_status_extras(build_failure_phase: Variant, diagnostics: Array = [], raw_build_output: Array = []) -> Dictionary:
+	var normalized := normalize_build_failure_payload({
+		"buildFailurePhase": build_failure_phase,
+		"buildDiagnostics": diagnostics,
+		"rawBuildOutput": raw_build_output,
+	})
 	return {
 		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
-		"buildFailurePhase": build_failure_phase,
-		"buildDiagnosticCount": diagnostics.size(),
-		"rawBuildOutputAvailable": not raw_build_output.is_empty(),
+		"buildFailurePhase": String(normalized.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+		"buildDiagnosticCount": int(normalized.get("buildDiagnostics", []).size()),
+		"rawBuildOutputAvailable": not (normalized.get("rawBuildOutput", []) as Array).is_empty(),
 	}
 
 
-func normalize_build_failure_payload(payload: Dictionary) -> Dictionary:
+func normalize_build_failure_payload(payload: Variant) -> Dictionary:
+	if payload == null:
+		return {
+			"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
+			"buildFailurePhase": InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING,
+			"buildDiagnostics": [],
+			"rawBuildOutput": [],
+			"details": "Build diagnostics were detected before runtime attachment.",
+		}
+
+	var source := {}
+	if typeof(payload) == TYPE_DICTIONARY:
+		source = (payload as Dictionary).duplicate(true)
+	elif typeof(payload) == TYPE_STRING:
+		source = {"details": String(payload)}
+	else:
+		source = {"details": String(payload)}
+
 	var normalized_diagnostics: Array = []
-	for diagnostic_value in payload.get("buildDiagnostics", []):
+	for diagnostic_value in source.get("buildDiagnostics", []):
 		if typeof(diagnostic_value) != TYPE_DICTIONARY:
 			continue
 		normalized_diagnostics.append(build_build_diagnostic(
@@ -186,7 +217,7 @@ func normalize_build_failure_payload(payload: Dictionary) -> Dictionary:
 		))
 
 	var normalized_output: Array = []
-	for output_value in payload.get("rawBuildOutput", []):
+	for output_value in source.get("rawBuildOutput", []):
 		var output_line := String(output_value)
 		if output_line.is_empty():
 			continue
@@ -194,10 +225,10 @@ func normalize_build_failure_payload(payload: Dictionary) -> Dictionary:
 
 	return {
 		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_BUILD,
-		"buildFailurePhase": String(payload.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
+		"buildFailurePhase": String(source.get("buildFailurePhase", InspectionConstants.AUTOMATION_BUILD_FAILURE_PHASE_LAUNCHING)),
 		"buildDiagnostics": normalized_diagnostics,
 		"rawBuildOutput": normalized_output,
-		"details": String(payload.get("details", "Build diagnostics were detected before runtime attachment.")),
+		"details": String(source.get("details", "Build diagnostics were detected before runtime attachment.")),
 	}
 
 

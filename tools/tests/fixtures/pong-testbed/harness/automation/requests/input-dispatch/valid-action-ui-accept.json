@@ -1,0 +1,6 @@
+{
+  "events": [
+    { "kind": "action", "identifier": "ui_accept", "phase": "press", "frame": 10 },
+    { "kind": "action", "identifier": "ui_accept", "phase": "release", "frame": 12 }
+  ]
+}

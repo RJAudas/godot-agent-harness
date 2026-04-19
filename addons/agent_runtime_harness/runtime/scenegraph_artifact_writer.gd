@@ -13,6 +13,8 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var summary := _summary_builder.build_summary(snapshot, diagnostics)
 	var behavior_watch: Dictionary = session_context.get("behavior_watch", {})
 	var applied_watch: Dictionary = behavior_watch.get("appliedWatch", {})
+	var applied_input_dispatch: Dictionary = session_context.get("applied_input_dispatch", {})
+	var run_id := String(session_context.get("run_id", snapshot.get("run_id", "unknown-run")))
 	var validation_notes: Array = [
 		"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
 	]
@@ -28,7 +30,6 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var diagnostics_path := output_directory.path_join("scenegraph-diagnostics.json")
 	var summary_path := output_directory.path_join("scenegraph-summary.json")
 	var manifest_path := output_directory.path_join("evidence-manifest.json")
-	var trace_path := output_directory.path_join(InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)
 
 	var snapshot_error := _write_json(snapshot_path, snapshot)
 	if not snapshot_error.is_empty():
@@ -38,7 +39,7 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		"schema_version": "1.0.0",
 		"snapshot_id": String(snapshot.get("snapshot_id", "")),
 		"session_id": String(session_context.get("session_id", "")),
-		"run_id": String(session_context.get("run_id", "")),
+		"run_id": run_id,
 		"scenario_id": String(session_context.get("scenario_id", "")),
 		"diagnostics": diagnostics,
 	})
@@ -57,10 +58,12 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	]
 
 	if not applied_watch.is_empty():
+		var trace_file_name := String(applied_watch.get("traceArtifact", InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)).get_file()
+		var trace_path := output_directory.path_join(trace_file_name)
 		artifact_refs.append(_build_artifact_ref(
 			InspectionConstants.ARTIFACT_KIND_TRACE,
 			artifact_root,
-			String(applied_watch.get("traceArtifact", InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)),
+			trace_file_name,
 			"application/jsonl",
 			"Bounded behavior-watch trace for the current automation run."
 		))
@@ -84,10 +87,24 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		if not FileAccess.file_exists(trace_path):
 			validation_notes.append("Behavior watch trace artifact was requested but trace.jsonl was not written.")
 
+	if not applied_input_dispatch.is_empty():
+		var input_dispatch_validation := _validate_input_dispatch_outcomes(_input_dispatch_outcomes_path(output_directory), run_id)
+		bundle_valid = bundle_valid and bool(input_dispatch_validation.get("bundleValid", false))
+		for note_value in input_dispatch_validation.get("notes", []):
+			validation_notes.append(String(note_value))
+		if bool(input_dispatch_validation.get("includeArtifact", false)):
+			artifact_refs.append(_build_artifact_ref(
+				InspectionConstants.ARTIFACT_KIND_INPUT_DISPATCH_OUTCOMES,
+				artifact_root,
+				InspectionConstants.DEFAULT_INPUT_DISPATCH_OUTCOMES_FILE,
+				"application/jsonl",
+				"Per-event runtime input-dispatch outcomes captured during the run."
+			))
+
 	var manifest := {
 		"schemaVersion": "1.0.0",
-		"manifestId": "scenegraph-%s" % String(session_context.get("run_id", snapshot.get("run_id", "unknown-run"))),
-		"runId": String(session_context.get("run_id", snapshot.get("run_id", "unknown-run"))),
+		"manifestId": "scenegraph-%s" % run_id,
+		"runId": run_id,
 		"scenarioId": String(session_context.get("scenario_id", snapshot.get("scenario_id", "unknown-scenario"))),
 		"status": String(summary.get("status", "unknown")),
 		"summary": {
@@ -105,6 +122,8 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	}
 	if not applied_watch.is_empty():
 		manifest["appliedWatch"] = applied_watch.duplicate(true)
+	if not applied_input_dispatch.is_empty():
+		manifest["appliedInputDispatch"] = applied_input_dispatch.duplicate(true)
 
 	var manifest_error := _write_json(manifest_path, manifest)
 	if not manifest_error.is_empty():
@@ -115,6 +134,46 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		"output_directory": output_directory,
 		"manifest_path": manifest_path,
 	}
+
+
+func reset_input_dispatch_outcomes(session_context: Dictionary) -> String:
+	var applied_input_dispatch: Dictionary = session_context.get("applied_input_dispatch", {})
+	if applied_input_dispatch.is_empty():
+		return ""
+
+	var output_directory := String(session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	_ensure_directory(output_directory)
+	var outcomes_path := _input_dispatch_outcomes_path(output_directory)
+	if not FileAccess.file_exists(outcomes_path):
+		return ""
+
+	var remove_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(outcomes_path))
+	if remove_error != OK:
+		return "Could not clear %s before starting input dispatch (%s)." % [outcomes_path, error_string(remove_error)]
+	return ""
+
+
+func append_input_dispatch_outcome(session_context: Dictionary, outcome: Dictionary) -> String:
+	var output_directory := String(session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var expected_run_id := String(session_context.get("run_id", ""))
+	var outcome_run_id := String(outcome.get("runId", ""))
+	if not expected_run_id.is_empty() and outcome_run_id != expected_run_id:
+		return "Refused to append input dispatch outcome for run '%s' into run '%s' output." % [outcome_run_id, expected_run_id]
+
+	_ensure_directory(output_directory)
+	var path := _input_dispatch_outcomes_path(output_directory)
+	var handle: FileAccess
+	if FileAccess.file_exists(path):
+		handle = FileAccess.open(path, FileAccess.READ_WRITE)
+		if handle != null:
+			handle.seek_end()
+	else:
+		handle = FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return "Could not open %s for input dispatch outcome append (%s)." % [path, error_string(FileAccess.get_open_error())]
+	handle.store_line(JSON.stringify(outcome))
+	handle.close()
+	return ""
 
 
 func _ensure_directory(output_directory: String) -> void:
@@ -162,6 +221,67 @@ func _build_producer(session_context: Dictionary) -> Dictionary:
 	if not request_id.is_empty():
 		producer["toolingArtifactId"] = "scenegraph_automation_broker"
 	return producer
+
+
+func _input_dispatch_outcomes_path(output_directory: String) -> String:
+	return output_directory.path_join(InspectionConstants.DEFAULT_INPUT_DISPATCH_OUTCOMES_FILE)
+
+
+func _validate_input_dispatch_outcomes(outcomes_path: String, run_id: String) -> Dictionary:
+	if not FileAccess.file_exists(outcomes_path):
+		return {
+			"includeArtifact": false,
+			"bundleValid": false,
+			"notes": ["Input dispatch was requested but input-dispatch-outcomes.jsonl was not written."],
+		}
+
+	var handle := FileAccess.open(outcomes_path, FileAccess.READ)
+	if handle == null:
+		return {
+			"includeArtifact": false,
+			"bundleValid": false,
+			"notes": ["Input dispatch outcomes could not be opened for validation."],
+		}
+
+	var row_count := 0
+	var notes: Array = []
+	while not handle.eof_reached():
+		var raw_line := handle.get_line().strip_edges()
+		if raw_line.is_empty():
+			continue
+		row_count += 1
+		var parsed := JSON.parse_string(raw_line)
+		if typeof(parsed) != TYPE_DICTIONARY:
+			handle.close()
+			return {
+				"includeArtifact": false,
+				"bundleValid": false,
+				"notes": ["Input dispatch outcomes contained a non-object JSONL row."],
+			}
+		var outcome_row: Dictionary = parsed
+		if String(outcome_row.get("runId", "")) != run_id:
+			handle.close()
+			return {
+				"includeArtifact": false,
+				"bundleValid": false,
+				"notes": ["Input dispatch outcomes contained rows from a different runId."],
+			}
+	handle.close()
+
+	if row_count <= 0:
+		notes.append("Input dispatch outcomes file was present but contained no rows.")
+		return {
+			"includeArtifact": false,
+			"bundleValid": false,
+			"notes": notes,
+		}
+
+	notes.append("Input dispatch outcomes were validated for the active run.")
+	return {
+		"includeArtifact": true,
+		"bundleValid": true,
+		"notes": notes,
+	}
 
 
 func _join_strings(values: Array) -> String:

@@ -11,6 +11,7 @@ const ScenegraphDiagnosticSerializer = preload("res://addons/agent_runtime_harne
 const ScenegraphArtifactWriter = preload("res://addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd")
 const BehaviorWatchSampler = preload("res://addons/agent_runtime_harness/runtime/behavior_watch_sampler.gd")
 const BehaviorTraceWriter = preload("res://addons/agent_runtime_harness/runtime/behavior_trace_writer.gd")
+const InputDispatchRuntime = preload("res://addons/agent_runtime_harness/runtime/input_dispatch_runtime.gd")
 
 var _capture_service := ScenegraphCaptureService.new()
 var _diagnostic_serializer := ScenegraphDiagnosticSerializer.new()
@@ -25,6 +26,7 @@ var _latest_diagnostics: Array = []
 var _identifier_sequence := 0
 var _applied_watch := {}
 var _run_started_at_msec := 0
+var _input_dispatch_runtime: InputDispatchRuntime = null
 
 
 func _ready() -> void:
@@ -36,6 +38,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_flush_pending_input_dispatch_outcomes()
 	if EngineDebugger.is_active():
 		EngineDebugger.unregister_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL)
 
@@ -69,10 +72,16 @@ func configure_session(session_context: Dictionary) -> void:
 	_behavior_watch_sampler.configure(_applied_watch)
 	set_physics_process(_behavior_watch_sampler.is_enabled())
 
+	if session_context.has(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED):
+		_session_context[InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED] = session_context.get(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED, {}).duplicate(true)
+	if session_context.has("applied_input_dispatch"):
+		_session_context["applied_input_dispatch"] = session_context.get("applied_input_dispatch", {}).duplicate(true)
+
 	if session_context.has("config_path"):
 		_load_session_config(String(session_context.get("config_path")), session_context)
 
 	_send_debugger_message("session_configured", [_build_session_configuration_event()])
+	_install_input_dispatch_runtime_if_needed()
 
 
 func request_manual_capture() -> Dictionary:
@@ -245,6 +254,9 @@ func _build_session_configuration_event() -> Dictionary:
 	}
 	if not _applied_watch.is_empty():
 		event["appliedWatch"] = _applied_watch.duplicate(true)
+	var applied_input_dispatch: Dictionary = _session_context.get("applied_input_dispatch", {})
+	if not applied_input_dispatch.is_empty():
+		event["appliedInputDispatch"] = applied_input_dispatch.duplicate(true)
 	return event
 
 
@@ -255,3 +267,38 @@ func _elapsed_run_time_msec() -> int:
 func _emit_runtime_error(message: String) -> void:
 	emit_signal("runtime_error", message)
 	_send_debugger_message("runtime_error", [message])
+
+
+func _install_input_dispatch_runtime_if_needed() -> void:
+	var script_dict: Dictionary = _session_context.get(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED, {})
+	if script_dict.is_empty():
+		if _input_dispatch_runtime != null:
+			_input_dispatch_runtime.configure({}, String(_session_context.get("run_id", "")))
+		return
+
+	var reset_error := String(_artifact_writer.reset_input_dispatch_outcomes(_session_context))
+	if not reset_error.is_empty():
+		_emit_runtime_error(reset_error)
+		return
+
+	if _input_dispatch_runtime == null:
+		_input_dispatch_runtime = InputDispatchRuntime.new()
+		_input_dispatch_runtime.name = "InputDispatchRuntime"
+		_input_dispatch_runtime.outcome_recorded.connect(_on_input_dispatch_outcome)
+		add_child(_input_dispatch_runtime)
+	var run_id := String(_session_context.get("run_id", ""))
+	_input_dispatch_runtime.configure(script_dict, run_id)
+
+
+func _flush_pending_input_dispatch_outcomes() -> void:
+	if _input_dispatch_runtime == null:
+		return
+	_input_dispatch_runtime.dispatch_remaining_as_skipped("")
+
+
+func _on_input_dispatch_outcome(outcome: Dictionary) -> void:
+	var append_error := String(_artifact_writer.append_input_dispatch_outcome(_session_context, outcome))
+	if not append_error.is_empty():
+		_emit_runtime_error("Failed to append input dispatch outcome evidence: %s" % append_error)
+		return
+	_send_debugger_message("input_dispatch_outcome", [outcome])

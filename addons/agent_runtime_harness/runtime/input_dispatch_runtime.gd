@@ -1,0 +1,121 @@
+extends Node
+class_name InputDispatchRuntime
+
+signal outcome_recorded(outcome)
+
+const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
+const KeyIdentifierResolver = preload("res://addons/agent_runtime_harness/shared/key_identifier_resolver.gd")
+
+var _events: Array = []
+var _next_event_index := 0
+var _run_id := ""
+var _start_frame := 0
+var _started := false
+var _completed := false
+var _last_relative_frame := -1
+
+
+func configure(script_dict: Dictionary, run_id: String) -> void:
+	_events = script_dict.get("events", []).duplicate(true)
+	_run_id = run_id
+	_next_event_index = 0
+	_completed = false
+	_started = false
+	_last_relative_frame = -1
+	set_process(not _events.is_empty())
+
+
+func _ready() -> void:
+	set_process(not _events.is_empty())
+
+
+func _process(_delta: float) -> void:
+	if _completed:
+		return
+	if _events.is_empty():
+		_completed = true
+		set_process(false)
+		return
+	if not _started:
+		_start_frame = int(Engine.get_process_frames())
+		_started = true
+
+	var current_relative_frame := int(Engine.get_process_frames()) - _start_frame
+	_last_relative_frame = max(_last_relative_frame, current_relative_frame)
+	while _next_event_index < _events.size():
+		var event: Dictionary = _events[_next_event_index]
+		var declared_frame := int(event.get("frame", 0))
+		if declared_frame > current_relative_frame:
+			break
+		_dispatch_event(event, declared_frame, current_relative_frame)
+		_next_event_index += 1
+
+	if _next_event_index >= _events.size():
+		_completed = true
+		set_process(false)
+
+
+func dispatch_remaining_as_skipped(reason_code: String) -> void:
+	while _next_event_index < _events.size():
+		var event: Dictionary = _events[_next_event_index]
+		var declared_frame := int(event.get("frame", 0))
+		var status := InspectionConstants.INPUT_DISPATCH_STATUS_SKIPPED_RUN_ENDED
+		var reason_message := "Run ended before event could dispatch."
+		if _last_relative_frame < 0 or declared_frame > _last_relative_frame:
+			status = InspectionConstants.INPUT_DISPATCH_STATUS_SKIPPED_FRAME_UNREACHED
+			reason_message = "Run ended before the requested frame was reached."
+		_emit_outcome(event, declared_frame, -1, status, reason_code, reason_message)
+		_next_event_index += 1
+	_completed = true
+	set_process(false)
+
+
+func _dispatch_event(event: Dictionary, declared_frame: int, dispatched_frame: int) -> void:
+	var kind := String(event.get("kind", ""))
+	var identifier := String(event.get("identifier", ""))
+	var phase := String(event.get("phase", ""))
+	var pressed := phase == "press"
+	var failure_message := ""
+
+	if kind == "key":
+		if not KeyIdentifierResolver.is_supported(identifier):
+			_emit_outcome(event, declared_frame, dispatched_frame, InspectionConstants.INPUT_DISPATCH_STATUS_FAILED, InspectionConstants.INPUT_DISPATCH_REJECTION_UNSUPPORTED_IDENTIFIER, "Key identifier '%s' not resolvable at runtime." % identifier)
+			return
+		var key_value := KeyIdentifierResolver.resolve(identifier)
+		var key_event := InputEventKey.new()
+		key_event.keycode = key_value
+		key_event.pressed = pressed
+		key_event.echo = false
+		Input.parse_input_event(key_event)
+	elif kind == "action":
+		if not InputMap.has_action(identifier):
+			_emit_outcome(event, declared_frame, dispatched_frame, InspectionConstants.INPUT_DISPATCH_STATUS_FAILED, InspectionConstants.INPUT_DISPATCH_REJECTION_UNSUPPORTED_IDENTIFIER, "InputMap action '%s' is not declared." % identifier)
+			return
+		var action_event := InputEventAction.new()
+		action_event.action = identifier
+		action_event.pressed = pressed
+		Input.parse_input_event(action_event)
+	else:
+		failure_message = "Unsupported input dispatch kind '%s'." % kind
+		_emit_outcome(event, declared_frame, dispatched_frame, InspectionConstants.INPUT_DISPATCH_STATUS_FAILED, InspectionConstants.INPUT_DISPATCH_REJECTION_UNSUPPORTED_FIELD, failure_message)
+		return
+
+	_emit_outcome(event, declared_frame, dispatched_frame, InspectionConstants.INPUT_DISPATCH_STATUS_DISPATCHED, "", "")
+
+
+func _emit_outcome(event: Dictionary, declared_frame: int, dispatched_frame: int, status: String, reason_code: String, reason_message: String) -> void:
+	var outcome := {
+		"runId": _run_id,
+		"eventIndex": int(event.get("declaredIndex", _next_event_index)),
+		"declaredFrame": declared_frame,
+		"dispatchedFrame": dispatched_frame,
+		"kind": String(event.get("kind", "")),
+		"identifier": String(event.get("identifier", "")),
+		"phase": String(event.get("phase", "")),
+		"status": status,
+	}
+	if not reason_code.is_empty():
+		outcome["reasonCode"] = reason_code
+	if not reason_message.is_empty():
+		outcome["reasonMessage"] = reason_message
+	emit_signal("outcome_recorded", outcome)

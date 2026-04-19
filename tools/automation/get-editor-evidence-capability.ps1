@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$ProjectRoot = 'examples/pong-testbed',
+    [Parameter(Mandatory = $true)]
+    [string]$ProjectRoot,
     [string]$ConfigPath,
     [string]$CapabilityPath,
     [switch]$PassThru
@@ -74,12 +75,16 @@ $result = [ordered]@{
     exists = [bool](Test-Path -LiteralPath $capabilitySourcePath)
     schemaValid = $false
     capability = $null
+    inputDispatch = $null
 }
 
 if ($result.exists) {
     $result.capability = Get-Content -LiteralPath $capabilitySourcePath -Raw | ConvertFrom-Json -Depth 100
     $validation = & (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $capabilitySourcePath -SchemaPath 'specs/003-editor-evidence-loop/contracts/automation-capability.schema.json' -PassThru -AllowInvalid
     $result.schemaValid = [bool]$validation.valid
+    if ($null -ne $result.capability -and $result.capability.PSObject.Properties.Name -contains 'inputDispatch') {
+        $result.inputDispatch = $result.capability.inputDispatch
+    }
 }
 
 if ($PassThru) {

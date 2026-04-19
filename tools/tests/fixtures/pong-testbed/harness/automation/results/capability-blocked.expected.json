@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-04-12T12:11:00Z",
+  "projectIdentifier": "tools/tests/fixtures/pong-testbed",
+  "singleTargetReady": false,
+  "launchControlAvailable": true,
+  "runtimeBridgeAvailable": false,
+  "captureControlAvailable": false,
+  "persistenceAvailable": true,
+  "validationAvailable": true,
+  "shutdownControlAvailable": true,
+  "blockedReasons": [
+    "multiple_open_projects",
+    "runtime_bridge_unavailable"
+  ],
+  "recommendedControlPath": "file_broker",
+  "notes": [
+    "The broker must block instead of guessing when the eligible editor target is ambiguous."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "requestId": "pong-request-healthy-001",
+  "runId": "pong-autonomous-run-validation-failure-001",
+  "finalStatus": "failed",
+  "failureKind": "validation",
+  "manifestPath": "tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json",
+  "outputDirectory": "res://evidence",
+  "validationResult": {
+    "manifestExists": true,
+    "artifactRefsChecked": 3,
+    "missingArtifacts": [
+      "tools/tests/fixtures/pong-testbed/evidence/missing-scenegraph-summary.json"
+    ],
+    "bundleValid": false,
+    "notes": [
+      "Manifest references did not validate for the current run."
+    ],
+    "validatedAt": "2026-04-12T12:23:00Z"
+  },
+  "terminationStatus": "stopped_cleanly",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:23:20Z"
+}

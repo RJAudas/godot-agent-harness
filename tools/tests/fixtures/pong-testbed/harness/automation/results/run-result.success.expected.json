@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-healthy-001",
+  "runId": "pong-autonomous-run-001",
+  "finalStatus": "completed",
+  "failureKind": null,
+  "manifestPath": "tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json",
+  "outputDirectory": "res://evidence",
+  "validationResult": {
+    "manifestExists": true,
+    "artifactRefsChecked": 3,
+    "missingArtifacts": [],
+    "bundleValid": true,
+    "notes": [
+      "Manifest and referenced scenegraph artifacts passed validation."
+    ],
+    "validatedAt": "2026-04-12T12:20:00Z"
+  },
+  "terminationStatus": "stopped_cleanly",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:20:30Z"
+}

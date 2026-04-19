@@ -236,7 +236,7 @@ The current autonomous editor evidence loop extends this layer with a plugin-own
 
 - request artifacts are read from `harness/automation/requests/run-request.json`
 - capability, lifecycle, and final result artifacts are written under `harness/automation/results/`
-- the broker uses the same plugin-owned path to classify pre-runtime build failures, waits for runtime attachment only when launch succeeds, persists the scenegraph bundle, validates the manifest, and stops the play session when configured to do so
+- the broker starts the requested target scene, waits for runtime attachment, persists the scenegraph bundle, validates the manifest, and stops the play session when configured to do so
 
 ### B. Runtime instrumentation addon
 
@@ -268,23 +268,12 @@ Likely implementation:
 
 Agents should consume runtime evidence through a manifest-centered bundle instead of opening every raw artifact immediately.
 
-For autonomous editor evidence runs, read the final `harness/automation/results/run-result.json` first:
-
-- if `failureKind = build`, use the build diagnostics and raw build output from that result, surface `details`, `resourcePath`, and `line`/`column` when available, and do not expect a manifest
-- otherwise, follow the existing manifest-centered bundle flow
-
 Recommended flow:
 
-1. Read `run-result.json` first for autonomous runs.
-2. If the run completed with a manifest, read `evidence-manifest.json`.
-3. Use the manifest summary and invariant outcomes to determine pass, fail, or unknown status.
-4. Follow `artifactRefs` only for the specific files needed to explain or validate the reported outcome.
-5. Preserve the raw artifacts unchanged so later runs can replay, diff, or revalidate the same bundle.
-
-For first-release behavior-watch runs, keep the same manifest-first flow and expect two additional runtime-facing details:
-
-- `appliedWatch` records the normalized watch request the harness actually used for the run.
-- `artifactRefs` includes a `trace` entry that points to the run-scoped `trace.jsonl` file for that same run.
+1. Read `evidence-manifest.json` first.
+2. Use the manifest summary and invariant outcomes to determine pass, fail, or unknown status.
+3. Follow `artifactRefs` only for the specific files needed to explain or validate the reported outcome.
+4. Preserve the raw artifacts unchanged so later runs can replay, diff, or revalidate the same bundle.
 
 The first-release contract for this repository is captured in `specs/001-agent-tooling-foundation/contracts/evidence-manifest.schema.json`.
 Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` and are intended to show the minimum artifact set an agent should expect:
@@ -295,7 +284,22 @@ Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` 
 - `events.json` for structured runtime events
 - `scene-snapshot.json` for point-in-time hierarchy or state inspection
 
-Agents should treat the autonomous run result as the first routing layer for brokered runs, and treat the manifest as the runtime-evidence routing layer whenever the run actually produced one.
+Agents should treat the manifest as the routing layer and raw files as supporting evidence, not the other way around.
+
+## Runtime input dispatch
+
+Agents can drive a small, deterministic keyboard/input-action script through the running game by attaching an `inputDispatchScript` to the existing automation run request. The harness validates the script before launch, dispatches each accepted event through Godot's real `Input.parse_input_event()` pipeline at the declared process frame, and persists one row per declared event to a fixed `input-dispatch-outcomes.jsonl` artifact registered in the run's evidence manifest.
+
+Recommended flow:
+
+1. Check the editor capability for an `inputDispatch` entry (`pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <project>`); a `supported: false` value or a non-empty `blockedReasons` array means the feature is unavailable on the current editor and the agent must stop, not improvise.
+2. Add a run-scoped `inputDispatchScript` (or place it under `overrides.inputDispatchScript`) on the request. Each event declares `kind` (`key` or `action`), `identifier` (logical `Key` enum suffix such as `KP_ENTER`, or a declared `InputMap` action), `phase` (`press` or `release`), and a non-negative `frame`. The script accepts at most 256 events.
+3. Submit the request through the existing automation helper (`pwsh ./tools/automation/request-editor-evidence-run.ps1 ...`).
+4. Read the run result first, then the persisted evidence manifest. The manifest references `input-dispatch-outcomes.jsonl`; each row carries the declared frame, the dispatched frame (or `-1` if skipped), and a fixed status enum (`dispatched`, `skipped_frame_unreached`, `skipped_run_ended`, `failed`).
+
+Rejections are machine-readable and surface before the playtest launches. Documented codes include `script_too_long`, `unsupported_identifier`, `unmatched_release`, `later_slice_field`, `invalid_phase`, `invalid_frame`, `duplicate_event`, `missing_field`, `unsupported_field`, and `capability_unsupported`. The authoritative contract lives in `specs/006-input-dispatch/contracts/`, with seeded fixtures under `tools/tests/fixtures/pong-testbed/harness/automation/requests/input-dispatch/` and the end-to-end walkthrough in `specs/006-input-dispatch/quickstart.md`.
+
+Slice 1 intentionally excludes mouse, touch, gamepad, recorded replay, physical keycodes, and physics-frame anchoring; requests that include those fields are rejected with `later_slice_field` so agents can reason about feature scope from the rejection itself.
 
 ## Non-goals for v1
 

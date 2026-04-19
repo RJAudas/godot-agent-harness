@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1.0.0",
+  "manifestId": "scenegraph-pong-behavior-watch-wall-bounce-every-frame-run-01",
+  "runId": "pong-behavior-watch-wall-bounce-every-frame-run-01",
+  "scenarioId": "pong-behavior-watch-wall-bounce-every-frame",
+  "status": "pass",
+  "summary": {
+    "headline": "Behavior watch captured the Pong ball across the requested frame window.",
+    "outcome": "The bounded watch trace recorded only the requested Ball fields for the current run.",
+    "keyFindings": [
+      "Behavior watch samples: 4",
+      "Targeted node: /root/Main/Ball",
+      "Window: frames 12 through 15"
+    ]
+  },
+  "appliedWatch": {
+    "runId": "pong-behavior-watch-wall-bounce-every-frame-run-01",
+    "targets": [
+      {
+        "nodePath": "/root/Main/Ball",
+        "properties": ["position", "velocity", "collisionState", "lastCollider"]
+      }
+    ],
+    "cadence": {
+      "mode": "every_frame",
+      "everyNFrames": null
+    },
+    "startFrameOffset": 12,
+    "frameCount": 4,
+    "traceArtifact": "trace.jsonl",
+    "outcomes": {
+      "sampleCount": 4,
+      "sampledFrameCount": 4,
+      "noSamples": false,
+      "missingTargets": [],
+      "missingProperties": []
+    }
+  },
+  "artifactRefs": [
+    {
+      "kind": "scenegraph-snapshot",
+      "path": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-snapshot.json",
+      "mediaType": "application/json",
+      "description": "Latest scenegraph snapshot for the behavior-watch run."
+    },
+    {
+      "kind": "scenegraph-diagnostics",
+      "path": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-diagnostics.json",
+      "mediaType": "application/json",
+      "description": "Structured diagnostics for the behavior-watch run."
+    },
+    {
+      "kind": "scenegraph-summary",
+      "path": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-summary.json",
+      "mediaType": "application/json",
+      "description": "Agent-readable summary for the behavior-watch run."
+    },
+    {
+      "kind": "trace",
+      "path": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/trace.jsonl",
+      "mediaType": "application/jsonl",
+      "description": "Bounded behavior-watch trace for the Pong ball."
+    }
+  ],
+  "producer": {
+    "toolingArtifactId": "scenegraph_automation_broker",
+    "surface": "scenegraph_harness_runtime"
+  },
+  "validation": {
+    "bundleValid": true,
+    "notes": [
+      "Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run."
+    ]
+  },
+  "createdAt": "2026-04-14T00:30:00Z"
+}

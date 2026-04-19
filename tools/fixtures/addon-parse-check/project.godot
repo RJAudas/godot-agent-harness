@@ -1,0 +1,15 @@
+; Minimal fixture used by tools/check-addon-parse.ps1 to parse-check the
+; agent_runtime_harness addon under realistic res://addons/... paths.
+; The script links the real addon into addons/agent_runtime_harness for the
+; duration of the run, so the addon's internal preload() calls resolve.
+
+config_version=5
+
+[application]
+
+config/name="Addon Parse Check"
+config/features=PackedStringArray("4.4")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/agent_runtime_harness/plugin.cfg")

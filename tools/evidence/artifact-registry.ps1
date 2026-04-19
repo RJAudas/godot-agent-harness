@@ -9,7 +9,8 @@ function Get-EvidenceArtifactDefinitions {
         @{ kind = 'scenegraph-diagnostics'; file = 'scenegraph-diagnostics.json'; mediaType = 'application/json'; description = 'Structured scenegraph diagnostics produced from scenario expectations.' },
         @{ kind = 'scenegraph-summary'; file = 'scenegraph-summary.json'; mediaType = 'application/json'; description = 'Agent-readable scenegraph inspection summary for the play session.' },
         @{ kind = 'stdout_summary'; file = 'summary.json'; mediaType = 'application/json'; description = 'Normalized summary for the sample run.' },
-        @{ kind = 'invariant_report'; file = 'invariants.json'; mediaType = 'application/json'; description = 'Invariant outcomes for the sample run.' }
+        @{ kind = 'invariant_report'; file = 'invariants.json'; mediaType = 'application/json'; description = 'Invariant outcomes for the sample run.' },
+        @{ kind = 'input-dispatch-outcomes'; file = 'input-dispatch-outcomes.jsonl'; mediaType = 'application/jsonl'; description = 'Per-event runtime input-dispatch outcomes for the input-dispatch feature.' }
     )
 }
 

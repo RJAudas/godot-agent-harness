@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-blocked-001",
+  "scenarioId": "pong-scenegraph-blocked-path",
+  "runId": "pong-autonomous-run-blocked-001",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/pong-autonomous-run-blocked-001",
+  "artifactRoot": "tools/tests/fixtures/pong-testbed/evidence/automation/pong-autonomous-run-blocked-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": false,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "scenegraph-automation-fixture",
+  "createdAt": "2026-04-12T12:13:00Z",
+  "overrides": {
+    "targetScene": "res://scenes/main.tscn"
+  }
+}

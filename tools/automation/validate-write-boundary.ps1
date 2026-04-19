@@ -64,6 +64,36 @@ function Convert-ToRepoRelativePath {
     return ($relativePath -replace '\\', '/').Trim()
 }
 
+function Normalize-AllowedBoundaryPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    return (($Path -replace '\\', '/') -replace '^\./', '').Trim()
+}
+
+function Test-PathWithinBoundary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$NormalizedPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$AllowedPath
+    )
+
+    $trimmedAllowedPath = ($AllowedPath -replace '/+$', '')
+    if ([string]::IsNullOrWhiteSpace($trimmedAllowedPath)) {
+        return $NormalizedPath -eq ''
+    }
+
+    if ($trimmedAllowedPath.Contains('*') -or $trimmedAllowedPath.Contains('?')) {
+        return ($NormalizedPath -like $trimmedAllowedPath) -or ($NormalizedPath -like ($trimmedAllowedPath + '/*'))
+    }
+
+    return ($NormalizedPath -eq $trimmedAllowedPath) -or $NormalizedPath.StartsWith($trimmedAllowedPath + '/', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 $resolvedBoundaryPath = Resolve-RepoPath -Path $BoundaryPath
 [void](& (Join-Path $PSScriptRoot '..\validate-json.ps1') -InputPath $resolvedBoundaryPath -SchemaPath 'tools/automation/write-boundaries.schema.json' -PassThru)
 $boundaryDocument = Get-Content -LiteralPath $resolvedBoundaryPath -Raw | ConvertFrom-Json -Depth 100
@@ -78,7 +108,15 @@ if ($RequestedEditType.Count -ne 1 -and $RequestedEditType.Count -ne $RequestedP
 }
 
 $violations = New-Object System.Collections.Generic.List[object]
-$normalizedAllowedPaths = @($boundary.allowedPaths | ForEach-Object { Convert-ToRepoRelativePath -Path $_ })
+$normalizedAllowedPaths = @($boundary.allowedPaths | ForEach-Object {
+    $allowedPath = [string]$_
+    if ($allowedPath.Contains('*') -or $allowedPath.Contains('?')) {
+        Normalize-AllowedBoundaryPath -Path $allowedPath
+    }
+    else {
+        Convert-ToRepoRelativePath -Path $allowedPath
+    }
+})
 
 for ($index = 0; $index -lt $RequestedPath.Count; $index++) {
     $normalizedPath = (($RequestedPath[$index] -replace '\\', '/') -replace '^\./', '').Trim()
@@ -95,14 +133,7 @@ for ($index = 0; $index -lt $RequestedPath.Count; $index++) {
 
     if ($null -eq $pathViolationReason) {
         foreach ($allowedPath in $normalizedAllowedPaths) {
-            $trimmedAllowedPath = ($allowedPath -replace '/+$', '')
-
-            if ($normalizedPath -eq $trimmedAllowedPath) {
-                $pathAllowed = $true
-                break
-            }
-
-            if ($normalizedPath.StartsWith($trimmedAllowedPath + '/')) {
+            if (Test-PathWithinBoundary -NormalizedPath $normalizedPath -AllowedPath ([string]$allowedPath)) {
                 $pathAllowed = $true
                 break
             }

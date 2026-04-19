@@ -11,6 +11,7 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 3. Relevant path-specific files under `.github/instructions/`.
 4. `docs/AGENT_RUNTIME_HARNESS.md` for harness architecture and evidence expectations.
 5. `docs/AI_TOOLING_BEST_PRACTICES.md` when adding or changing agent tooling assets.
+6. `docs/INTEGRATION_TESTING.md` and the "End-to-end plugin testing" section of `tools/README.md` BEFORE doing anything that involves a real Godot editor, real playtest, or real input dispatch.
 
 ## Durable rules
 
@@ -23,12 +24,14 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - When routing to runtime verification from this repository checkout, prefer the workspace-side helper flow: check capability, request a brokered run, then read the persisted evidence manifest first. Treat blocked or missing capability and run-result artifacts as explicit unsupported states.
 - Keep repo-wide guidance concise. Put durable rules here, agent operating workflow in `AGENTS.md`, and subtree-specific constraints in `.github/instructions/`.
 - For the current agent-tooling foundation work, prefer changes in `.github/`, `docs/`, `tools/`, and `specs/001-agent-tooling-foundation/` unless the task explicitly requires addon or scenario edits.
+- For any task that requires running the harness against a real Godot editor (manual feature validation, broker smoke tests, evidence reproduction, input-dispatch verification), use the `integration-testing/<name>` sandbox flow documented in `docs/INTEGRATION_TESTING.md` and `tools/README.md`. Do NOT scaffold ad-hoc projects elsewhere, do NOT download or extract a Godot binary into the repo, and do NOT hard-code an absolute path to a Godot install. Resolve the binary the same way `tools/check-addon-parse.ps1` does: `$env:GODOT_BIN` first, then `godot`/`godot4`/`Godot*` on `PATH`. If neither resolves in the current shell, check the user-level environment (`[System.Environment]::GetEnvironmentVariable('GODOT_BIN','User')` and the `User` `Path` for a `Godot*` directory) before concluding Godot is missing.
 
 ## Validation commands
 
 - `pwsh ./tools/validate-json.ps1 -InputPath <json-path> -SchemaPath <schema-path>` validates repository JSON assets against a schema.
 - `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>` validates an evidence bundle manifest and confirms referenced artifacts exist.
 - `pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <artifact-id> -RequestedPath <path> -RequestedEditType <edit-type>` checks whether an autonomous action stays inside the declared write boundary.
+- `pwsh ./tools/check-addon-parse.ps1` opens a minimal headless Godot project and surfaces GDScript parse, compile, or script-load errors in the addon. Run it after any edit under `addons/agent_runtime_harness/`; a non-zero exit is a blocking failure.
 
 ## Output locations
 
@@ -39,5 +42,6 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at
+`specs/006-input-dispatch/plan.md`.
 <!-- SPECKIT END -->

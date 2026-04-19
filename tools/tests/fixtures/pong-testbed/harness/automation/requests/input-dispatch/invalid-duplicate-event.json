@@ -1,0 +1,6 @@
+{
+  "events": [
+    { "kind": "key", "identifier": "ENTER", "phase": "press", "frame": 5 },
+    { "kind": "key", "identifier": "ENTER", "phase": "press", "frame": 5 }
+  ]
+}

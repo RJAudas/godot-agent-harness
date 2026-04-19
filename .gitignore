@@ -35,3 +35,8 @@ id_ed25519
 .ssh/
 secrets/
 credentials/
+
+# Developer-local Godot integration sandboxes (see docs/INTEGRATION_TESTING.md)
+integration-testing/*
+!integration-testing/.gitkeep
+!integration-testing/README.md

@@ -11,16 +11,6 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var output_directory := String(session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
 	var artifact_root := _resolve_artifact_root(session_context, output_directory)
 	var summary := _summary_builder.build_summary(snapshot, diagnostics)
-	var behavior_watch: Dictionary = session_context.get("behavior_watch", {})
-	var applied_watch: Dictionary = behavior_watch.get("appliedWatch", {})
-	var validation_notes: Array = [
-		"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
-	]
-	if not applied_watch.is_empty():
-		var key_findings: Array = summary.get("keyFindings", []).duplicate(true)
-		var watch_outcomes: Dictionary = applied_watch.get("outcomes", {})
-		key_findings.append("Behavior watch samples: %d" % int(watch_outcomes.get("sampleCount", 0)))
-		summary["keyFindings"] = key_findings
 
 	_ensure_directory(output_directory)
 
@@ -28,7 +18,6 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var diagnostics_path := output_directory.path_join("scenegraph-diagnostics.json")
 	var summary_path := output_directory.path_join("scenegraph-summary.json")
 	var manifest_path := output_directory.path_join("evidence-manifest.json")
-	var trace_path := output_directory.path_join(InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)
 
 	var snapshot_error := _write_json(snapshot_path, snapshot)
 	if not snapshot_error.is_empty():
@@ -50,39 +39,6 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		return {"error": summary_error}
 
 	var bundle_valid := _has_persisted_bundle(snapshot_path, diagnostics_path, summary_path)
-	var artifact_refs: Array = [
-		_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT, artifact_root, "scenegraph-snapshot.json", "application/json", "Latest scenegraph snapshot for the session."),
-		_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS, artifact_root, "scenegraph-diagnostics.json", "application/json", "Structured missing-node and hierarchy diagnostics for the session."),
-		_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_SUMMARY, artifact_root, "scenegraph-summary.json", "application/json", "Agent-readable scenegraph summary entry point."),
-	]
-
-	if not applied_watch.is_empty():
-		artifact_refs.append(_build_artifact_ref(
-			InspectionConstants.ARTIFACT_KIND_TRACE,
-			artifact_root,
-			String(applied_watch.get("traceArtifact", InspectionConstants.DEFAULT_BEHAVIOR_WATCH_TRACE_FILE)),
-			"application/jsonl",
-			"Bounded behavior-watch trace for the current automation run."
-		))
-		bundle_valid = bundle_valid and FileAccess.file_exists(trace_path)
-
-		var watch_outcomes: Dictionary = applied_watch.get("outcomes", {})
-		if bool(watch_outcomes.get("noSamples", false)):
-			validation_notes.append("Behavior watch completed without producing any trace rows for the configured window.")
-		var missing_targets: Array = watch_outcomes.get("missingTargets", [])
-		if not missing_targets.is_empty():
-			validation_notes.append("Behavior watch did not resolve requested targets: %s." % _join_strings(missing_targets))
-		var missing_properties: Array = watch_outcomes.get("missingProperties", [])
-		for missing_property_value in missing_properties:
-			var missing_property: Dictionary = missing_property_value
-			validation_notes.append(
-				"Behavior watch could not sample %s from %s." % [
-					_join_strings(missing_property.get("properties", [])),
-					String(missing_property.get("nodePath", "")),
-				]
-			)
-		if not FileAccess.file_exists(trace_path):
-			validation_notes.append("Behavior watch trace artifact was requested but trace.jsonl was not written.")
 
 	var manifest := {
 		"schemaVersion": "1.0.0",
@@ -95,16 +51,20 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 			"outcome": String(summary.get("outcome", "")),
 			"keyFindings": summary.get("keyFindings", []),
 		},
-		"artifactRefs": artifact_refs,
+		"artifactRefs": [
+			_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_SNAPSHOT, artifact_root, "scenegraph-snapshot.json", "application/json", "Latest scenegraph snapshot for the session."),
+			_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_DIAGNOSTICS, artifact_root, "scenegraph-diagnostics.json", "application/json", "Structured missing-node and hierarchy diagnostics for the session."),
+			_build_artifact_ref(InspectionConstants.ARTIFACT_KIND_SCENEGRAPH_SUMMARY, artifact_root, "scenegraph-summary.json", "application/json", "Agent-readable scenegraph summary entry point."),
+		],
 		"validation": {
 			"bundleValid": bundle_valid,
-			"notes": validation_notes,
+			"notes": [
+				"Persisted artifact references were written successfully. Validate the manifest schema and paths with tools/evidence/validate-evidence-manifest.ps1 after the editor run.",
+			],
 		},
 		"producer": _build_producer(session_context),
 		"createdAt": InspectionConstants.utc_timestamp_now(),
 	}
-	if not applied_watch.is_empty():
-		manifest["appliedWatch"] = applied_watch.duplicate(true)
 
 	var manifest_error := _write_json(manifest_path, manifest)
 	if not manifest_error.is_empty():
@@ -162,10 +122,3 @@ func _build_producer(session_context: Dictionary) -> Dictionary:
 	if not request_id.is_empty():
 		producer["toolingArtifactId"] = "scenegraph_automation_broker"
 	return producer
-
-
-func _join_strings(values: Array) -> String:
-	var parts: Array = []
-	for value in values:
-		parts.append(String(value))
-	return ", ".join(parts)

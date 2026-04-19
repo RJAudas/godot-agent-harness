@@ -289,85 +289,6 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         }
     }
 
-    It 'writes a schema-valid request artifact without a fixture' {
-        $sandboxPath = New-RepoSandboxDirectory
-
-        try {
-            $harnessPath = Join-Path $sandboxPath 'harness'
-            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
-
-            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
-                ProjectRoot = $sandboxPath
-                RequestedBy = 'automation-tools-default-request-test'
-                PassThru = $true
-            }
-
-            $result.schemaValid | Should -BeTrue
-            $config = Get-Content -LiteralPath (Join-Path $harnessPath 'inspection-run-config.json') -Raw | ConvertFrom-Json -Depth 100
-            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
-            $request.requestedBy | Should -Be 'automation-tools-default-request-test'
-            $request.scenarioId | Should -Be $config.scenarioId
-            $request.targetScene | Should -Be $config.targetScene
-        }
-        finally {
-            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'writes a schema-valid request artifact with a behavior-watch override fixture' {
-        $sandboxPath = New-RepoSandboxDirectory
-
-        try {
-            $harnessPath = Join-Path $sandboxPath 'harness'
-            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
-
-            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
-                ProjectRoot = $sandboxPath
-                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
-                BehaviorWatchRequestFixturePath = 'examples/pong-testbed/harness/automation/requests/behavior-watch-valid.json'
-                RequestedBy = 'automation-tools-behavior-watch-test'
-                PassThru = $true
-            }
-
-            $result.schemaValid | Should -BeTrue
-            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
-            $request.requestedBy | Should -Be 'automation-tools-behavior-watch-test'
-            $request.overrides.behaviorWatchRequest.targets[0].nodePath | Should -Be '/root/Main/Ball'
-            $request.overrides.behaviorWatchRequest.frameCount | Should -Be 4
-            $request.overrides.behaviorWatchRequest.PSObject.Properties.Name | Should -Not -Contain 'cadence'
-        }
-        finally {
-            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'writes a schema-valid build-failure request artifact for a sandbox project' {
-        $sandboxPath = New-RepoSandboxDirectory
-
-        try {
-            $harnessPath = Join-Path $sandboxPath 'harness'
-            New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
-
-            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
-                ProjectRoot = $sandboxPath
-                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.build-failure.json'
-                RequestedBy = 'automation-tools-build-failure-test'
-                PassThru = $true
-            }
-
-            $result.schemaValid | Should -BeTrue
-            $request = Get-Content -LiteralPath $result.requestPath -Raw | ConvertFrom-Json -Depth 100
-            $request.requestedBy | Should -Be 'automation-tools-build-failure-test'
-            $request.targetScene | Should -Be 'res://scenes/build_failure_missing_dependencies_case.tscn'
-        }
-        finally {
-            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
     It 'optionally validates the write boundary and emits an audit record' {
         $sandboxPath = New-RepoSandboxDirectory
         $runRecordPath = Join-Path $TestDrive 'editor-evidence-run-request-record.json'
@@ -401,21 +322,5 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         finally {
             Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
         }
-    }
-}
-
-Describe 'schema-consuming tool compatibility' {
-    BeforeAll {
-        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
-    }
-
-    It 'keeps build-failure run-result fixtures compatible with the shared JSON validator' {
-        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.build-failure.expected.json',
-            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
-        )
-
-        $result.ExitCode | Should -Be 0
-        $result.ParsedOutput.valid | Should -BeTrue
     }
 }

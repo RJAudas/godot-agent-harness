@@ -116,7 +116,6 @@ For the autonomous editor evidence loop, the current workspace-side entry points
 - `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`
 
 These helpers target the plugin-owned file broker under `harness/automation/requests/` and `harness/automation/results/`.
-Successful runs still hand off a manifest-centered evidence bundle, while build-failed runs now report normalized diagnostics and raw build output through the same final `run-result.json` artifact with no separate diagnostics transport.
 
 Agent guidance now routes validation through three modes:
 

@@ -52,18 +52,7 @@
     },
     "failureKind": {
       "type": "string",
-      "enum": ["launch", "attachment", "build", "capture", "persistence", "validation", "shutdown", "gameplay"]
-    },
-    "buildFailurePhase": {
-      "type": "string",
-      "enum": ["launching", "awaiting_runtime"]
-    },
-    "buildDiagnosticCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "rawBuildOutputAvailable": {
-      "type": "boolean"
+      "enum": ["launch", "attachment", "capture", "persistence", "validation", "shutdown", "gameplay"]
     },
     "evidenceRefs": {
       "type": "array",

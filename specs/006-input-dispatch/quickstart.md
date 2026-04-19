@@ -85,7 +85,7 @@ pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples
 3. Submit the input-dispatch request through the existing automation helper:
 
 ```powershell
-pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/input-dispatch.numpad-enter.json
+pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot examples/pong-testbed -RequestFixturePath examples/pong-testbed/harness/automation/requests/input-dispatch/valid-numpad-enter.json
 ```
 
 4. Read `harness/automation/results/run-result.json` first. If the run completed (or crashed as expected for issue #12), open the persisted `evidence-manifest.json`.

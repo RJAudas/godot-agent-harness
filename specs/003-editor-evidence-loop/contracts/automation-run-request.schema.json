@@ -88,6 +88,10 @@
         },
         "stopPolicy": {
           "$ref": "#/$defs/stopPolicy"
+        },
+        "inputDispatchScript": {
+          "type": "object",
+          "description": "Optional runtime input-dispatch script. Validated structurally by InputDispatchRequestValidator before runtime execution. See specs/006-input-dispatch/contracts/input-dispatch-script.schema.json for the authoritative shape."
         }
       }
     }

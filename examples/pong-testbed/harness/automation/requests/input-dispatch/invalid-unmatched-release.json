@@ -1,0 +1,5 @@
+{
+  "events": [
+    { "kind": "key", "identifier": "KP_ENTER", "phase": "release", "frame": 30 }
+  ]
+}

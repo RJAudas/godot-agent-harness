@@ -63,6 +63,19 @@
       "items": {
         "type": "string"
       }
+    },
+    "inputDispatch": {
+      "type": "object",
+      "description": "Capability advertisement for the runtime input-dispatch feature (specs/006-input-dispatch).",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "maxEvents": { "type": "integer", "minimum": 0 },
+        "supportedKinds": { "type": "array", "items": { "type": "string" } },
+        "supportedPhases": { "type": "array", "items": { "type": "string" } },
+        "laterSliceFields": { "type": "array", "items": { "type": "string" } },
+        "blockedReasons": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" }
+      }
     }
   }
 }

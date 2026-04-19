@@ -66,6 +66,15 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		"createdAt": InspectionConstants.utc_timestamp_now(),
 	}
 
+	if FileAccess.file_exists(_input_dispatch_outcomes_path(output_directory)):
+		manifest["artifactRefs"].append(_build_artifact_ref(
+			InspectionConstants.ARTIFACT_KIND_INPUT_DISPATCH_OUTCOMES,
+			artifact_root,
+			InspectionConstants.DEFAULT_INPUT_DISPATCH_OUTCOMES_FILE,
+			"application/jsonl",
+			"Per-event runtime input-dispatch outcomes captured during the run."
+		))
+
 	var manifest_error := _write_json(manifest_path, manifest)
 	if not manifest_error.is_empty():
 		return {"error": manifest_error}
@@ -122,3 +131,25 @@ func _build_producer(session_context: Dictionary) -> Dictionary:
 	if not request_id.is_empty():
 		producer["toolingArtifactId"] = "scenegraph_automation_broker"
 	return producer
+
+
+func _input_dispatch_outcomes_path(output_directory: String) -> String:
+	return output_directory.path_join(InspectionConstants.DEFAULT_INPUT_DISPATCH_OUTCOMES_FILE)
+
+
+func append_input_dispatch_outcome(session_context: Dictionary, outcome: Dictionary) -> String:
+	var output_directory := String(session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	_ensure_directory(output_directory)
+	var path := _input_dispatch_outcomes_path(output_directory)
+	var handle: FileAccess
+	if FileAccess.file_exists(path):
+		handle = FileAccess.open(path, FileAccess.READ_WRITE)
+		if handle != null:
+			handle.seek_end()
+	else:
+		handle = FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return "Could not open %s for input dispatch outcome append (%s)." % [path, error_string(FileAccess.get_open_error())]
+	handle.store_line(JSON.stringify(outcome))
+	handle.close()
+	return ""

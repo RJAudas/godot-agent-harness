@@ -11,6 +11,45 @@ const ARTIFACT_KIND_SCENEGRAPH_SUMMARY := "scenegraph-summary"
 const ARTIFACT_KIND_AUTOMATION_CAPABILITY := "automation-capability"
 const ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS := "automation-lifecycle-status"
 const ARTIFACT_KIND_AUTOMATION_RUN_RESULT := "automation-run-result"
+const ARTIFACT_KIND_INPUT_DISPATCH_OUTCOMES := "input-dispatch-outcomes"
+
+const DEFAULT_INPUT_DISPATCH_OUTCOMES_FILE := "input-dispatch-outcomes.jsonl"
+const DEFAULT_BEHAVIOR_WATCH_TRACE_FILE := "trace.jsonl"
+
+const INPUT_DISPATCH_MAX_EVENTS := 256
+
+const INPUT_DISPATCH_STATUS_DISPATCHED := "dispatched"
+const INPUT_DISPATCH_STATUS_SKIPPED_FRAME_UNREACHED := "skipped_frame_unreached"
+const INPUT_DISPATCH_STATUS_SKIPPED_RUN_ENDED := "skipped_run_ended"
+const INPUT_DISPATCH_STATUS_FAILED := "failed"
+
+const INPUT_DISPATCH_REJECTION_MISSING_FIELD := "missing_field"
+const INPUT_DISPATCH_REJECTION_UNSUPPORTED_FIELD := "unsupported_field"
+const INPUT_DISPATCH_REJECTION_LATER_SLICE_FIELD := "later_slice_field"
+const INPUT_DISPATCH_REJECTION_UNSUPPORTED_IDENTIFIER := "unsupported_identifier"
+const INPUT_DISPATCH_REJECTION_UNMATCHED_RELEASE := "unmatched_release"
+const INPUT_DISPATCH_REJECTION_SCRIPT_TOO_LONG := "script_too_long"
+const INPUT_DISPATCH_REJECTION_INVALID_PHASE := "invalid_phase"
+const INPUT_DISPATCH_REJECTION_INVALID_FRAME := "invalid_frame"
+const INPUT_DISPATCH_REJECTION_DUPLICATE_EVENT := "duplicate_event"
+const INPUT_DISPATCH_REJECTION_INVALID_REQUEST := "invalid_request"
+const INPUT_DISPATCH_REJECTION_CAPABILITY_UNSUPPORTED := "capability_unsupported"
+
+const INPUT_DISPATCH_LATER_SLICE_FIELDS := [
+	"mouse",
+	"touch",
+	"gamepad",
+	"recordedReplay",
+	"physicalKeycode",
+	"physicsFrame",
+]
+const INPUT_DISPATCH_SUPPORTED_REQUEST_KEYS := ["events"]
+const INPUT_DISPATCH_SUPPORTED_EVENT_KEYS := ["kind", "identifier", "phase", "frame", "order"]
+const INPUT_DISPATCH_SUPPORTED_KINDS := ["key", "action"]
+const INPUT_DISPATCH_SUPPORTED_PHASES := ["press", "release"]
+
+const INPUT_DISPATCH_DEBUGGER_KEY_APPLIED := "appliedInputDispatch"
+const INPUT_DISPATCH_RUNTIME_KEY_APPLIED := "input_dispatch_script"
 
 const TRIGGER_STARTUP := "startup"
 const TRIGGER_MANUAL := "manual"
@@ -82,6 +121,7 @@ static func supported_artifact_kinds() -> PackedStringArray:
 		ARTIFACT_KIND_AUTOMATION_CAPABILITY,
 		ARTIFACT_KIND_AUTOMATION_LIFECYCLE_STATUS,
 		ARTIFACT_KIND_AUTOMATION_RUN_RESULT,
+		ARTIFACT_KIND_INPUT_DISPATCH_OUTCOMES,
 	])
 
 

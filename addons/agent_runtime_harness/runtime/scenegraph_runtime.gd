@@ -9,6 +9,7 @@ const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/i
 const ScenegraphCaptureService = preload("res://addons/agent_runtime_harness/runtime/scenegraph_capture_service.gd")
 const ScenegraphDiagnosticSerializer = preload("res://addons/agent_runtime_harness/runtime/scenegraph_diagnostic_serializer.gd")
 const ScenegraphArtifactWriter = preload("res://addons/agent_runtime_harness/runtime/scenegraph_artifact_writer.gd")
+const InputDispatchRuntime = preload("res://addons/agent_runtime_harness/runtime/input_dispatch_runtime.gd")
 
 var _capture_service := ScenegraphCaptureService.new()
 var _diagnostic_serializer := ScenegraphDiagnosticSerializer.new()
@@ -19,6 +20,7 @@ var _expectations: Array = []
 var _latest_snapshot := {}
 var _latest_diagnostics: Array = []
 var _identifier_sequence := 0
+var _input_dispatch_runtime: Node = null
 
 
 func _ready() -> void:
@@ -52,10 +54,16 @@ func configure_session(session_context: Dictionary) -> void:
 		}),
 	}
 
+	if session_context.has(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED):
+		_session_context[InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED] = session_context.get(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED, {}).duplicate(true)
+	if session_context.has("applied_input_dispatch"):
+		_session_context["applied_input_dispatch"] = session_context.get("applied_input_dispatch", {}).duplicate(true)
+
 	if session_context.has("config_path"):
 		_load_session_config(String(session_context.get("config_path")))
 
 	_send_debugger_message("session_configured", [_build_session_configuration_event()])
+	_install_input_dispatch_runtime_if_needed()
 
 
 func request_manual_capture() -> Dictionary:
@@ -204,3 +212,21 @@ func _build_session_configuration_event() -> Dictionary:
 func _emit_runtime_error(message: String) -> void:
 	emit_signal("runtime_error", message)
 	_send_debugger_message("runtime_error", [message])
+
+
+func _install_input_dispatch_runtime_if_needed() -> void:
+	var script_dict: Dictionary = _session_context.get(InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED, {})
+	if script_dict.is_empty():
+		return
+	if _input_dispatch_runtime == null:
+		_input_dispatch_runtime = InputDispatchRuntime.new()
+		_input_dispatch_runtime.name = "InputDispatchRuntime"
+		_input_dispatch_runtime.outcome_recorded.connect(_on_input_dispatch_outcome)
+		add_child(_input_dispatch_runtime)
+	var run_id := String(_session_context.get("run_id", ""))
+	_input_dispatch_runtime.configure(script_dict, run_id)
+
+
+func _on_input_dispatch_outcome(outcome: Dictionary) -> void:
+	_artifact_writer.append_input_dispatch_outcome(_session_context, outcome)
+	_send_debugger_message("input_dispatch_outcome", [outcome])

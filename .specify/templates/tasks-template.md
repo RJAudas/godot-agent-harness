@@ -152,7 +152,9 @@ Examples of foundational tasks (adjust based on your project):
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] TXXX [P] Documentation updates in docs/
+- [ ] TXXX [P] Documentation updates in docs/ (including docs/AGENT_RUNTIME_HARNESS.md and docs/AI_TOOLING_AUTOMATION_MATRIX.md when behavior or routing changes)
+- [ ] TXXX [P] Agent-instruction updates in .github/copilot-instructions.md and the matching .github/instructions/*.md path scope
+- [ ] TXXX [P] Prompt, skill, and agent asset updates in .github/prompts/, .github/agents/, and addons/agent_runtime_harness/templates/project_root/ when the feature is exposed to game-coding agents
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Extend automated coverage or scenario depth where evidence is still weak

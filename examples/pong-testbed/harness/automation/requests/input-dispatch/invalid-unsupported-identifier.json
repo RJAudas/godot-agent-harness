@@ -1,0 +1,5 @@
+{
+  "events": [
+    { "kind": "key", "identifier": "DEFINITELY_NOT_A_KEY", "phase": "press", "frame": 5 }
+  ]
+}

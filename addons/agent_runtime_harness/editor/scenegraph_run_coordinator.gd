@@ -5,6 +5,7 @@ class_name ScenegraphRunCoordinator
 const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/inspection_constants.gd")
 const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
 const BehaviorWatchRequestValidator = preload("res://addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd")
+const InputDispatchRequestValidator = preload("res://addons/agent_runtime_harness/shared/input_dispatch_request_validator.gd")
 
 signal lifecycle_status_written(payload)
 signal run_completed(result)
@@ -28,6 +29,7 @@ var _stop_requested := false
 var _launch_started_at_usec := 0
 var _active_config_path := ""
 var _watch_request_validator := BehaviorWatchRequestValidator.new()
+var _input_dispatch_validator := InputDispatchRequestValidator.new()
 
 
 func configure(plugin: EditorPlugin, bridge: Object, artifact_store: ScenegraphAutomationArtifactStore) -> void:
@@ -63,6 +65,10 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, 
 	var watch_validation := _active_request.get("behaviorWatchValidation", {})
 	if not watch_validation.is_empty() and not bool(watch_validation.get("accepted", false)):
 		return _finish_invalid_request(watch_validation)
+
+	var input_dispatch_validation := _active_request.get("inputDispatchValidation", {})
+	if not input_dispatch_validation.is_empty() and not bool(input_dispatch_validation.get("accepted", false)):
+		return _finish_invalid_input_dispatch(input_dispatch_validation)
 
 	var blocked_reasons := _collect_blocked_reasons(capability)
 	if not blocked_reasons.is_empty():
@@ -422,6 +428,10 @@ func _build_session_context() -> Dictionary:
 	}
 	if _active_request.has("appliedWatch"):
 		context["applied_watch"] = _active_request.get("appliedWatch", {}).duplicate(true)
+	if _active_request.has("inputDispatchScript"):
+		context[InspectionConstants.INPUT_DISPATCH_RUNTIME_KEY_APPLIED] = _active_request.get("inputDispatchScript", {}).duplicate(true)
+	if _active_request.has("appliedInputDispatch"):
+		context["applied_input_dispatch"] = _active_request.get("appliedInputDispatch", {}).duplicate(true)
 	return context
 
 
@@ -493,7 +503,88 @@ func _resolve_request(config: Dictionary, request: Dictionary) -> Dictionary:
 			resolved["behaviorWatchRequest"] = watch_validation.get("request", {}).duplicate(true)
 			resolved["appliedWatch"] = watch_validation.get("appliedWatch", {}).duplicate(true)
 
+	var input_dispatch_script := _resolve_input_dispatch_script(default_overrides, request, overrides)
+	if not input_dispatch_script.is_empty():
+		var declared_actions := _collect_declared_input_actions()
+		var dispatch_validation := _input_dispatch_validator.normalize_request(
+			input_dispatch_script,
+			String(resolved.get("runId", "")),
+			declared_actions
+		)
+		resolved["inputDispatchValidation"] = dispatch_validation
+		if bool(dispatch_validation.get("accepted", false)):
+			resolved["inputDispatchScript"] = dispatch_validation.get("request", {}).duplicate(true)
+			resolved["appliedInputDispatch"] = dispatch_validation.get("appliedDispatch", {}).duplicate(true)
+
 	return resolved
+
+
+func _resolve_input_dispatch_script(default_overrides: Dictionary, request: Dictionary, overrides: Dictionary) -> Dictionary:
+	for source_value in [
+		overrides.get("inputDispatchScript", null),
+		request.get("inputDispatchScript", null),
+		default_overrides.get("inputDispatchScript", null),
+	]:
+		if typeof(source_value) == TYPE_DICTIONARY and not (source_value as Dictionary).is_empty():
+			return (source_value as Dictionary).duplicate(true)
+	return {}
+
+
+func _collect_declared_input_actions() -> Array:
+	var actions: Array = []
+	if not Engine.has_singleton("InputMap"):
+		# InputMap is always available at runtime; this guard keeps tests safe.
+		pass
+	for action_name in InputMap.get_actions():
+		actions.append(String(action_name))
+	return actions
+
+
+func _finish_invalid_input_dispatch(validation_result: Dictionary) -> Dictionary:
+	var request_id := String(_active_request.get("requestId", "request-invalid"))
+	var run_id := String(_active_request.get("runId", "run-invalid"))
+	var notes: Array = []
+	for error_value in validation_result.get("errors", []):
+		if typeof(error_value) != TYPE_DICTIONARY:
+			continue
+		var error: Dictionary = error_value
+		notes.append("Input dispatch rejection: %s [%s] %s" % [
+			String(error.get("code", "")),
+			String(error.get("field", "")),
+			String(error.get("message", "")),
+		])
+	if notes.is_empty():
+		notes.append("Input dispatch script was rejected before playtest launch.")
+	_emit_status(
+		InspectionConstants.AUTOMATION_STATUS_FAILED,
+		"Input dispatch script was rejected before playtest launch.",
+		{
+			"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+			"inputDispatchValidation": validation_result.duplicate(true),
+		}
+	)
+	var result := {
+		"requestId": request_id,
+		"runId": run_id,
+		"finalStatus": "failed",
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_VALIDATION,
+		"manifestPath": null,
+		"outputDirectory": String(_active_request.get("outputDirectory", "")),
+		"validationResult": _build_validation_result(false, 0, [], false, notes),
+		"terminationStatus": InspectionConstants.AUTOMATION_TERMINATION_NOT_STARTED,
+		"blockedReasons": [],
+		"controlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
+		"completedAt": InspectionConstants.utc_timestamp_now(),
+		"inputDispatchValidation": validation_result.duplicate(true),
+	}
+	_artifact_store.write_run_result(_active_config, result)
+	emit_signal("run_completed", result)
+	_reset_state()
+	return {
+		"ok": false,
+		"requestId": request_id,
+		"runId": run_id,
+	}
 
 
 func _resolve_behavior_watch_request(default_overrides: Dictionary, request: Dictionary, overrides: Dictionary) -> Dictionary:

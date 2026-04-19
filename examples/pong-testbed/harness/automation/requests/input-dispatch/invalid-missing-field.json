@@ -1,0 +1,5 @@
+{
+  "events": [
+    { "kind": "key", "phase": "press", "frame": 5 }
+  ]
+}

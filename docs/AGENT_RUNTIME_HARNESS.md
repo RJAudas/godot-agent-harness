@@ -286,6 +286,21 @@ Seeded examples live under `tools/evals/fixtures/001-agent-tooling-foundation/` 
 
 Agents should treat the manifest as the routing layer and raw files as supporting evidence, not the other way around.
 
+## Runtime input dispatch
+
+Agents can drive a small, deterministic keyboard/input-action script through the running game by attaching an `inputDispatchScript` to the existing automation run request. The harness validates the script before launch, dispatches each accepted event through Godot's real `Input.parse_input_event()` pipeline at the declared process frame, and persists one row per declared event to a fixed `input-dispatch-outcomes.jsonl` artifact registered in the run's evidence manifest.
+
+Recommended flow:
+
+1. Check the editor capability for an `inputDispatch` entry (`pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <project>`); a `supported: false` value or a non-empty `blockedReasons` array means the feature is unavailable on the current editor and the agent must stop, not improvise.
+2. Add a run-scoped `inputDispatchScript` (or place it under `overrides.inputDispatchScript`) on the request. Each event declares `kind` (`key` or `action`), `identifier` (logical `Key` enum suffix such as `KP_ENTER`, or a declared `InputMap` action), `phase` (`press` or `release`), and a non-negative `frame`. The script accepts at most 256 events.
+3. Submit the request through the existing automation helper (`pwsh ./tools/automation/request-editor-evidence-run.ps1 ...`).
+4. Read the run result first, then the persisted evidence manifest. The manifest references `input-dispatch-outcomes.jsonl`; each row carries the declared frame, the dispatched frame (or `-1` if skipped), and a fixed status enum (`dispatched`, `skipped_frame_unreached`, `skipped_run_ended`, `failed`).
+
+Rejections are machine-readable and surface before the playtest launches. Documented codes include `script_too_long`, `unsupported_identifier`, `unmatched_release`, `later_slice_field`, `invalid_phase`, `invalid_frame`, `duplicate_event`, `missing_field`, `unsupported_field`, and `capability_unsupported`. The authoritative contract lives in `specs/006-input-dispatch/contracts/`, with seeded fixtures under `examples/pong-testbed/harness/automation/requests/input-dispatch/` and the end-to-end walkthrough in `specs/006-input-dispatch/quickstart.md`.
+
+Slice 1 intentionally excludes mouse, touch, gamepad, recorded replay, physical keycodes, and physics-frame anchoring; requests that include those fields are rejected with `later_slice_field` so agents can reason about feature scope from the rejection itself.
+
 ## Non-goals for v1
 
 - full visual understanding from screenshots

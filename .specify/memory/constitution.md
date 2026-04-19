@@ -1,24 +1,18 @@
 <!--
 Sync Impact Report
-Version change: unversioned template -> 1.0.0
+Version change: 1.0.0 -> 1.1.0
 Modified principles:
-- Template principle 1 -> I. Plugin-First Interop
-- Template principle 2 -> II. Reference-Driven Design
-- Template principle 3 -> III. Test-Backed Agent Loops
-- Template principle 4 -> IV. Runtime Evidence as the Product Surface
-- Template principle 5 -> V. Reuse Before Reinvention
+- (none renamed)
 Added sections:
-- Engineering Boundaries
-- Workflow and Quality Gates
+- VI. Documentation Synchronization
 Removed sections:
 - None
 Templates requiring updates:
-- ✅ updated: .specify/templates/plan-template.md
-- ✅ updated: .specify/templates/spec-template.md
-- ✅ updated: .specify/templates/tasks-template.md
-- ✅ updated: README.md
-- ✅ updated: docs/AGENT_RUNTIME_HARNESS.md
-- ⚠ pending: .specify/templates/commands/ (directory not present; no command templates were available to validate)
+- ✅ updated: .specify/memory/constitution.md
+- ✅ updated: .specify/templates/plan-template.md (Constitution Check gate adds docs-sync row)
+- ✅ updated: .specify/templates/tasks-template.md (Polish phase calls out agent-facing surfaces)
+- ⚠ pending: .specify/templates/spec-template.md (no constitution-bound section needed; revisit if scope expands)
+- ⚠ pending: .specify/templates/commands/ (directory still absent in this checkout)
 Follow-up TODOs:
 - None
 -->
@@ -67,6 +61,25 @@ project tooling, or reference patterns were insufficient. This project is about
 surfacing and packaging Godot runtime information for agents, not rebuilding broad
 engine-adjacent infrastructure from scratch.
 
+### VI. Documentation Synchronization
+Any change that adds, removes, or alters an agent-observable feature, contract,
+artifact, capability flag, command, prompt, skill, or workflow MUST land together
+with the corresponding updates to the agent-facing surfaces that teach game-coding
+agents how to use it. In the same change set, contributors MUST update, at minimum,
+the affected entries under: docs/ (notably docs/AGENT_RUNTIME_HARNESS.md and
+docs/AI_TOOLING_AUTOMATION_MATRIX.md when routing or runtime behavior is touched),
+.github/copilot-instructions.md and the relevant .github/instructions/*.md path
+scopes, .github/prompts/ and .github/agents/ assets that mention the feature, the
+deployable templates under addons/agent_runtime_harness/templates/project_root/, and
+the feature's own quickstart.md. Schemas, fixtures, capability advertisements, and
+rejection codes MUST be linked from the prose rather than duplicated. A change is
+not complete while a downstream agent could discover the new behavior only by
+reading source code, and reviews MUST reject feature work whose docs, instructions,
+prompts, or skills still describe the prior contract. The rationale is that this
+repository's product is the agent's ability to operate the harness correctly;
+runtime evidence is wasted if the agent cannot find out the feature exists or how
+to invoke it.
+
 ## Engineering Boundaries
 
 The repository scope is constrained to a Godot plugin-first harness that helps agents
@@ -88,14 +101,19 @@ of this repository.
 Each feature spec MUST identify the internal docs, external docs, and source
 references used during discovery. Each implementation plan MUST include a
 Constitution Check that confirms plugin-first scope, cites the relevant references,
-documents the planned runtime artifacts, and explains any escalation to GDExtension
-or engine changes.
+documents the planned runtime artifacts, explains any escalation to GDExtension or
+engine changes, and enumerates the agent-facing documentation, instructions,
+prompts, skills, and deployable templates that will be updated alongside the code.
 
 Implementation tasks MUST remain traceable to independently testable user stories.
 Tasks for a story MUST include the scenario execution or automated verification needed
-to prove the story with runtime evidence. Reviews MUST reject work that lacks cited
-references, bypasses supported Godot extension layers without written justification,
-or depends on manual-only validation for behavior agents are expected to diagnose.
+to prove the story with runtime evidence, and the task set MUST contain explicit
+documentation-synchronization tasks for every agent-facing surface affected by the
+change. Reviews MUST reject work that lacks cited references, bypasses supported
+Godot extension layers without written justification, depends on manual-only
+validation for behavior agents are expected to diagnose, or ships a behavior change
+without the matching updates to docs, instructions, prompts, skills, or deployable
+agent assets.
 
 ## Governance
 
@@ -109,7 +127,7 @@ to principle removals or incompatible reinterpretations, MINOR increments apply 
 new principles or materially expanded obligations, and PATCH increments apply to
 clarifications that do not change expected behavior. Compliance review is mandatory
 for every spec, plan, and task set: reviewers MUST confirm reference coverage,
-plugin-first justification, test-backed validation, and machine-readable runtime
-evidence before approval.
+plugin-first justification, test-backed validation, machine-readable runtime
+evidence, and documentation-synchronization coverage before approval.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-11
+**Version**: 1.1.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-19

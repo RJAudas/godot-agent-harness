@@ -36,3 +36,8 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - Place reusable fixture inputs under `tools/evals/fixtures/001-agent-tooling-foundation/`.
 - Place evidence helper scripts under `tools/evidence/`.
 - Place autonomous boundary contracts and run logs under `tools/automation/`.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

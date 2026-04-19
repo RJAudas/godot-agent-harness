@@ -8,7 +8,7 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
         $payloadPath = Join-Path $TestDrive 'automation-capability.json'
         @{
             checkedAt = '2026-04-12T12:00:00Z'
-            projectIdentifier = 'examples/pong-testbed'
+            projectIdentifier = 'tools/tests/fixtures/pong-testbed'
             singleTargetReady = $true
             launchControlAvailable = $true
             runtimeBridgeAvailable = $true
@@ -38,7 +38,7 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
             runId = 'pong-run-001'
             targetScene = 'res://scenes/main.tscn'
             outputDirectory = 'res://evidence/automation/pong-run-001'
-            artifactRoot = 'examples/pong-testbed/evidence/automation/pong-run-001'
+            artifactRoot = 'tools/tests/fixtures/pong-testbed/evidence/automation/pong-run-001'
             expectationFiles = @('res://harness/expectations/common.json')
             capturePolicy = @{
                 startup = $true
@@ -74,7 +74,7 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
             timestamp = '2026-04-12T12:02:00Z'
             sessionId = 'automation-session-001'
             controlPath = 'file_broker'
-            evidenceRefs = @('examples/pong-testbed/harness/automation/results/lifecycle-status.json')
+            evidenceRefs = @('tools/tests/fixtures/pong-testbed/harness/automation/results/lifecycle-status.json')
         } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
 
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
@@ -93,7 +93,7 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
             runId = 'pong-run-001'
             finalStatus = 'completed'
             failureKind = $null
-            manifestPath = 'examples/pong-testbed/evidence/automation/pong-run-001/evidence-manifest.json'
+            manifestPath = 'tools/tests/fixtures/pong-testbed/evidence/automation/pong-run-001/evidence-manifest.json'
             outputDirectory = 'res://evidence/automation/pong-run-001'
             validationResult = @{
                 manifestExists = $true
@@ -119,10 +119,10 @@ Describe 'specs/003-editor-evidence-loop automation schemas' {
     }
 }
 
-Describe 'examples/pong-testbed automation fixtures' {
+Describe 'tools/tests/fixtures/pong-testbed automation fixtures' {
     It 'accepts the ready capability fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/results/capability-ready.expected.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/results/capability-ready.expected.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-capability.schema.json'
         )
 
@@ -132,7 +132,7 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts the blocked capability fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/results/capability-blocked.expected.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/results/capability-blocked.expected.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-capability.schema.json'
         )
 
@@ -142,7 +142,7 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts the healthy run request fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/requests/run-request.healthy.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
         )
 
@@ -152,7 +152,7 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts the blocked run request fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/requests/run-request.blocked.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/requests/run-request.blocked.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
         )
 
@@ -162,7 +162,7 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts the capability options fixture' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/results/capability-options.expected.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/results/capability-options.expected.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-capability.schema.json'
         )
 
@@ -172,11 +172,11 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts the success run result fixture and its referenced manifest' {
         $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
-            '-InputPath', 'examples/pong-testbed/harness/automation/results/run-result.success.expected.json',
+            '-InputPath', 'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.success.expected.json',
             '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
         )
         $manifestValidation = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @(
-            '-ManifestPath', 'examples/pong-testbed/harness/expected-evidence-manifest.json'
+            '-ManifestPath', 'tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json'
         )
 
         $result.ExitCode | Should -Be 0
@@ -187,12 +187,12 @@ Describe 'examples/pong-testbed automation fixtures' {
 
     It 'accepts each failure and blocked run result fixture' {
         $fixturePaths = @(
-            'examples/pong-testbed/harness/automation/results/run-result.attachment-failure.expected.json',
-            'examples/pong-testbed/harness/automation/results/run-result.capture-failure.expected.json',
-            'examples/pong-testbed/harness/automation/results/run-result.validation-failure.expected.json',
-            'examples/pong-testbed/harness/automation/results/run-result.shutdown-failure.expected.json',
-            'examples/pong-testbed/harness/automation/results/run-result.gameplay-failure.expected.json',
-            'examples/pong-testbed/harness/automation/results/run-result.blocked.expected.json'
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.attachment-failure.expected.json',
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.capture-failure.expected.json',
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.validation-failure.expected.json',
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.shutdown-failure.expected.json',
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.gameplay-failure.expected.json',
+            'tools/tests/fixtures/pong-testbed/harness/automation/results/run-result.blocked.expected.json'
         )
 
         foreach ($fixturePath in $fixturePaths) {
@@ -209,7 +209,7 @@ Describe 'examples/pong-testbed automation fixtures' {
 
 Describe 'inspection-run config automation defaults' {
     It 'defines automation paths and target-scene defaults for the example project' {
-        $config = Get-Content -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Raw | ConvertFrom-Json -Depth 20
+        $config = Get-Content -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Raw | ConvertFrom-Json -Depth 20
 
         $config.targetScene | Should -Be 'res://scenes/main.tscn'
         $config.automation.requestPath | Should -Be 'res://harness/automation/requests/run-request.json'

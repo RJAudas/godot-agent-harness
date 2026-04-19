@@ -39,7 +39,7 @@ Use this file as the agent-facing operating guide for work in this repository.
 ## Path defaults
 
 - Safe default write targets for agent-tooling work are `.github/`, `docs/`, `tools/`, and `specs/001-agent-tooling-foundation/`.
-- Avoid casual edits under `addons/agent_runtime_harness/`, `examples/`, and `scenarios/` unless the task needs runtime-facing behavior or deterministic fixture changes.
+- Avoid casual edits under `addons/agent_runtime_harness/` and `scenarios/` unless the task needs runtime-facing behavior or deterministic fixture changes. The git-ignored `integration-testing/` sandbox is yours to use freely; tracked test fixtures live under `tools/tests/fixtures/`.
 
 ## Autonomous artifacts
 

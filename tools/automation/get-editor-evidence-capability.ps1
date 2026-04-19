@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$ProjectRoot = 'examples/pong-testbed',
+    [Parameter(Mandatory = $true)]
+    [string]$ProjectRoot,
     [string]$ConfigPath,
     [string]$CapabilityPath,
     [switch]$PassThru

@@ -53,10 +53,12 @@ addons/
 docs/
   AGENT_RUNTIME_HARNESS.md # requirements and architecture
   GODOT_PLUGIN_REFERENCES.md
-examples/
-  pong-testbed/            # minimal validation project
+  INTEGRATION_TESTING.md   # how to spin up a local sandbox project
+integration-testing/       # developer-local Godot sandboxes (git-ignored)
 scenarios/                 # deterministic scenario definitions
-tools/                     # helper scripts and runner utilities
+tools/
+  tests/fixtures/          # tracked JSON fixtures consumed by Pester
+  ...                      # helper scripts and runner utilities
 ```
 
 ## Documentation

@@ -1,0 +1,22 @@
+{
+  "requestId": "pong-request-healthy-001",
+  "runId": "pong-autonomous-run-shutdown-failure-001",
+  "finalStatus": "failed",
+  "failureKind": "shutdown",
+  "manifestPath": "tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json",
+  "outputDirectory": "res://evidence",
+  "validationResult": {
+    "manifestExists": true,
+    "artifactRefsChecked": 3,
+    "missingArtifacts": [],
+    "bundleValid": true,
+    "notes": [
+      "Evidence validated, but the editor play session did not stop cleanly."
+    ],
+    "validatedAt": "2026-04-12T12:24:00Z"
+  },
+  "terminationStatus": "shutdown_failed",
+  "blockedReasons": [],
+  "controlPath": "file_broker",
+  "completedAt": "2026-04-12T12:24:20Z"
+}

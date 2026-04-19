@@ -2,7 +2,7 @@ Describe 'specs/006-input-dispatch input dispatch script fixtures' {
     BeforeAll {
         . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
         $script:SchemaPath = 'specs/006-input-dispatch/contracts/input-dispatch-script.schema.json'
-        $script:FixtureRoot = Get-RepoPath -Path 'examples/pong-testbed/harness/automation/requests/input-dispatch'
+        $script:FixtureRoot = Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/automation/requests/input-dispatch'
     }
 
     It 'accepts the numpad-Enter reproduction fixture' {

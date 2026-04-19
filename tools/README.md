@@ -75,11 +75,18 @@ export GODOT_BIN=/opt/godot/Godot_v4.6.2-stable_linux.x86_64
 - `1` — errors detected (script prints the offending lines) or Godot
   could not be located / timed out.
 
-## End-to-end plugin testing against `examples/pong-testbed`
+## End-to-end plugin testing in `integration-testing/`
 
-Once Godot is on `PATH` (or `GODOT_BIN` is set — see above), the full
-broker → playtest → evidence loop can be exercised without hardcoded
-install paths. All commands assume the repo root as the working directory.
+The repository deliberately does **not** ship a runnable Godot project.
+Instead, every developer creates a sandbox project under the git-ignored
+`integration-testing/` folder and exercises the full broker → playtest →
+evidence loop there. See [`docs/INTEGRATION_TESTING.md`](../docs/INTEGRATION_TESTING.md)
+for project-creation guidance; the loop steps below assume you have a
+project at `integration-testing/<name>/` with the harness already
+deployed via `tools/deploy-game-harness.ps1`.
+
+All commands assume the repo root as the working directory. Replace
+`<name>` with your sandbox project name (e.g. `smoke`).
 
 ### 1. Parse-check the addon
 
@@ -89,26 +96,26 @@ pwsh ./tools/check-addon-parse.ps1
 
 Fix anything it reports before continuing.
 
-### 2. Launch the editor against the testbed
+### 2. Launch the editor against the sandbox
 
 ```pwsh
-godot --editor --path examples/pong-testbed
+godot --editor --path integration-testing/<name>
 ```
 
 If `godot` is not on `PATH` for the current shell, fall back to
-`& $env:GODOT_BIN --editor --path examples/pong-testbed`. Do **not**
+`& $env:GODOT_BIN --editor --path integration-testing/<name>`. Do **not**
 embed an absolute install path in checked-in scripts or docs — the
 parse-check helper resolves the binary the same way and is the
 canonical lookup.
 
 When the editor finishes loading with the **Agent Runtime Harness**
 plugin enabled, the broker writes
-`examples/pong-testbed/harness/automation/results/capability.json`.
+`integration-testing/<name>/harness/automation/results/capability.json`.
 
 ### 3. Confirm the capability advertisement
 
 ```pwsh
-pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot examples/pong-testbed
+pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot integration-testing/<name>
 ```
 
 Look for `inputDispatch.supported = true` (and any other capability
@@ -120,20 +127,20 @@ With the editor still open:
 
 ```pwsh
 pwsh ./tools/automation/request-editor-evidence-run.ps1 `
-    -ProjectRoot examples/pong-testbed `
-    -RequestFixturePath examples/pong-testbed/harness/automation/requests/input-dispatch/valid-numpad-enter.json
+    -ProjectRoot integration-testing/<name> `
+    -RequestFixturePath tools/tests/fixtures/pong-testbed/harness/automation/requests/run-request.healthy.json
 ```
 
-Substitute any other fixture under
-`examples/pong-testbed/harness/automation/requests/` to exercise a
-different code path. The helper writes the request file the broker
-watches; the broker (running inside the editor) launches the playtest
-and persists evidence.
+Any tracked fixture under `tools/tests/fixtures/pong-testbed/harness/automation/requests/`
+can be reused as a request template, or you can author a custom one
+inside the sandbox at `integration-testing/<name>/harness/automation/requests/`.
+The helper writes the request file the broker watches; the broker
+(running inside the editor) launches the playtest and persists evidence.
 
 ### 5. Read the results
 
 ```pwsh
-Get-Content examples/pong-testbed/harness/automation/results/run-result.json |
+Get-Content integration-testing/<name>/harness/automation/results/run-result.json |
     ConvertFrom-Json | Format-List
 ```
 

@@ -241,8 +241,8 @@ Describe 'tools/automation/get-editor-evidence-capability.ps1' {
             $harnessPath = Join-Path $sandboxPath 'harness'
             $resultsPath = Join-Path $harnessPath 'automation\results'
             New-Item -ItemType Directory -Path $resultsPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/automation/results/capability-ready.expected.json') -Destination (Join-Path $resultsPath 'capability.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/automation/results/capability-ready.expected.json') -Destination (Join-Path $resultsPath 'capability.json')
 
             $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/get-editor-evidence-capability.ps1' -Parameters @{
                 ProjectRoot = $sandboxPath
@@ -270,11 +270,11 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         try {
             $harnessPath = Join-Path $sandboxPath 'harness'
             New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
 
             $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
                 ProjectRoot = $sandboxPath
-                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
+                RequestFixturePath = 'tools/tests/fixtures/pong-testbed/harness/automation/requests/run-request.healthy.json'
                 RequestedBy = 'automation-tools-test'
                 PassThru = $true
             }
@@ -296,11 +296,11 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         try {
             $harnessPath = Join-Path $sandboxPath 'harness'
             New-Item -ItemType Directory -Path $harnessPath -Force | Out-Null
-            Copy-Item -LiteralPath (Get-RepoPath -Path 'examples/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
 
             $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/request-editor-evidence-run.ps1' -Parameters @{
                 ProjectRoot = $sandboxPath
-                RequestFixturePath = 'examples/pong-testbed/harness/automation/requests/run-request.healthy.json'
+                RequestFixturePath = 'tools/tests/fixtures/pong-testbed/harness/automation/requests/run-request.healthy.json'
                 BoundaryArtifactId = 'editor-evidence-run-request.helper'
                 WriteRunRecord = $true
                 RunRecordArtifactId = 'editor-evidence-run-request.helper'

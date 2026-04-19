@@ -30,7 +30,7 @@
       "artifactId": "editor-evidence-run-request.helper",
       "description": "Boundary for deterministic editor-evidence run-request artifacts and audit records.",
       "allowedPaths": [
-        "examples/pong-testbed/harness/automation/requests/",
+        "integration-testing/",
         "tools/tests/.tmp/",
         "tools/automation/run-records/"
       ],

@@ -1,0 +1,19 @@
+{
+  "requestId": "runtime-error-loop-soft-validation-then-error-001",
+  "scenarioId": "runtime-error-loop-soft-validation-then-error",
+  "runId": "runtime-error-loop-soft-validation-then-error-run-001",
+  "targetScene": "res://scenes/error_on_frame.tscn",
+  "outputDirectory": "res://evidence/automation/runtime-error-loop-soft-validation-then-error-run-001",
+  "artifactRoot": "integration-testing/runtime-error-loop/evidence/automation/runtime-error-loop-soft-validation-then-error-run-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": false
+  },
+  "requestedBy": "runtime-error-loop-fixture",
+  "createdAt": "2026-04-21T00:00:00Z"
+}

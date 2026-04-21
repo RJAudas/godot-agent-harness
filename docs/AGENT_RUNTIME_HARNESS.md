@@ -346,3 +346,71 @@ Fork the engine only if at least one of these becomes true:
 - the harness requires editor/runtime capabilities only available through engine changes
 
 Until then, prefer addon/plugin + debugger integration.
+
+## Runtime error reporting and pause-on-error
+
+Feature `specs/007-report-runtime-errors` adds structured runtime error capture, pause-on-error control, and crash classification to every evidence bundle.
+
+### New artifacts in the bundle
+
+| Artifact kind | File | Description |
+|---|---|---|
+| `runtime-error-records` | `runtime-error-records.jsonl` | One JSONL row per deduplicated error or warning. Keyed by `(scriptPath, line, severity)`. `repeatCount` is capped at 100 (`truncatedAt` set when cap is hit). Ordered by `firstSeenAt` ASC. |
+| `pause-decision-log` | `pause-decision-log.jsonl` | One JSONL row per pause resolution event. Empty when the run completed without any errors or when the environment is in degraded mode. |
+
+### `runtimeErrorReporting` manifest block
+
+Every run manifest now carries a `runtimeErrorReporting` block:
+
+```json
+{
+  "runtimeErrorReporting": {
+    "termination": "completed",
+    "pauseOnErrorMode": "active",
+    "runtimeErrorRecordsArtifact": "evidence/automation/<runId>/runtime-error-records.jsonl",
+    "pauseDecisionLogArtifact": "evidence/automation/<runId>/pause-decision-log.jsonl"
+  }
+}
+```
+
+`termination` values:
+- `completed` — clean shutdown handshake received.
+- `stopped_by_agent` — agent sent a `stop` decision via `submit-pause-decision.ps1`.
+- `stopped_by_default_on_pause_timeout` — 30-second pause timeout applied `stop` automatically.
+- `crashed` — process exited without a handshake. `lastErrorAnchor` is populated (or `{ "lastError": "none" }` if no error was seen before the crash).
+- `killed_by_harness` — coordinator stopped the run for internal limit reasons.
+
+`pauseOnErrorMode` values:
+- `active` — pause-on-error is available; the harness will pause the playtest and wait for an agent decision.
+- `unavailable_degraded_capture_only` — the environment cannot support debug-pause; errors are captured but no pause is raised.
+
+### Pause-on-error decision flow
+
+1. Runtime captures an `error`-severity event → raises engine debug-pause and emits a `runtime_pause` message.
+2. Editor coordinator suspends input-dispatch advancement and starts a 30-second timer.
+3. Agent calls `pwsh ./tools/automation/submit-pause-decision.ps1` with `-Decision continue|stop`.
+4. Broker polls `harness/automation/requests/pause-decision.json`, validates, forwards `pause_decision` to runtime.
+5. Runtime resumes or stops. Decision is recorded in `pause-decision-log.jsonl`.
+
+Timeout default: 30 seconds → `decision = timeout_default_applied, decisionSource = timeout_default` → run stops.
+
+### Capability advertisement (three new bits)
+
+`get-editor-evidence-capability.ps1` now surfaces three additional entries:
+
+| Field | Always supported? | Degraded behavior when false |
+|---|---|---|
+| `runtimeErrorCapture` | Yes (v1 invariant) | N/A |
+| `pauseOnError` | No — requires runtime bridge | Run continues in capture-only mode; `pauseOnErrorMode = "unavailable_degraded_capture_only"` |
+| `breakpointSuppression` | No — requires engine hook | Breakpoints still route through the pause-decision flow with `cause = "paused_at_user_breakpoint"` |
+
+### Crash classification
+
+When the game process exits without a clean shutdown handshake:
+- `termination = "crashed"` is stamped.
+- The runtime's last-error sidecar (`last-error-anchor.json`) is read to populate `lastErrorAnchor`.
+- If no error was captured before the crash, `lastErrorAnchor = { "lastError": "none" }`.
+
+### Cooperation with feature 006 (input dispatch)
+
+While a pause is outstanding, the broker does NOT advance any queued input-dispatch events. The outstanding pause must be resolved (or timeout) before input dispatch resumes.

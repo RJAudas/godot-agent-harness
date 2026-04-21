@@ -76,6 +76,9 @@ $result = [ordered]@{
     schemaValid = $false
     capability = $null
     inputDispatch = $null
+    runtimeErrorCapture = $null
+    pauseOnError = $null
+    breakpointSuppression = $null
 }
 
 if ($result.exists) {
@@ -84,6 +87,15 @@ if ($result.exists) {
     $result.schemaValid = [bool]$validation.valid
     if ($null -ne $result.capability -and $result.capability.PSObject.Properties.Name -contains 'inputDispatch') {
         $result.inputDispatch = $result.capability.inputDispatch
+    }
+    if ($null -ne $result.capability -and $result.capability.PSObject.Properties.Name -contains 'runtimeErrorCapture') {
+        $result.runtimeErrorCapture = $result.capability.runtimeErrorCapture
+    }
+    if ($null -ne $result.capability -and $result.capability.PSObject.Properties.Name -contains 'pauseOnError') {
+        $result.pauseOnError = $result.capability.pauseOnError
+    }
+    if ($null -ne $result.capability -and $result.capability.PSObject.Properties.Name -contains 'breakpointSuppression') {
+        $result.breakpointSuppression = $result.capability.breakpointSuppression
     }
 }
 

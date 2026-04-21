@@ -10,7 +10,9 @@ function Get-EvidenceArtifactDefinitions {
         @{ kind = 'scenegraph-summary'; file = 'scenegraph-summary.json'; mediaType = 'application/json'; description = 'Agent-readable scenegraph inspection summary for the play session.' },
         @{ kind = 'stdout_summary'; file = 'summary.json'; mediaType = 'application/json'; description = 'Normalized summary for the sample run.' },
         @{ kind = 'invariant_report'; file = 'invariants.json'; mediaType = 'application/json'; description = 'Invariant outcomes for the sample run.' },
-        @{ kind = 'input-dispatch-outcomes'; file = 'input-dispatch-outcomes.jsonl'; mediaType = 'application/jsonl'; description = 'Per-event runtime input-dispatch outcomes for the input-dispatch feature.' }
+        @{ kind = 'input-dispatch-outcomes'; file = 'input-dispatch-outcomes.jsonl'; mediaType = 'application/jsonl'; description = 'Per-event runtime input-dispatch outcomes for the input-dispatch feature.' },
+        @{ kind = 'runtime-error-records'; file = 'runtime-error-records.jsonl'; mediaType = 'application/jsonl'; description = 'Deduplicated runtime error and warning records captured after the runtime harness attaches, one row per (scriptPath, line, severity) key.' },
+        @{ kind = 'pause-decision-log'; file = 'pause-decision-log.jsonl'; mediaType = 'application/jsonl'; description = 'One row per pause notification resolved during the run, recording the cause, originating location, decision, decision source, and latency.' }
     )
 }
 

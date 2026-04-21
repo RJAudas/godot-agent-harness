@@ -1,0 +1,8 @@
+{
+  "runId": "runtime-error-loop-error-on-frame-run-001",
+  "pauseId": 0,
+  "decision": "continue",
+  "submittedBy": "runtime-error-loop-fixture",
+  "submittedAt": "2026-04-19T00:00:00Z",
+  "_note": "This fixture represents a second decision for a pauseId that already has a recorded decision. The validator must reject with decision_already_recorded."
+}

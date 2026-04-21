@@ -75,11 +75,78 @@ foreach ($artifactRef in $manifest.artifactRefs) {
 }
 
 $bundleValid = [bool]$schemaResult.valid -and $missingArtifactPaths.Count -eq 0 -and $unsupportedArtifactKinds.Count -eq 0
+
+# ---------------------------------------------------------------------------
+# T028: runtimeErrorReporting block invariants
+# ---------------------------------------------------------------------------
+$runtimeReportingViolations = New-Object System.Collections.Generic.List[string]
+$validTerminations  = @('completed', 'stopped_by_agent', 'stopped_by_default_on_pause_timeout', 'crashed', 'killed_by_harness')
+$validPauseOnErrorModes = @('active', 'unavailable_degraded_capture_only')
+
+if ($null -ne ($manifest | Get-Member -Name 'runtimeErrorReporting' -ErrorAction SilentlyContinue) -and
+    $null -ne $manifest.runtimeErrorReporting) {
+    $rer = $manifest.runtimeErrorReporting
+
+    # Required: termination must be a valid enum value
+    $hasTermination = $null -ne ($rer | Get-Member -Name 'termination' -ErrorAction SilentlyContinue)
+    $termination = if ($hasTermination) { [string]$rer.termination } else { '' }
+    if ([string]::IsNullOrEmpty($termination)) {
+        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.termination is missing or empty")
+    } elseif ($termination -notin $validTerminations) {
+        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.termination '$termination' is not a recognized enum value (expected one of: $($validTerminations -join ', '))")
+    }
+
+    # Required: pauseOnErrorMode must be a valid enum value
+    $hasPauseMode = $null -ne ($rer | Get-Member -Name 'pauseOnErrorMode' -ErrorAction SilentlyContinue)
+    $pauseMode = if ($hasPauseMode) { [string]$rer.pauseOnErrorMode } else { '' }
+    if ([string]::IsNullOrEmpty($pauseMode)) {
+        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.pauseOnErrorMode is missing or empty")
+    } elseif ($pauseMode -notin $validPauseOnErrorModes) {
+        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.pauseOnErrorMode '$pauseMode' is not a recognized enum value (expected one of: $($validPauseOnErrorModes -join ', '))")
+    }
+
+    # Conditional: lastErrorAnchor REQUIRED when termination = crashed
+    $hasLastErrorAnchor = $null -ne ($rer | Get-Member -Name 'lastErrorAnchor' -ErrorAction SilentlyContinue)
+    if ($termination -eq 'crashed') {
+        if (-not $hasLastErrorAnchor -or $null -eq $rer.lastErrorAnchor) {
+            [void]$runtimeReportingViolations.Add("runtimeErrorReporting.lastErrorAnchor is required when termination = crashed but is absent")
+        } else {
+            $anchor = $rer.lastErrorAnchor
+            # Accept { lastError: "none" } marker, or a full anchor shape
+            $hasLastErrorProp = $null -ne ($anchor | Get-Member -Name 'lastError' -ErrorAction SilentlyContinue)
+            $isNoneMarker = $hasLastErrorProp -and [string]$anchor.lastError -eq 'none'
+            if (-not $isNoneMarker) {
+                foreach ($required in @('scriptPath', 'line', 'severity', 'message')) {
+                    $hasProp = $null -ne ($anchor | Get-Member -Name $required -ErrorAction SilentlyContinue)
+                    if (-not $hasProp) {
+                        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.lastErrorAnchor.$required is required for a crash anchor but is missing or empty")
+                        continue
+                    }
+                    $val = $anchor.$required
+                    if ($null -eq $val -or ($val -is [string] -and [string]::IsNullOrEmpty($val))) {
+                        [void]$runtimeReportingViolations.Add("runtimeErrorReporting.lastErrorAnchor.$required is required for a crash anchor but is missing or empty")
+                    }
+                }
+            }
+        }
+    } elseif (-not [string]::IsNullOrEmpty($termination)) {
+        # lastErrorAnchor MUST NOT be present for non-crash terminations
+        if ($hasLastErrorAnchor -and $null -ne $rer.lastErrorAnchor) {
+            [void]$runtimeReportingViolations.Add("runtimeErrorReporting.lastErrorAnchor must not be present when termination = '$termination' (only allowed for crashed)")
+        }
+    }
+
+    if ($runtimeReportingViolations.Count -gt 0) {
+        $bundleValid = $false
+    }
+}
+
 $result = [ordered]@{
     manifestPath = $resolvedManifestPath
     schemaValid = [bool]$schemaResult.valid
     missingArtifactPaths = $missingArtifactPaths
     unsupportedArtifactKinds = $unsupportedArtifactKinds
+    runtimeReportingViolations = $runtimeReportingViolations
     bundleValid = $bundleValid
 }
 

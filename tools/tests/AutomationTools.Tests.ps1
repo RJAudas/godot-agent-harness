@@ -348,3 +348,156 @@ Describe 'tools/automation/request-editor-evidence-run.ps1' {
         }
     }
 }
+
+Describe 'get-editor-evidence-capability.ps1 runtime-error-reporting fields (T011)' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    It 'surfaces runtimeErrorCapture, pauseOnError, and breakpointSuppression when present' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            $resultsPath = Join-Path $harnessPath 'automation\results'
+            New-Item -ItemType Directory -Path $resultsPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+
+            $capabilityFixture = [ordered]@{
+                checkedAt               = '2026-04-19T00:00:00Z'
+                projectIdentifier       = 'res://'
+                singleTargetReady       = $true
+                launchControlAvailable  = $true
+                runtimeBridgeAvailable  = $true
+                captureControlAvailable = $true
+                persistenceAvailable    = $true
+                validationAvailable     = $true
+                shutdownControlAvailable = $true
+                blockedReasons          = @()
+                recommendedControlPath  = 'file_broker'
+                inputDispatch           = @{ supported = $true; maxEvents = 256; supportedKinds = @(); supportedPhases = @(); laterSliceFields = @(); blockedReasons = @() }
+                runtimeErrorCapture     = @{ supported = $true }
+                pauseOnError            = @{ supported = $true }
+                breakpointSuppression   = @{ supported = $false; reason = 'engine_hook_unavailable' }
+            }
+            $capabilityFixture | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $resultsPath 'capability.json') -Encoding utf8
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/get-editor-evidence-capability.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                PassThru    = $true
+            }
+
+            $result.runtimeErrorCapture | Should -Not -BeNullOrEmpty
+            $result.runtimeErrorCapture.supported | Should -BeTrue
+            $result.pauseOnError | Should -Not -BeNullOrEmpty
+            $result.pauseOnError.supported | Should -BeTrue
+            $result.breakpointSuppression | Should -Not -BeNullOrEmpty
+            $result.breakpointSuppression.supported | Should -BeFalse
+            $result.breakpointSuppression.reason | Should -Be 'engine_hook_unavailable'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns null for new fields when capability omits them (backward compat)' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $harnessPath = Join-Path $sandboxPath 'harness'
+            $resultsPath = Join-Path $harnessPath 'automation\results'
+            New-Item -ItemType Directory -Path $resultsPath -Force | Out-Null
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/inspection-run-config.json') -Destination (Join-Path $harnessPath 'inspection-run-config.json')
+            Copy-Item -LiteralPath (Get-RepoPath -Path 'tools/tests/fixtures/pong-testbed/harness/automation/results/capability-ready.expected.json') -Destination (Join-Path $resultsPath 'capability.json')
+
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/get-editor-evidence-capability.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                PassThru    = $true
+            }
+
+            $result.PSObject.Properties.Name | Should -Contain 'runtimeErrorCapture'
+            $result.runtimeErrorCapture | Should -BeNullOrEmpty
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'tools/automation/submit-pause-decision.ps1 (T012)' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    It 'writes a valid pause-decision.json to the requests directory' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/submit-pause-decision.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RunId       = 'test-run-001'
+                PauseId     = 0
+                Decision    = 'continue'
+                SubmittedBy = 'automation-tools-test'
+                PassThru    = $true
+            }
+
+            $result.accepted | Should -BeTrue
+            $result.outputPath | Should -Not -BeNullOrEmpty
+
+            $doc = Get-Content -LiteralPath $result.outputPath -Raw | ConvertFrom-Json -Depth 10
+            $doc.runId | Should -Be 'test-run-001'
+            $doc.pauseId | Should -Be 0
+            $doc.decision | Should -Be 'continue'
+            $doc.submittedBy | Should -Be 'automation-tools-test'
+            $doc.submittedAt | Should -Not -BeNullOrEmpty
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'writes to the correct requests subdirectory' {
+        $sandboxPath = New-RepoSandboxDirectory
+
+        try {
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/submit-pause-decision.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RunId       = 'test-run-001'
+                PauseId     = 0
+                Decision    = 'stop'
+                PassThru    = $true
+            }
+
+            $expectedPath = Join-Path $sandboxPath 'harness' 'automation' 'requests' 'pause-decision.json'
+            $result.outputPath | Should -Be $expectedPath
+            Test-Path -LiteralPath $expectedPath | Should -BeTrue
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'produces a schema-valid pause-decision document' {
+        $sandboxPath = New-RepoSandboxDirectory
+        $schemaPath = 'specs/007-report-runtime-errors/contracts/pause-decision-request.schema.json'
+
+        try {
+            $result = Invoke-RepoScriptPassThru -ScriptPath 'tools/automation/submit-pause-decision.ps1' -Parameters @{
+                ProjectRoot = $sandboxPath
+                RunId       = 'schema-validation-run'
+                PauseId     = 2
+                Decision    = 'stop'
+                PassThru    = $true
+            }
+
+            $validationResult = & (Get-RepoPath -Path 'tools/validate-json.ps1') `
+                -InputPath $result.outputPath -SchemaPath $schemaPath -PassThru -AllowInvalid
+
+            $validationResult.valid | Should -BeTrue
+        }
+        finally {
+            Remove-Item -LiteralPath $sandboxPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

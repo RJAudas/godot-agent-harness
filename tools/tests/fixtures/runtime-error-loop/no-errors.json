@@ -1,0 +1,19 @@
+{
+  "requestId": "runtime-error-loop-no-errors-001",
+  "scenarioId": "runtime-error-loop-no-errors",
+  "runId": "runtime-error-loop-no-errors-run-001",
+  "targetScene": "res://scenes/no_errors.tscn",
+  "outputDirectory": "res://evidence/automation/runtime-error-loop-no-errors-run-001",
+  "artifactRoot": "integration-testing/runtime-error-loop/evidence/automation/runtime-error-loop-no-errors-run-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runtime-error-loop-fixture",
+  "createdAt": "2026-04-19T00:00:00Z"
+}

@@ -31,6 +31,7 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - `pwsh ./tools/validate-json.ps1 -InputPath <json-path> -SchemaPath <schema-path>` validates repository JSON assets against a schema.
 - `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <manifest-path>` validates an evidence bundle manifest and confirms referenced artifacts exist.
 - `pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <artifact-id> -RequestedPath <path> -RequestedEditType <edit-type>` checks whether an autonomous action stays inside the declared write boundary.
+- `pwsh ./tools/automation/submit-pause-decision.ps1 -ProjectRoot <path> -RunId <id> -PauseId <n> -Decision continue|stop -SubmittedBy <agent>` submits a pause-on-error decision during an active harness run.
 - `pwsh ./tools/check-addon-parse.ps1` opens a minimal headless Godot project and surfaces GDScript parse, compile, or script-load errors in the addon. Run it after any edit under `addons/agent_runtime_harness/`; a non-zero exit is a blocking failure.
 
 ## Output locations
@@ -42,6 +43,6 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan at
-`specs/006-input-dispatch/plan.md`.
+shell commands, and other important information, read the current plan:
+[specs/007-report-runtime-errors/plan.md](../specs/007-report-runtime-errors/plan.md)
 <!-- SPECKIT END -->

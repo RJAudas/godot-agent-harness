@@ -1,0 +1,19 @@
+{
+  "requestId": "runtime-error-loop-crash-after-error-001",
+  "scenarioId": "runtime-error-loop-crash-after-error",
+  "runId": "runtime-error-loop-crash-after-error-run-001",
+  "targetScene": "res://scenes/crash_after_error.tscn",
+  "outputDirectory": "res://evidence/automation/runtime-error-loop-crash-after-error-run-001",
+  "artifactRoot": "integration-testing/runtime-error-loop/evidence/automation/runtime-error-loop-crash-after-error-run-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runtime-error-loop-fixture",
+  "createdAt": "2026-04-19T00:00:00Z"
+}

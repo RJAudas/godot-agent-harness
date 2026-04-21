@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/007-report-runtime-errors/contracts/pause-decision-record.schema.json",
+  "title": "Pause Decision Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "pauseId",
+    "cause",
+    "scriptPath",
+    "line",
+    "function",
+    "message",
+    "processFrame",
+    "raisedAt",
+    "decision",
+    "decisionSource",
+    "recordedAt",
+    "latencyMs"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pauseId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cause": {
+      "type": "string",
+      "enum": ["runtime_error", "unhandled_exception", "paused_at_user_breakpoint"]
+    },
+    "scriptPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "line": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "function": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "message": {
+      "type": "string"
+    },
+    "processFrame": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "raisedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "continued",
+        "stopped",
+        "timeout_default_applied",
+        "stopped_by_disconnect",
+        "resolved_by_run_end"
+      ]
+    },
+    "decisionSource": {
+      "type": "string",
+      "enum": ["agent", "timeout_default", "disconnect", "run_end"]
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "latencyMs": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision": { "const": "continued" } } },
+      "then": { "properties": { "decisionSource": { "const": "agent" } } }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "timeout_default_applied" } } },
+      "then": { "properties": { "decisionSource": { "const": "timeout_default" } } }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "stopped_by_disconnect" } } },
+      "then": { "properties": { "decisionSource": { "const": "disconnect" } } }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "resolved_by_run_end" } } },
+      "then": { "properties": { "decisionSource": { "const": "run_end" } } }
+    }
+  ]
+}

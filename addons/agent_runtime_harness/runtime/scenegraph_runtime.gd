@@ -28,6 +28,19 @@ var _applied_watch := {}
 var _run_started_at_msec := 0
 var _input_dispatch_runtime: InputDispatchRuntime = null
 
+## Per-run dedup map for runtime error and warning records.
+## Key: "<scriptPath>|<line>|<severity>" (String)
+## Value: Dictionary matching the runtime-error-record schema.
+var _runtime_error_dedup: Dictionary = {}
+## Monotonically increasing ordinal per dedup-key first occurrence.
+var _runtime_error_ordinal := 0
+## Pause-on-error state (US2/T021-T022). Set to false in degraded mode.
+var _pause_on_error_enabled := true
+## -1 = no outstanding pause; >= 0 = current pauseId.
+var _pending_pause_id := -1
+## Monotonic counter for generating unique pauseIds in this run.
+var _pause_counter := 0
+
 
 func _ready() -> void:
 	set_physics_process(false)
@@ -45,6 +58,12 @@ func _exit_tree() -> void:
 
 func configure_session(session_context: Dictionary) -> void:
 	_run_started_at_msec = Time.get_ticks_msec()
+	_runtime_error_dedup.clear()
+	_runtime_error_ordinal = 0
+	# T034: default to enabled; degraded mode disables pause-on-error if capability says unavailable.
+	_pause_on_error_enabled = String(session_context.get("pause_on_error_mode", InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE)) == InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE
+	_pending_pause_id = -1
+	_pause_counter = 0
 	_session_context = {
 		"session_id": session_context.get("session_id", _build_identifier("session")),
 		"request_id": session_context.get("request_id", _build_identifier("request")),
@@ -120,6 +139,11 @@ func persist_latest_bundle() -> Dictionary:
 		return {}
 
 	var session_context := _session_context.duplicate(true)
+
+	# Attach runtime error records for T016 (artifact writer flush).
+	if not _runtime_error_dedup.is_empty():
+		session_context["runtime_error_records"] = get_runtime_error_records()
+
 	if not _applied_watch.is_empty():
 		var trace_result := _behavior_trace_writer.persist_trace(_behavior_watch_sampler.get_rows(), session_context)
 		if trace_result.has("error"):
@@ -235,13 +259,177 @@ func _on_debugger_request(message: String, data: Array) -> bool:
 		"persist_latest_bundle":
 			persist_latest_bundle()
 			return true
+		InspectionConstants.RUNTIME_ERROR_MSG_RECORD:
+			# The editor bridge forwards structured error records (intercepted from
+			# the engine's built-in error channel) back to the runtime so the dedup
+			# map is maintained here alongside the existing session context.
+			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
+				_record_runtime_error_from_editor(data[0])
+			return true
+		InspectionConstants.RUNTIME_ERROR_MSG_PAUSE_DECISION:
+			# The editor/broker has resolved an outstanding pause decision.
+			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
+				_handle_pause_decision(data[0])
+			return true
+		InspectionConstants.RUNTIME_ERROR_MSG_PAUSE_DECISION_LOG:
+			# The editor sends the completed pause decision log just before
+			# persisting, so the artifact writer can flush it to JSONL.
+			if not data.is_empty() and typeof(data[0]) == TYPE_ARRAY:
+				_session_context["pause_decision_log"] = data[0]
+			return true
+		InspectionConstants.RUNTIME_ERROR_MSG_SET_TERMINATION:
+			# T031: The coordinator sends the derived runtime termination before
+			# requesting persist_latest_bundle, so the artifact writer stamps it.
+			if not data.is_empty() and typeof(data[0]) == TYPE_STRING:
+				_session_context["termination"] = String(data[0])
+			return true
+		"breakpoint":
+			# T022: The engine informs the runtime of a user breakpoint pause.
+			# We do NOT increment a dedup counter for breakpoints.
+			if _pending_pause_id < 0:
+				var bp_file := String(data[0]) if data.size() > 0 else "unknown"
+				var bp_line := int(data[1]) if data.size() > 1 else -1
+				var bp_record := {
+					"scriptPath": bp_file if not bp_file.is_empty() else "unknown",
+					"line": bp_line if bp_line > 0 else null,
+					"function": null,
+					"message": "Execution paused at user breakpoint.",
+				}
+				_raise_runtime_pause(bp_record, InspectionConstants.PAUSE_CAUSE_USER_BREAKPOINT)
+			return true
 		_:
 			return false
+
+
+## Record a structured runtime error dict forwarded from the editor bridge.
+## Maintains the per-run dedup map keyed by (scriptPath, line, severity).
+func _record_runtime_error_from_editor(record: Dictionary) -> void:
+	var script_path := String(record.get("scriptPath", "unknown"))
+	var line: int = int(record.get("line", -1))
+	var severity := String(record.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR))
+	var dedup_key := "%s|%d|%s" % [script_path, line, severity]
+
+	var now_ts := InspectionConstants.utc_timestamp_now()
+	if _runtime_error_dedup.has(dedup_key):
+		var existing: Dictionary = _runtime_error_dedup[dedup_key]
+		var count: int = int(existing.get("repeatCount", 1))
+		if count < InspectionConstants.RUNTIME_ERROR_REPEAT_CAP:
+			existing["repeatCount"] = count + 1
+			existing["lastSeenAt"] = now_ts
+		else:
+			# Cap reached; annotate once.
+			existing["truncatedAt"] = InspectionConstants.RUNTIME_ERROR_REPEAT_CAP
+	else:
+		_runtime_error_ordinal += 1
+		var new_record := {
+			"runId": String(_session_context.get("run_id", "")),
+			"ordinal": _runtime_error_ordinal,
+			"scriptPath": script_path,
+			"line": line if line > 0 else null,
+			"function": String(record.get("function", "")),
+			"message": String(record.get("message", "")),
+			"severity": severity,
+			"firstSeenAt": now_ts,
+			"lastSeenAt": now_ts,
+			"repeatCount": 1,
+		}
+		_runtime_error_dedup[dedup_key] = new_record
+		# Send the first-occurrence record onward to the editor for real-time
+		# awareness (e.g. the run coordinator can update its anchor tracker).
+		_send_debugger_message(InspectionConstants.RUNTIME_ERROR_MSG_RECORD, [new_record])
+
+		# T030: Flush the last-error anchor sidecar so a sudden crash leaves a
+		# recoverable on-disk anchor for the coordinator to read.
+		if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
+			_flush_last_error_anchor(new_record)
+
+		# US2/T021: raise a debug pause on first occurrence of an error-severity record.
+		if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR and _pause_on_error_enabled and _pending_pause_id < 0:
+			_raise_runtime_pause(new_record, InspectionConstants.PAUSE_CAUSE_RUNTIME_ERROR)
+
+
+## Return a copy of the current dedup map as an array of record dicts,
+## sorted by firstSeenAt (ascending), then ordinal.
+func get_runtime_error_records() -> Array:
+	var records: Array = _runtime_error_dedup.values().duplicate(true)
+	records.sort_custom(func(a, b):
+		var ta := String(a.get("firstSeenAt", ""))
+		var tb := String(b.get("firstSeenAt", ""))
+		if ta != tb:
+			return ta < tb
+		return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0))
+	)
+	return records
 
 
 func _send_debugger_message(message_name: String, data: Array) -> void:
 	if EngineDebugger.is_active():
 		EngineDebugger.send_message("%s:%s" % [InspectionConstants.RUNTIME_TO_EDITOR_CHANNEL, message_name], data)
+
+
+## T030: Write (or overwrite) the last-error-anchor.json sidecar inside the run's
+## output directory so a sudden process exit leaves a recoverable anchor on disk.
+func _flush_last_error_anchor(error_record: Dictionary) -> void:
+	var output_dir := String(_session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	# ProjectSettings.globalize_path converts "res://" to an absolute OS path.
+	var abs_dir := ProjectSettings.globalize_path(output_dir)
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var sidecar_path := abs_dir.path_join(InspectionConstants.DEFAULT_LAST_ERROR_ANCHOR_FILE)
+	var anchor := {
+		"scriptPath": String(error_record.get("scriptPath", "unknown")),
+		"line": error_record.get("line"),
+		"severity": String(error_record.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+		"message": String(error_record.get("message", "")),
+	}
+	var handle := FileAccess.open(sidecar_path, FileAccess.WRITE)
+	if handle != null:
+		handle.store_string(JSON.stringify(anchor))
+		handle.close()
+
+
+## US2/T021: Raise the engine's debug-pause state and emit a runtime_pause message.
+func _raise_runtime_pause(error_record: Dictionary, cause: String) -> void:
+	_pause_counter += 1
+	_pending_pause_id = _pause_counter - 1   # 0-based
+	var pause_msg := {
+		"pauseId": _pending_pause_id,
+		"runId": String(_session_context.get("run_id", "")),
+		"cause": cause,
+		"scriptPath": String(error_record.get("scriptPath", "unknown")),
+		"line": error_record.get("line"),
+		"function": error_record.get("function"),
+		"message": String(error_record.get("message", "")),
+		"processFrame": Engine.get_process_frames(),
+		"raisedAt": InspectionConstants.utc_timestamp_now(),
+	}
+	_send_debugger_message(InspectionConstants.RUNTIME_ERROR_MSG_PAUSE, [pause_msg])
+	# Request the engine to pause execution so the agent has time to decide.
+	EngineDebugger.debug(false, true)
+
+
+## US2/T021: Handle a pause decision sent from the editor/broker.
+func _handle_pause_decision(decision_data: Dictionary) -> void:
+	var pause_id: int = int(decision_data.get("pauseId", -1))
+	if pause_id != _pending_pause_id:
+		# Reject stale or unknown pause decisions.
+		var ack := {
+			"pauseId": pause_id,
+			"accepted": false,
+			"reason": InspectionConstants.PAUSE_DECISION_REJECTION_UNKNOWN_PAUSE,
+		}
+		_send_debugger_message(InspectionConstants.RUNTIME_ERROR_MSG_PAUSE_DECISION_ACK, [ack])
+		return
+
+	var decision := String(decision_data.get("decision", ""))
+	_pending_pause_id = -1
+
+	var ack := {
+		"pauseId": pause_id,
+		"accepted": true,
+		"decision": decision,
+	}
+	_send_debugger_message(InspectionConstants.RUNTIME_ERROR_MSG_PAUSE_DECISION_ACK, [ack])
 
 
 func _build_session_configuration_event() -> Dictionary:

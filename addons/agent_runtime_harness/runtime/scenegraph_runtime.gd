@@ -40,6 +40,10 @@ var _pause_on_error_enabled := true
 var _pending_pause_id := -1
 ## Monotonic counter for generating unique pauseIds in this run.
 var _pause_counter := 0
+## Fix #17: ensures the startup capture fires at most once per game launch.
+var _startup_capture_fired := false
+## Fix #17: reference to the session-ready watchdog timer.
+var _session_ready_watchdog: SceneTreeTimer = null
 
 
 func _ready() -> void:
@@ -47,7 +51,9 @@ func _ready() -> void:
 	if _session_context.is_empty():
 		configure_session({})
 	_register_debugger_transport()
-	call_deferred("_capture_startup_if_enabled")
+	# Fix #17: Gate startup capture behind editor handshake instead of firing
+	# immediately via call_deferred, which races the broker's configure_session.
+	_notify_editor_session_ready()
 
 
 func _exit_tree() -> void:
@@ -236,6 +242,50 @@ func _build_identifier(prefix: String) -> String:
 	return "%s-%s-%s" % [prefix, str(Time.get_ticks_usec()), str(_identifier_sequence)]
 
 
+## Fix #17: After registering the transport, announce readiness to the editor so it
+## can send configure_session before the startup capture fires.  Falls back to
+## an immediate (deferred) trigger when running without an editor debugger.
+func _notify_editor_session_ready() -> void:
+	if not EngineDebugger.is_active():
+		# Standalone game: no editor handshake is possible; trigger startup
+		# capture after the autoload's own configure_session call completes.
+		call_deferred("_trigger_startup_capture_if_pending")
+		return
+	_send_debugger_message(InspectionConstants.RUNTIME_TO_EDITOR_MSG_SESSION_READY, [_session_context.duplicate(true)])
+	_start_session_ready_watchdog()
+
+
+## Fix #17: Arm a watchdog so a missing or delayed editor reply never prevents
+## the startup capture from firing.
+func _start_session_ready_watchdog() -> void:
+	if get_tree() == null:
+		return
+	_session_ready_watchdog = get_tree().create_timer(
+		InspectionConstants.SESSION_READY_WATCHDOG_MSEC / 1000.0, false)
+	_session_ready_watchdog.timeout.connect(_on_session_ready_watchdog_timeout)
+
+
+func _on_session_ready_watchdog_timeout() -> void:
+	_session_ready_watchdog = null
+	_trigger_startup_capture_if_pending()
+
+
+func _cancel_session_ready_watchdog() -> void:
+	if _session_ready_watchdog != null:
+		if _session_ready_watchdog.timeout.is_connected(_on_session_ready_watchdog_timeout):
+			_session_ready_watchdog.timeout.disconnect(_on_session_ready_watchdog_timeout)
+		_session_ready_watchdog = null
+
+
+## Fix #17: Idempotent gate — fires the startup capture exactly once per launch.
+func _trigger_startup_capture_if_pending() -> void:
+	if _startup_capture_fired:
+		return
+	_startup_capture_fired = true
+	_cancel_session_ready_watchdog()
+	_capture_startup_if_enabled()
+
+
 func _register_debugger_transport() -> void:
 	if EngineDebugger.is_active():
 		EngineDebugger.register_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL, _on_debugger_request)
@@ -246,6 +296,12 @@ func _on_debugger_request(message: String, data: Array) -> bool:
 		"configure_session":
 			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
 				configure_session(data[0])
+				# Fix #17: trigger startup capture now that broker context is applied.
+				_trigger_startup_capture_if_pending()
+			return true
+		InspectionConstants.EDITOR_TO_RUNTIME_MSG_CONFIGURE_SESSION_SKIP:
+			# Fix #17: editor has no broker context; proceed with file-loaded context.
+			_trigger_startup_capture_if_pending()
 			return true
 		"request_manual_capture":
 			request_manual_capture()

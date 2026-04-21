@@ -64,6 +64,12 @@ func _capture(message: String, data: Array, session_id: int) -> bool:
 			if not data.is_empty() and typeof(data[0]) == TYPE_DICTIONARY:
 				_on_session_configured(data[0])
 			return true
+		InspectionConstants.RUNTIME_TO_EDITOR_MSG_SESSION_READY:
+			# Fix #17: runtime transport is registered; deliver the broker context now
+			# (or skip if no automation run is active) so the startup capture uses the
+			# correct runId instead of the stale inspection-run-config.json value.
+			_on_runtime_session_ready()
+			return true
 		"runtime_error":
 			# Deprecated path: the old unstructured runtime_error message.
 			# Now handled as a transport error only if the data is a plain string.
@@ -153,6 +159,17 @@ func _on_persistence_completed(manifest: Dictionary) -> void:
 func _on_session_configured(session_context: Dictionary) -> void:
 	emit_signal("session_state_changed", "configured", "Runtime automation session configured.")
 	emit_signal("automation_session_configured", session_context)
+
+
+## Fix #17: Called when the runtime signals that its debugger transport handler
+## is registered and it is waiting for the broker's session context before firing
+## the startup capture.  Sends configure_session if a broker context is pending,
+## or configure_session_skip to let the runtime proceed with its file-loaded context.
+func _on_runtime_session_ready() -> void:
+	if not _session_context.is_empty():
+		_send_request("configure_session", [_session_context], false)
+	else:
+		_send_request(InspectionConstants.EDITOR_TO_RUNTIME_MSG_CONFIGURE_SESSION_SKIP, [], false)
 
 
 func _on_runtime_error(message: String) -> void:

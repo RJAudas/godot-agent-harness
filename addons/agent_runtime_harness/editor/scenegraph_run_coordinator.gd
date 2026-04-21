@@ -198,6 +198,14 @@ func handle_session_state_changed(state: String, details: String) -> void:
 				# The coordinator reads _last_error_anchor (or the sidecar) and
 				# records the termination = crashed in the run result.
 				_fail_run_as_crashed()
+			elif _pending_failure_kind != null:
+				# Fix #18: a deferred validation failure was recorded while
+				# stopAfterValidation=false.  Now that the session has ended
+				# normally, promote it to a hard failure so the run result is
+				# correctly written as failed (not stuck at terminationStatus
+				# "running") and runtime-error-records written during the deferred
+				# window are preserved in the manifest.
+				_fail_run(String(_pending_failure_kind), _pending_failure_message)
 		InspectionConstants.SESSION_STATUS_ERROR:
 			if _awaiting_runtime:
 				_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_ATTACHMENT, details)
@@ -267,7 +275,14 @@ func handle_manifest_persisted(manifest: Dictionary) -> void:
 		return
 
 	if _pending_failure_kind != null:
-		_fail_run(String(_pending_failure_kind), _pending_failure_message)
+		# stopAfterValidation is false: defer finalization so the coordinator stays
+		# active to continue capturing runtime error records, pause events, and the
+		# disconnect.  _fail_run will be called from handle_session_state_changed
+		# when the session disconnects.
+		_emit_status(InspectionConstants.AUTOMATION_STATUS_VALIDATING,
+				"Evidence bundle failed validation; deferring failure — coordinator remains active.", {
+					"failureKind": String(_pending_failure_kind),
+				})
 		return
 
 	_finalize_run("completed", null, InspectionConstants.AUTOMATION_TERMINATION_RUNNING)

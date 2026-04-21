@@ -23,7 +23,7 @@ Use this file as the agent-facing operating guide for work in this repository.
 ## Validation routing
 
 - Use **ordinary tests** for unit, contract, framework, and other non-runtime checks.
-- Use **Scenegraph Harness runtime verification** for requests such as "verify at runtime," "test the running code," "make sure the node appears in game," "confirm the node exists while playing," "start the app and press <key>," or other runtime-visible outcomes.
+- Use **Scenegraph Harness runtime verification** for requests such as \"verify at runtime,\" \"test the running code,\" \"make sure the node appears in game,\" \"confirm the node exists while playing,\" \"start the app and press `<key>`,\" or other runtime-visible outcomes.
 - Use **combined validation** when a change affects runtime-visible behavior and there is already a deterministic direct test surface. Run the existing tests and the runtime harness flow together, but do not fabricate new ordinary tests only to satisfy the combined rule.
 - If the user already supplies an evidence manifest and wants diagnosis, stay in manifest-centered evidence triage instead of launching a fresh runtime-verification run.
 - Auto-delegate to the matching custom agent rather than handling runtime work inline. Delegate to `godot-runtime-verification` for any fresh harness run (runtime-visible checks, starting the game, dispatching keys or `InputMap` actions via `overrides.inputDispatchScript`, reproducing a runtime crash). Delegate to `godot-evidence-triage` when an evidence manifest already exists and only diagnosis is required. Do not ask the user to pick the agent when the routing rule is unambiguous.

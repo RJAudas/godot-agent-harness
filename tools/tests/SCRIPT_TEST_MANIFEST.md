@@ -41,3 +41,11 @@ This manifest records how each PowerShell script under `tools/` is exercised by 
 - Success cases: minimal record generation, nested output path creation, default operation and validation field values.
 - Failure cases: mismatched `OperationEditType`, `OperationStatus`, `OperationNote`, `ValidationStatus`, and `ValidationDetails` counts.
 - Assertions: output record shape, generated defaults, schema-valid JSON emission, and terminating errors for inconsistent parameter arrays.
+
+## RuntimeErrorEmergencyPersist.Tests.ps1
+
+- Purpose: verify that the coordinator-side emergency-persist path (Fix #19) produces schema-valid `runtime-error-records.jsonl` rows and that the two validation notes stamps (`emergency_persisted` / `none_observed`) are correctly shaped strings.
+- Primary schema: `specs/007-report-runtime-errors/contracts/runtime-error-record.schema.json`.
+- Success cases: single error-severity record, single warning-severity record, capped record (`repeatCount=100`, `truncatedAt=100`), two-record JSONL, multi-record ordinal monotonicity, notes stamp format.
+- Failure cases: n/a (format/schema coverage; failure paths exercised by the schema's own rejection tests in `RuntimeErrorCapture.Tests.ps1`).
+- Assertions: each emergency-persist record shape passes schema, ordinals are sequential, notes stamps match expected literal strings.

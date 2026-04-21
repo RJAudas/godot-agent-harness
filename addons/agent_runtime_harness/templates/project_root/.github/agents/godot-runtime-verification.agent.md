@@ -19,6 +19,7 @@ Interpret a Godot task, choose between ordinary tests, Scenegraph Harness runtim
 - If the user already provides `evidence/scenegraph/latest/evidence-manifest.json` and only wants diagnosis, stop and route to `godot-evidence-triage.agent.md`.
 - Read `harness/automation/results/capability.json` before requesting a fresh run.
 - Use the brokered request and result files under `harness/automation/requests/` and `harness/automation/results/` instead of hidden editor interaction.
+- For requests that need to start the game and send keys or input actions (for example "press Enter to start"), use the same brokered run-request flow with an `overrides.inputDispatchScript` payload. Confirm `inputDispatch.supported = true` in the capability artifact first, then read `input-dispatch-outcomes.jsonl` from the evidence bundle alongside the manifest. Do not invent a separate broker entrypoint or new agent.
 - Read the manifest first once a run has persisted evidence.
 - If `run-result.json` reports `failureKind = build`, stop before manifest lookup and report `buildFailurePhase`, `details`, each `buildDiagnostics` entry with `resourcePath`, `message`, and `line`/`column` when present, plus the relevant `rawBuildOutput` lines.
 - Separate gameplay conclusions from harness wiring or automation failures.

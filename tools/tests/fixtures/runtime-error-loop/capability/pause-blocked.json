@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-04-19T00:00:00Z",
+  "projectIdentifier": "res://",
+  "singleTargetReady": true,
+  "launchControlAvailable": true,
+  "runtimeBridgeAvailable": false,
+  "captureControlAvailable": true,
+  "persistenceAvailable": true,
+  "validationAvailable": true,
+  "shutdownControlAvailable": true,
+  "blockedReasons": [],
+  "recommendedControlPath": "file_broker",
+  "inputDispatch": {
+    "supported": false,
+    "maxEvents": 0,
+    "supportedKinds": [],
+    "supportedPhases": [],
+    "laterSliceFields": [],
+    "blockedReasons": ["runtime_bridge_unavailable"],
+    "reason": "runtime_bridge_unavailable"
+  },
+  "runtimeErrorCapture": {
+    "supported": true
+  },
+  "pauseOnError": {
+    "supported": false,
+    "reason": "engine_pause_unavailable"
+  },
+  "breakpointSuppression": {
+    "supported": false,
+    "reason": "engine_hook_unavailable"
+  }
+}

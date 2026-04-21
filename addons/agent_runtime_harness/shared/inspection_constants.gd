@@ -118,6 +118,75 @@ const BUILD_DIAGNOSTIC_SOURCE_KIND_RESOURCE := "resource"
 const BUILD_DIAGNOSTIC_SOURCE_KIND_UNKNOWN := "unknown"
 
 const DEFAULT_SCENARIO_ID := "runtime-smoke-test"
+
+# ---------------------------------------------------------------------------
+# Runtime error reporting (feature 007)
+# ---------------------------------------------------------------------------
+
+## Artifact kinds for the two new JSONL artifacts
+const ARTIFACT_KIND_RUNTIME_ERROR_RECORDS := "runtime-error-records"
+const ARTIFACT_KIND_PAUSE_DECISION_LOG := "pause-decision-log"
+
+## Default filenames
+const DEFAULT_RUNTIME_ERROR_RECORDS_FILE := "runtime-error-records.jsonl"
+const DEFAULT_PAUSE_DECISION_LOG_FILE := "pause-decision-log.jsonl"
+const DEFAULT_LAST_ERROR_ANCHOR_FILE := "last-error-anchor.json"
+
+## Per-key dedup repeat cap
+const RUNTIME_ERROR_REPEAT_CAP := 100
+
+## Runtime error severities
+const RUNTIME_ERROR_SEVERITY_ERROR := "error"
+const RUNTIME_ERROR_SEVERITY_WARNING := "warning"
+
+## Pause causes (why the run paused)
+const PAUSE_CAUSE_RUNTIME_ERROR := "runtime_error"
+const PAUSE_CAUSE_UNHANDLED_EXCEPTION := "unhandled_exception"
+const PAUSE_CAUSE_USER_BREAKPOINT := "paused_at_user_breakpoint"
+
+## Pause decisions (what was decided)
+const PAUSE_DECISION_CONTINUED := "continued"
+const PAUSE_DECISION_STOPPED := "stopped"
+const PAUSE_DECISION_TIMEOUT_DEFAULT_APPLIED := "timeout_default_applied"
+const PAUSE_DECISION_STOPPED_BY_DISCONNECT := "stopped_by_disconnect"
+const PAUSE_DECISION_RESOLVED_BY_RUN_END := "resolved_by_run_end"
+
+## Pause decision sources (who/what made the decision)
+const PAUSE_DECISION_SOURCE_AGENT := "agent"
+const PAUSE_DECISION_SOURCE_TIMEOUT_DEFAULT := "timeout_default"
+const PAUSE_DECISION_SOURCE_DISCONNECT := "disconnect"
+const PAUSE_DECISION_SOURCE_RUN_END := "run_end"
+
+## Run termination kinds (how the run ended overall)
+const RUNTIME_TERMINATION_COMPLETED := "completed"
+const RUNTIME_TERMINATION_STOPPED_BY_AGENT := "stopped_by_agent"
+const RUNTIME_TERMINATION_STOPPED_BY_DEFAULT_ON_PAUSE_TIMEOUT := "stopped_by_default_on_pause_timeout"
+const RUNTIME_TERMINATION_CRASHED := "crashed"
+const RUNTIME_TERMINATION_KILLED_BY_HARNESS := "killed_by_harness"
+
+## Pause-on-error mode (is pause active or degraded to capture-only)
+const PAUSE_ON_ERROR_MODE_ACTIVE := "active"
+const PAUSE_ON_ERROR_MODE_UNAVAILABLE_DEGRADED_CAPTURE_ONLY := "unavailable_degraded_capture_only"
+
+## Pause-decision request rejection codes
+const PAUSE_DECISION_REJECTION_MISSING_FIELD := "missing_field"
+const PAUSE_DECISION_REJECTION_UNSUPPORTED_FIELD := "unsupported_field"
+const PAUSE_DECISION_REJECTION_INVALID_DECISION := "invalid_decision"
+const PAUSE_DECISION_REJECTION_UNKNOWN_PAUSE := "unknown_pause"
+const PAUSE_DECISION_REJECTION_DECISION_ALREADY_RECORDED := "decision_already_recorded"
+
+## Debugger message names for the runtime-error-reporting channel
+const RUNTIME_ERROR_MSG_RECORD := "runtime_error_record"
+const RUNTIME_ERROR_MSG_PAUSE := "runtime_pause"
+const RUNTIME_ERROR_MSG_PAUSE_DECISION := "pause_decision"
+const RUNTIME_ERROR_MSG_PAUSE_DECISION_ACK := "pause_decision_ack"
+const RUNTIME_ERROR_MSG_PAUSE_DECISION_LOG := "pause_decision_log"
+const RUNTIME_ERROR_MSG_SET_TERMINATION := "set_termination"
+## T034: sent by coordinator at session start to configure degraded mode.
+const RUNTIME_ERROR_MSG_SET_PAUSE_ON_ERROR_MODE := "set_pause_on_error_mode"
+
+## Default pause-decision timeout in seconds
+const PAUSE_DECISION_TIMEOUT_SECONDS := 30
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"
 const DEFAULT_MANIFEST_ARTIFACT_ROOT := ""
 const DEFAULT_AUTOMATION_REQUEST_PATH := "res://harness/automation/requests/run-request.json"

@@ -1,0 +1,7 @@
+{
+  "runId": "wrong-run-id-that-does-not-exist",
+  "pauseId": 999,
+  "decision": "stop",
+  "submittedBy": "runtime-error-loop-fixture",
+  "submittedAt": "2026-04-19T00:00:00Z"
+}

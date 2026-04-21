@@ -15,6 +15,7 @@ var _bridge
 var _artifact_store: ScenegraphAutomationArtifactStore
 var _active_config := {}
 var _active_request := {}
+var _active_capability := {}
 var _last_manifest := {}
 var _last_validation := {}
 var _last_build_failure := {}
@@ -30,12 +31,21 @@ var _launch_started_at_usec := 0
 var _active_config_path := ""
 var _watch_request_validator := BehaviorWatchRequestValidator.new()
 var _input_dispatch_validator := InputDispatchRequestValidator.new()
+## Tracks the last runtime error anchor for crash classification (US3/T030).
+var _last_error_anchor := {}
+var _runtime_error_record_count := 0
+## T025: Outstanding pause tracking and decision log.
+var _active_pause := {}
+var _pause_decision_log: Array = []
 
 
 func configure(plugin: EditorPlugin, bridge: Object, artifact_store: ScenegraphAutomationArtifactStore) -> void:
 	_plugin = plugin
 	_bridge = bridge
 	_artifact_store = artifact_store
+	if _bridge != null and _bridge.has_signal("runtime_error_record_received"):
+		if not _bridge.runtime_error_record_received.is_connected(_on_runtime_error_record):
+			_bridge.runtime_error_record_received.connect(_on_runtime_error_record)
 
 
 func is_active() -> bool:
@@ -53,10 +63,15 @@ func get_active_request() -> Dictionary:
 func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, config_path: String = "") -> Dictionary:
 	_active_config = config.duplicate(true)
 	_active_request = _resolve_request(config, request, capability)
+	_active_capability = capability.duplicate(true)
 	_active_config_path = config_path
 	_last_manifest = {}
 	_last_validation = _build_validation_result(false, 0, [], false, ["Validation has not completed yet."])
 	_last_build_failure = {}
+	_last_error_anchor = {}
+	_runtime_error_record_count = 0
+	_active_pause = {}
+	_pause_decision_log = []
 	_pending_failure_kind = null
 	_pending_failure_message = ""
 	_stop_requested = false
@@ -114,6 +129,33 @@ func poll() -> void:
 			_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_ATTACHMENT, "Runtime debugger session did not attach before timeout.")
 			return
 
+	# T025: Check pause decision timeout (30 s default → stop).
+	if not _active_pause.is_empty():
+		var timeout_at: int = int(_active_pause.get("_timeoutAt", 0))
+		if timeout_at > 0 and Time.get_ticks_msec() >= timeout_at:
+			var now_ms := Time.get_ticks_msec()
+			var raised_ms: int = int(_active_pause.get("_raisedAtMs", now_ms))
+			var timeout_row := {
+				"runId": String(_active_pause.get("runId", "")),
+				"pauseId": int(_active_pause.get("pauseId", 0)),
+				"cause": String(_active_pause.get("cause", "")),
+				"scriptPath": String(_active_pause.get("scriptPath", "unknown")),
+				"line": _active_pause.get("line"),
+				"function": _active_pause.get("function"),
+				"message": String(_active_pause.get("message", "")),
+				"processFrame": int(_active_pause.get("processFrame", 0)),
+				"raisedAt": String(_active_pause.get("raisedAt", "")),
+				"decision": InspectionConstants.PAUSE_DECISION_TIMEOUT_DEFAULT_APPLIED,
+				"decisionSource": InspectionConstants.PAUSE_DECISION_SOURCE_TIMEOUT_DEFAULT,
+				"recordedAt": InspectionConstants.utc_timestamp_now(),
+				"latencyMs": now_ms - raised_ms,
+			}
+			_pause_decision_log.append(timeout_row)
+			_active_pause = {}
+			# Apply timeout default: stop the run.
+			_request_stop()
+			return
+
 	if _awaiting_stop and not _is_playing_scene():
 		_finalize_after_stop(InspectionConstants.AUTOMATION_TERMINATION_STOPPED_CLEANLY)
 
@@ -126,12 +168,36 @@ func handle_session_state_changed(state: String, details: String) -> void:
 		InspectionConstants.SESSION_STATUS_CONNECTED:
 			_on_runtime_attached()
 		"disconnected":
+			# T025: record stopped_by_disconnect if a pause was outstanding at disconnect.
+			if not _active_pause.is_empty():
+				var now_ms := Time.get_ticks_msec()
+				var raised_ms: int = int(_active_pause.get("_raisedAtMs", now_ms))
+				var disc_row := {
+					"runId": String(_active_pause.get("runId", "")),
+					"pauseId": int(_active_pause.get("pauseId", 0)),
+					"cause": String(_active_pause.get("cause", "")),
+					"scriptPath": String(_active_pause.get("scriptPath", "unknown")),
+					"line": _active_pause.get("line"),
+					"function": _active_pause.get("function"),
+					"message": String(_active_pause.get("message", "")),
+					"processFrame": int(_active_pause.get("processFrame", 0)),
+					"raisedAt": String(_active_pause.get("raisedAt", "")),
+					"decision": InspectionConstants.PAUSE_DECISION_STOPPED_BY_DISCONNECT,
+					"decisionSource": InspectionConstants.PAUSE_DECISION_SOURCE_DISCONNECT,
+					"recordedAt": InspectionConstants.utc_timestamp_now(),
+					"latencyMs": now_ms - raised_ms,
+				}
+				_pause_decision_log.append(disc_row)
+				_active_pause = {}
 			if _awaiting_stop or _stop_requested:
 				_finalize_after_stop(InspectionConstants.AUTOMATION_TERMINATION_STOPPED_CLEANLY)
 			elif _awaiting_runtime:
 				_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_ATTACHMENT, details)
 			elif _last_manifest.is_empty():
-				_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY, "The play session ended before a scenegraph bundle was persisted.")
+				# T031: Abnormal disconnect with no manifest → classify as crashed.
+				# The coordinator reads _last_error_anchor (or the sidecar) and
+				# records the termination = crashed in the run result.
+				_fail_run_as_crashed()
 		InspectionConstants.SESSION_STATUS_ERROR:
 			if _awaiting_runtime:
 				_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_ATTACHMENT, details)
@@ -153,12 +219,40 @@ func handle_capture_updated(snapshot: Dictionary, diagnostics: Array) -> void:
 	})
 	_emit_status(InspectionConstants.AUTOMATION_STATUS_PERSISTING, "Persisting the latest scenegraph evidence bundle.")
 	_awaiting_manifest = true
-	_bridge.persist_latest_bundle()
+	var termination := _derive_runtime_termination()
+	if _bridge.has_method("persist_latest_bundle_with_context"):
+		_bridge.persist_latest_bundle_with_context(_pause_decision_log, termination)
+	elif _bridge.has_method("persist_latest_bundle_with_pause_log"):
+		_bridge.persist_latest_bundle_with_pause_log(_pause_decision_log)
+	else:
+		_bridge.persist_latest_bundle()
 
 
 func handle_manifest_persisted(manifest: Dictionary) -> void:
 	if not _active or not _awaiting_manifest:
 		return
+
+	# T025: If a pause was still outstanding when the run ended, record resolved_by_run_end.
+	if not _active_pause.is_empty():
+		var now_ms := Time.get_ticks_msec()
+		var raised_ms: int = int(_active_pause.get("_raisedAtMs", now_ms))
+		var rre_row := {
+			"runId": String(_active_pause.get("runId", "")),
+			"pauseId": int(_active_pause.get("pauseId", 0)),
+			"cause": String(_active_pause.get("cause", "")),
+			"scriptPath": String(_active_pause.get("scriptPath", "unknown")),
+			"line": _active_pause.get("line"),
+			"function": _active_pause.get("function"),
+			"message": String(_active_pause.get("message", "")),
+			"processFrame": int(_active_pause.get("processFrame", 0)),
+			"raisedAt": String(_active_pause.get("raisedAt", "")),
+			"decision": InspectionConstants.PAUSE_DECISION_RESOLVED_BY_RUN_END,
+			"decisionSource": InspectionConstants.PAUSE_DECISION_SOURCE_RUN_END,
+			"recordedAt": InspectionConstants.utc_timestamp_now(),
+			"latencyMs": now_ms - raised_ms,
+		}
+		_pause_decision_log.append(rre_row)
+		_active_pause = {}
 
 	_awaiting_manifest = false
 	_last_manifest = manifest.duplicate(true)
@@ -198,6 +292,61 @@ func handle_transport_error(message: String) -> void:
 		_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_CAPTURE, message)
 	else:
 		_fail_run(InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY, message)
+
+
+func _on_runtime_error_record(record: Dictionary) -> void:
+	## Called when the bridge forwards a structured runtime error record (T018).
+	## Maintains the last-error anchor for crash classification (US3/T031).
+	if not _active:
+		return
+	_runtime_error_record_count += 1
+	if String(record.get("severity", "")) == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
+		_last_error_anchor = {
+			"scriptPath": String(record.get("scriptPath", "unknown")),
+			"line": record.get("line"),
+			"severity": String(record.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+			"message": String(record.get("message", "")),
+		}
+
+
+## T025: Called when the runtime raises a debug pause.
+func handle_pause_raised(pause_msg: Dictionary) -> void:
+	if not _active:
+		return
+	_active_pause = pause_msg.duplicate(true)
+	_active_pause["_raisedAtMs"] = Time.get_ticks_msec()
+	_active_pause["_timeoutAt"] = _active_pause["_raisedAtMs"] + (InspectionConstants.PAUSE_DECISION_TIMEOUT_SECONDS * 1000)
+
+
+## T025: Called when the broker dispatches a valid pause decision to the runtime.
+func handle_pause_decision_submitted(decision_msg: Dictionary) -> void:
+	if _active_pause.is_empty():
+		return
+	var now_ms := Time.get_ticks_msec()
+	var raised_ms: int = int(_active_pause.get("_raisedAtMs", now_ms))
+	var row := {
+		"runId": String(_active_pause.get("runId", "")),
+		"pauseId": int(_active_pause.get("pauseId", 0)),
+		"cause": String(_active_pause.get("cause", "")),
+		"scriptPath": String(_active_pause.get("scriptPath", "unknown")),
+		"line": _active_pause.get("line"),
+		"function": _active_pause.get("function"),
+		"message": String(_active_pause.get("message", "")),
+		"processFrame": int(_active_pause.get("processFrame", 0)),
+		"raisedAt": String(_active_pause.get("raisedAt", "")),
+		"decision": String(decision_msg.get("decision", "")),
+		"decisionSource": InspectionConstants.PAUSE_DECISION_SOURCE_AGENT,
+		"recordedAt": InspectionConstants.utc_timestamp_now(),
+		"latencyMs": now_ms - raised_ms,
+	}
+	_pause_decision_log.append(row)
+	_active_pause = {}
+
+
+## T025: Called when the runtime acks a pause decision.
+func handle_pause_decision_ack(ack: Dictionary) -> void:
+	# Nothing extra needed here; the decision log row is written by handle_pause_decision_submitted.
+	pass
 
 
 func handle_build_failed(payload: Dictionary) -> void:
@@ -356,6 +505,50 @@ func _fail_run(failure_kind: String, message: String) -> void:
 	_finalize_run("failed", failure_kind, _derive_failure_termination_status(), message)
 
 
+## T031: Called on abnormal disconnect (no manifest, no stop request).
+## Reads the coordinator's in-memory last-error anchor (populated by _on_runtime_error_record)
+## or the on-disk sidecar written by T030, and finalizes the run with termination = crashed.
+func _fail_run_as_crashed() -> void:
+	var anchor := _last_error_anchor.duplicate(true)
+	# Also try reading the sidecar from disk as a recovery fallback.
+	if anchor.is_empty():
+		anchor = _read_last_error_anchor_sidecar()
+	var crash_message := "The play session ended abnormally before a scenegraph bundle was persisted."
+	_emit_status(InspectionConstants.AUTOMATION_STATUS_FAILED, crash_message, {
+		"failureKind": InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY,
+		"termination": InspectionConstants.RUNTIME_TERMINATION_CRASHED,
+		"lastErrorAnchor": anchor if not anchor.is_empty() else {"lastError": "none"},
+	})
+	_finalize_run(
+		"failed",
+		InspectionConstants.AUTOMATION_FAILURE_KIND_GAMEPLAY,
+		InspectionConstants.AUTOMATION_TERMINATION_CRASHED,
+		crash_message
+	)
+
+
+func _read_last_error_anchor_sidecar() -> Dictionary:
+	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	# Editor-side: convert res:// to an absolute path via the project root.
+	var abs_dir: String
+	if output_dir.begins_with("res://"):
+		var project_path := ProjectSettings.globalize_path("res://")
+		abs_dir = output_dir.replace("res://", project_path)
+	else:
+		abs_dir = output_dir
+	var sidecar_path := abs_dir.path_join(InspectionConstants.DEFAULT_LAST_ERROR_ANCHOR_FILE)
+	if not FileAccess.file_exists(sidecar_path):
+		return {}
+	var handle := FileAccess.open(sidecar_path, FileAccess.READ)
+	if handle == null:
+		return {}
+	var parsed := JSON.parse_string(handle.get_as_text())
+	handle.close()
+	if typeof(parsed) == TYPE_DICTIONARY:
+		return parsed
+	return {}
+
+
 func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "", build_failure := {}) -> void:
 	var manifest_path = null
 	if not _last_manifest.is_empty():
@@ -436,6 +629,12 @@ func _resolve_active_config_path() -> String:
 
 
 func _build_session_context() -> Dictionary:
+	# T034: Determine pause_on_error_mode from capability snapshot at run start.
+	var pause_on_error_cap: Dictionary = {}
+	if typeof(_active_capability.get("pauseOnError", null)) == TYPE_DICTIONARY:
+		pause_on_error_cap = _active_capability.get("pauseOnError", {})
+	var pause_on_error_mode := InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE if bool(pause_on_error_cap.get("supported", true)) else InspectionConstants.PAUSE_ON_ERROR_MODE_UNAVAILABLE_DEGRADED_CAPTURE_ONLY
+
 	var context := {
 		"config_path": _resolve_active_config_path(),
 		"session_id": String(_active_request.get("requestId", "")),
@@ -447,6 +646,7 @@ func _build_session_context() -> Dictionary:
 		"artifact_root": String(_active_request.get("artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT)),
 		"capture_policy": _active_request.get("capturePolicy", {}).duplicate(true),
 		"stop_policy": _active_request.get("stopPolicy", {}).duplicate(true),
+		"pause_on_error_mode": pause_on_error_mode,
 	}
 	if _active_request.has("appliedWatch"):
 		context["applied_watch"] = _active_request.get("appliedWatch", {}).duplicate(true)
@@ -768,6 +968,27 @@ func _derive_failure_termination_status() -> String:
 	if _is_playing_scene():
 		return InspectionConstants.AUTOMATION_TERMINATION_RUNNING
 	return InspectionConstants.AUTOMATION_TERMINATION_ALREADY_CLOSED
+
+
+## T031: Derive the runtimeErrorReporting.termination value from the completed run state.
+## This is sent to the runtime just before persist_latest_bundle so the artifact writer
+## can stamp the manifest with the correct classification.
+func _derive_runtime_termination() -> String:
+	# Walk backward through the pause decision log for the first resolved decision
+	# that produced a definitive termination cause.
+	for i in range(_pause_decision_log.size() - 1, -1, -1):
+		var row_val: Variant = _pause_decision_log[i]
+		if typeof(row_val) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_val
+		var decision := String(row.get("decision", ""))
+		var source := String(row.get("decisionSource", ""))
+		if decision == InspectionConstants.PAUSE_DECISION_STOPPED and source == InspectionConstants.PAUSE_DECISION_SOURCE_AGENT:
+			return InspectionConstants.RUNTIME_TERMINATION_STOPPED_BY_AGENT
+		if decision == InspectionConstants.PAUSE_DECISION_TIMEOUT_DEFAULT_APPLIED:
+			return InspectionConstants.RUNTIME_TERMINATION_STOPPED_BY_DEFAULT_ON_PAUSE_TIMEOUT
+	# Default: normal clean exit.
+	return InspectionConstants.RUNTIME_TERMINATION_COMPLETED
 
 
 func _derive_build_failure_termination_status() -> String:

@@ -1,0 +1,19 @@
+{
+  "requestId": "runtime-error-loop-warning-only-001",
+  "scenarioId": "runtime-error-loop-warning-only",
+  "runId": "runtime-error-loop-warning-only-run-001",
+  "targetScene": "res://scenes/warning_only.tscn",
+  "outputDirectory": "res://evidence/automation/runtime-error-loop-warning-only-run-001",
+  "artifactRoot": "integration-testing/runtime-error-loop/evidence/automation/runtime-error-loop-warning-only-run-001",
+  "expectationFiles": [],
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runtime-error-loop-fixture",
+  "createdAt": "2026-04-19T00:00:00Z"
+}

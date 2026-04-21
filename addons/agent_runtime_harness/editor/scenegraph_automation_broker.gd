@@ -24,6 +24,8 @@ var _poll_timer: Timer
 var _last_capability_signature := ""
 var _script_error_summary_regexes: Array[RegEx] = []
 var _script_error_line_regex: RegEx = null
+## Pause-decision polling state (T024)
+var _outstanding_pause: Dictionary = {}   # empty = no outstanding pause
 
 
 func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res://harness/inspection-run-config.json") -> void:
@@ -39,6 +41,10 @@ func configure(plugin: EditorPlugin, bridge: Object, config_path: String = "res:
 		_bridge.manifest_persisted.connect(_run_coordinator.handle_manifest_persisted)
 		_bridge.automation_session_configured.connect(_run_coordinator.handle_runtime_session_configured)
 		_bridge.transport_error.connect(_run_coordinator.handle_transport_error)
+		if _bridge.has_signal("runtime_pause_raised"):
+			_bridge.runtime_pause_raised.connect(_on_runtime_pause_raised)
+		if _bridge.has_signal("runtime_pause_decision_ack"):
+			_bridge.runtime_pause_decision_ack.connect(_on_runtime_pause_decision_ack)
 
 	if _poll_timer == null:
 		_poll_timer = Timer.new()
@@ -64,7 +70,11 @@ func _on_poll_timer_timeout() -> void:
 	_publish_capability_if_needed(config, capability)
 
 	if _run_coordinator.is_active():
-		_run_coordinator.poll()
+		# T024: If a pause is outstanding, poll for the agent's pause decision.
+		if not _outstanding_pause.is_empty():
+			_poll_pause_decision(config)
+		else:
+			_run_coordinator.poll()
 		return
 
 	var request := _artifact_store.read_request(config)
@@ -110,6 +120,9 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 		"blockedReasons": deduped_blocked_reasons,
 		"recommendedControlPath": InspectionConstants.AUTOMATION_CONTROL_PATH_FILE_BROKER,
 		"inputDispatch": _build_input_dispatch_capability(runtime_bridge_available),
+		"runtimeErrorCapture": _build_runtime_error_capture_capability(),
+		"pauseOnError": _build_pause_on_error_capability(runtime_bridge_available),
+		"breakpointSuppression": _build_breakpoint_suppression_capability(),
 		"notes": [
 			"The preferred v1 control surface is the plugin-owned workspace file broker."
 		],
@@ -131,6 +144,29 @@ func _build_input_dispatch_capability(runtime_bridge_available: bool) -> Diction
 	}
 
 
+func _build_runtime_error_capture_capability() -> Dictionary:
+	# runtimeErrorCapture is always supported for v1: the capture surface is
+	# unconditionally available whenever the addon is loaded.
+	return { "supported": true }
+
+
+func _build_pause_on_error_capability(runtime_bridge_available: bool) -> Dictionary:
+	# pauseOnError requires the runtime bridge (the editor debugger session) so
+	# the harness can raise and resolve the engine's debug-pause state.
+	if not runtime_bridge_available:
+		return { "supported": false, "reason": "runtime_bridge_unavailable" }
+	return { "supported": true }
+
+
+func _build_breakpoint_suppression_capability() -> Dictionary:
+	# Godot 4.x does not expose a documented public API to suppress user
+	# GDScript breakpoint statements programmatically before they hit the
+	# engine debug-pause state. Mark as unsupported conservatively; user
+	# breakpoints will be routed through the pause-decision flow with
+	# cause = "paused_at_user_breakpoint" instead.
+	return { "supported": false, "reason": "engine_hook_unavailable" }
+
+
 func handle_editor_build() -> bool:
 	if not _run_coordinator.is_active():
 		return true
@@ -149,6 +185,79 @@ func handle_editor_build() -> bool:
 
 	_run_coordinator.handle_build_failed(build_failure)
 	return false
+
+
+## T024: Called when the runtime raises a debug pause.
+func _on_runtime_pause_raised(pause_msg: Dictionary) -> void:
+	_outstanding_pause = pause_msg
+	_run_coordinator.handle_pause_raised(pause_msg)
+
+
+## T024: Called when the runtime acknowledges or rejects a pause decision.
+func _on_runtime_pause_decision_ack(ack: Dictionary) -> void:
+	if bool(ack.get("accepted", false)) or not _outstanding_pause.is_empty():
+		_outstanding_pause = {}
+	_run_coordinator.handle_pause_decision_ack(ack)
+
+
+## T024: Poll harness/automation/requests/pause-decision.json when a pause is outstanding.
+func _poll_pause_decision(config: Dictionary) -> void:
+	var requests_dir := _artifact_store.get_requests_directory(config)
+	var decision_path := requests_dir.path_join("pause-decision.json")
+	if not FileAccess.file_exists(decision_path):
+		return
+
+	var raw := FileAccess.get_file_as_string(decision_path)
+	if raw.is_empty():
+		return
+
+	var parse_result := JSON.parse_string(raw)
+	if parse_result == null or typeof(parse_result) != TYPE_DICTIONARY:
+		return
+
+	var request: Dictionary = parse_result
+	var pause_id_val: Variant = _outstanding_pause.get("pauseId", null)
+	var run_id_val: String = String(_outstanding_pause.get("runId", ""))
+	var validator := preload("res://addons/agent_runtime_harness/shared/pause_decision_request_validator.gd").new()
+
+	# Build Callable lookups to satisfy the validator interface.
+	var active_pause_copy := _outstanding_pause.duplicate(false)
+	var pause_lookup := func(run_id: String, pause_id: int) -> bool:
+		if active_pause_copy.is_empty():
+			return false
+		return String(active_pause_copy.get("runId", "")) == run_id and int(active_pause_copy.get("pauseId", -1)) == pause_id
+	var decision_log_lookup := func(_run_id: String, _pause_id: int) -> bool:
+		return false   # No decisions recorded yet for the current outstanding pause.
+
+	var validation := validator.validate(request, pause_lookup, decision_log_lookup)
+	if not bool(validation.get("ok", false)):
+		# Write rejection to automation result log.
+		var rejection := {
+			"accepted": false,
+			"code": String(validation.get("code", "unknown")),
+			"field": validation.get("field"),
+			"message": String(validation.get("message", "")),
+		}
+		_artifact_store.append_automation_log(config, rejection)
+		return
+
+	# Valid decision — forward to runtime and consume the file.
+	var decision_msg := {
+		"pauseId": int(pause_id_val) if pause_id_val != null else -1,
+		"decision": String(request.get("decision", "")),
+		"submittedBy": String(request.get("submittedBy", "vscode-agent")),
+	}
+	if _bridge != null:
+		var session = _bridge._get_active_session() if _bridge.has_method("_get_active_session") else null
+		if session != null:
+			session.send_message(
+				"%s:%s" % [InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL, InspectionConstants.RUNTIME_ERROR_MSG_PAUSE_DECISION],
+				[decision_msg]
+			)
+	# Delete the consumed request file.
+	DirAccess.remove_absolute(decision_path)
+	# Notify coordinator.
+	_run_coordinator.handle_pause_decision_submitted(decision_msg)
 
 
 func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -> void:

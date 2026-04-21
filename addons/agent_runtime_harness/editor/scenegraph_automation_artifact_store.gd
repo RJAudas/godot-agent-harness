@@ -58,6 +58,24 @@ func get_request_path(config: Dictionary) -> String:
 	return String(automation.get("requestPath", "res://harness/automation/requests/run-request.json"))
 
 
+func get_requests_directory(config: Dictionary) -> String:
+	var automation: Dictionary = config.get("automation", {})
+	return ProjectSettings.globalize_path(String(automation.get("requestsDirectory", "res://harness/automation/requests")))
+
+
+func append_automation_log(config: Dictionary, entry: Dictionary) -> void:
+	## Append a JSON line to the automation rejection log.
+	var automation: Dictionary = config.get("automation", {})
+	var results_dir := ProjectSettings.globalize_path(String(automation.get("resultsDirectory", "res://harness/automation/results")))
+	var log_path := results_dir.path_join("automation-log.jsonl")
+	var handle := FileAccess.open(log_path, FileAccess.READ_WRITE if FileAccess.file_exists(log_path) else FileAccess.WRITE)
+	if handle == null:
+		return
+	handle.seek_end(0)
+	handle.store_line(JSON.stringify(entry))
+	handle.close()
+
+
 func get_capability_result_path(config: Dictionary) -> String:
 	var automation: Dictionary = config.get("automation", {})
 	return String(automation.get("capabilityResultPath", "res://harness/automation/results/capability.json"))

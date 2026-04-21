@@ -101,6 +101,65 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 				"Per-event runtime input-dispatch outcomes captured during the run."
 			))
 
+	# ---------------------------------------------------------------------------
+	# T016: Runtime error records (feature 007)
+	# ---------------------------------------------------------------------------
+	var runtime_error_records: Array = session_context.get("runtime_error_records", [])
+	var runtime_error_reporting := {}
+	var runtime_error_records_path := output_directory.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+	var flush_result := _flush_runtime_error_records(runtime_error_records, runtime_error_records_path, run_id)
+	if flush_result.has("error"):
+		validation_notes.append("Runtime error records could not be flushed: %s" % String(flush_result.get("error", "")))
+	else:
+		if not runtime_error_records.is_empty():
+			artifact_refs.append(_build_artifact_ref(
+				InspectionConstants.ARTIFACT_KIND_RUNTIME_ERROR_RECORDS,
+				artifact_root,
+				InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE,
+				"application/jsonl",
+				"Deduplicated runtime error and warning records captured after the runtime harness attaches."
+			))
+			runtime_error_reporting["runtimeErrorRecordsArtifact"] = artifact_root.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+		else:
+			# No errors — write an empty file so the manifest reference stays consistent.
+			_ensure_runtime_error_records_empty(runtime_error_records_path)
+	# T034: pauseOnErrorMode is set from the session context (coordinator stamps it at run start).
+	var pause_on_error_mode := String(session_context.get("pause_on_error_mode", InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE))
+	runtime_error_reporting["pauseOnErrorMode"] = pause_on_error_mode if not pause_on_error_mode.is_empty() else InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE
+
+	# T031: termination is set by the coordinator via set_termination message before persist.
+	var termination := String(session_context.get("termination", InspectionConstants.RUNTIME_TERMINATION_COMPLETED))
+	if termination.is_empty():
+		termination = InspectionConstants.RUNTIME_TERMINATION_COMPLETED
+	runtime_error_reporting["termination"] = termination
+
+	# T031: Add lastErrorAnchor only when termination = crashed.
+	if termination == InspectionConstants.RUNTIME_TERMINATION_CRASHED:
+		var last_error_anchor: Variant = session_context.get("last_error_anchor", null)
+		if last_error_anchor != null and typeof(last_error_anchor) == TYPE_DICTIONARY and not (last_error_anchor as Dictionary).is_empty():
+			runtime_error_reporting["lastErrorAnchor"] = (last_error_anchor as Dictionary).duplicate(true)
+		else:
+			runtime_error_reporting["lastErrorAnchor"] = {"lastError": "none"}
+
+	# ---------------------------------------------------------------------------
+	# T026: Pause decision log (feature 007)
+	# ---------------------------------------------------------------------------
+	var pause_decision_log: Array = session_context.get("pause_decision_log", [])
+	var pause_decision_log_path := output_directory.path_join(InspectionConstants.DEFAULT_PAUSE_DECISION_LOG_FILE)
+	var pdl_flush_result := _flush_pause_decision_log(pause_decision_log, pause_decision_log_path, run_id)
+	if pdl_flush_result.has("error"):
+		validation_notes.append("Pause decision log could not be flushed: %s" % String(pdl_flush_result.get("error", "")))
+	else:
+		if not pause_decision_log.is_empty():
+			artifact_refs.append(_build_artifact_ref(
+				InspectionConstants.ARTIFACT_KIND_PAUSE_DECISION_LOG,
+				artifact_root,
+				InspectionConstants.DEFAULT_PAUSE_DECISION_LOG_FILE,
+				"application/jsonl",
+				"One row per resolved pause: (runId, pauseId, cause, decision, decisionSource, latencyMs)."
+			))
+			runtime_error_reporting["pauseDecisionLogArtifact"] = artifact_root.path_join(InspectionConstants.DEFAULT_PAUSE_DECISION_LOG_FILE)
+
 	var manifest := {
 		"schemaVersion": "1.0.0",
 		"manifestId": "scenegraph-%s" % run_id,
@@ -113,6 +172,7 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 			"keyFindings": summary.get("keyFindings", []),
 		},
 		"artifactRefs": artifact_refs,
+		"runtimeErrorReporting": runtime_error_reporting,
 		"validation": {
 			"bundleValid": bundle_valid,
 			"notes": validation_notes,
@@ -289,3 +349,53 @@ func _join_strings(values: Array) -> String:
 	for value in values:
 		parts.append(String(value))
 	return ", ".join(parts)
+
+
+func _flush_runtime_error_records(records: Array, path: String, run_id: String) -> Dictionary:
+	## Write runtime-error-records.jsonl; one row per dedup key.
+	## Returns {} on success or { "error": <message> } on failure.
+	if records.is_empty():
+		return {}
+
+	var handle := FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return {"error": "Could not open %s for writing (%s)." % [path, error_string(FileAccess.get_open_error())]}
+
+	for record_value in records:
+		var record: Dictionary = record_value
+		# Safety: enforce run_id consistency.
+		record["runId"] = run_id
+		handle.store_line(JSON.stringify(record))
+
+	handle.close()
+	return {}
+
+
+func _ensure_runtime_error_records_empty(path: String) -> void:
+	## Write an empty JSONL file so the path exists for manifest references.
+	if FileAccess.file_exists(path):
+		return
+	var handle := FileAccess.open(path, FileAccess.WRITE)
+	if handle != null:
+		handle.close()
+
+
+func _flush_pause_decision_log(log: Array, path: String, run_id: String) -> Dictionary:
+	## Write pause-decision-log.jsonl; one row per resolved pause, ordered by pauseId.
+	if log.is_empty():
+		return {}
+
+	var sorted_log := log.duplicate(true)
+	sorted_log.sort_custom(func(a, b): return int(a.get("pauseId", 0)) < int(b.get("pauseId", 0)))
+
+	var handle := FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return {"error": "Could not open %s for writing (%s)." % [path, error_string(FileAccess.get_open_error())]}
+
+	for entry_value in sorted_log:
+		var entry: Dictionary = entry_value
+		entry["runId"] = run_id
+		handle.store_line(JSON.stringify(entry))
+
+	handle.close()
+	return {}

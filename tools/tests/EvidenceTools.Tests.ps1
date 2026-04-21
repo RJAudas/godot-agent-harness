@@ -176,3 +176,113 @@ Describe 'tools/evidence/validate-evidence-manifest.ps1' {
         $result.ParsedOutput.missingArtifactPaths | Should -Contain '..\..\outside-repo.json'
     }
 }
+
+# ---------------------------------------------------------------------------
+# T028: runtimeErrorReporting block invariants in validate-evidence-manifest.ps1
+# ---------------------------------------------------------------------------
+
+Describe 'validate-evidence-manifest.ps1 runtimeErrorReporting invariants (T028)' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+        $script:ValidScript = Get-RepoPath 'tools/evidence/validate-evidence-manifest.ps1'
+
+        ## Helper: write a minimal manifest with the given runtimeErrorReporting block to $TestDrive
+        $script:WriteManifest = {
+            param([string]$FileName, [hashtable]$Reporting)
+            $m = [ordered]@{
+                schemaVersion = '1.0.0'
+                manifestId    = 'test-manifest'
+                runId         = 'test-run'
+                scenarioId    = 'test-scenario'
+                status        = 'pass'
+                summary       = @{ headline = 'h'; outcome = 'pass'; keyFindings = @() }
+                artifactRefs  = @()
+                runtimeErrorReporting = $Reporting
+                validation    = @{ bundleValid = $true; notes = @() }
+                producer      = @{ toolingArtifactId = 'test'; surface = 'test' }
+                createdAt     = '2026-04-19T00:00:00Z'
+            }
+            $path = Join-Path $TestDrive $FileName
+            $m | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding utf8
+            return $path
+        }
+    }
+
+    It 'passes when runtimeErrorReporting has valid completed termination' {
+        $path = & $script:WriteManifest 'rer-completed.json' @{
+            termination = 'completed'; pauseOnErrorMode = 'active'
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.runtimeReportingViolations | Should -BeNullOrEmpty
+        $result.ParsedOutput.bundleValid | Should -BeTrue
+    }
+
+    It 'fails when termination enum value is unrecognized' {
+        $path = & $script:WriteManifest 'rer-bad-termination.json' @{
+            termination = 'exploded'; pauseOnErrorMode = 'active'
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.bundleValid | Should -BeFalse
+        @($result.ParsedOutput.runtimeReportingViolations | Where-Object { $_ -like '*termination*exploded*' }).Count |
+            Should -BeGreaterThan 0
+    }
+
+    It 'fails when pauseOnErrorMode enum value is unrecognized' {
+        $path = & $script:WriteManifest 'rer-bad-mode.json' @{
+            termination = 'completed'; pauseOnErrorMode = 'broken_mode'
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.bundleValid | Should -BeFalse
+        @($result.ParsedOutput.runtimeReportingViolations | Where-Object { $_ -like '*pauseOnErrorMode*broken_mode*' }).Count |
+            Should -BeGreaterThan 0
+    }
+
+    It 'fails when termination=crashed but lastErrorAnchor is absent' {
+        $path = & $script:WriteManifest 'rer-crashed-no-anchor.json' @{
+            termination = 'crashed'; pauseOnErrorMode = 'active'
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.bundleValid | Should -BeFalse
+        @($result.ParsedOutput.runtimeReportingViolations | Where-Object { $_ -like '*lastErrorAnchor*required*' }).Count |
+            Should -BeGreaterThan 0
+    }
+
+    It 'passes when termination=crashed with a full anchor shape' {
+        $path = & $script:WriteManifest 'rer-crashed-full-anchor.json' @{
+            termination     = 'crashed'
+            pauseOnErrorMode = 'active'
+            lastErrorAnchor = @{
+                scriptPath = 'res://scripts/crash.gd'
+                line       = 10
+                severity   = 'error'
+                message    = 'fatal error'
+            }
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.runtimeReportingViolations | Should -BeNullOrEmpty
+        $result.ParsedOutput.bundleValid | Should -BeTrue
+    }
+
+    It 'passes when termination=crashed with { lastError: none } marker' {
+        $path = & $script:WriteManifest 'rer-crashed-none-marker.json' @{
+            termination     = 'crashed'
+            pauseOnErrorMode = 'active'
+            lastErrorAnchor = @{ lastError = 'none' }
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.runtimeReportingViolations | Should -BeNullOrEmpty
+        $result.ParsedOutput.bundleValid | Should -BeTrue
+    }
+
+    It 'fails when termination=completed but lastErrorAnchor is present' {
+        $path = & $script:WriteManifest 'rer-completed-spurious-anchor.json' @{
+            termination     = 'completed'
+            pauseOnErrorMode = 'active'
+            lastErrorAnchor = @{ scriptPath = 'res://x.gd'; line = 1; severity = 'error'; message = 'oops' }
+        }
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/evidence/validate-evidence-manifest.ps1' -Arguments @('-ManifestPath', $path)
+        $result.ParsedOutput.bundleValid | Should -BeFalse
+        @($result.ParsedOutput.runtimeReportingViolations | Where-Object { $_ -like '*lastErrorAnchor*must not be present*' }).Count |
+            Should -BeGreaterThan 0
+    }
+}

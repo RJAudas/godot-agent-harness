@@ -76,6 +76,30 @@
         "blockedReasons": { "type": "array", "items": { "type": "string" } },
         "reason": { "type": "string" }
       }
+    },
+    "runtimeErrorCapture": {
+      "type": "object",
+      "description": "Whether runtime-error and warning capture is available (specs/007-report-runtime-errors). v1 invariant: always supported when the addon is loaded.",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    },
+    "pauseOnError": {
+      "type": "object",
+      "description": "Whether the harness can pause the running playtest on runtime errors and wait for an agent decision (specs/007-report-runtime-errors). When unsupported the run executes in capture-only degraded mode.",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    },
+    "breakpointSuppression": {
+      "type": "object",
+      "description": "Whether user-set GDScript breakpoint statements are suppressed during agent runs (specs/007-report-runtime-errors). When unsupported, breakpoints are routed through the pause-decision flow with cause paused_at_user_breakpoint.",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
     }
   }
 }

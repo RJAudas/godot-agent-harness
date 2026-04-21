@@ -411,6 +411,13 @@ When the game process exits without a clean shutdown handshake:
 - The runtime's last-error sidecar (`last-error-anchor.json`) is read to populate `lastErrorAnchor`.
 - If no error was captured before the crash, `lastErrorAnchor = { "lastError": "none" }`.
 
+**Persistence guarantee (Fix #19):** `runtime-error-records.jsonl` and `last-error-anchor.json` are written through two independent fallback paths so they are present even when the run ends before `persist_latest_bundle` runs:
+
+1. **Coordinator emergency flush** — when `_fail_run_as_crashed` fires, the coordinator writes its own accumulated dedup map to `runtime-error-records.jsonl` (and the anchor sidecar) if the files are missing or empty. The `validationResult.notes` array on the run result will contain `"runtime_error_records: emergency_persisted"` when this path was used, or `"runtime_error_records: none_observed"` when no errors had been recorded at all.
+2. **Runtime exit-tree flush** — `_exit_tree` writes the runtime's in-memory dedup map to the same JSONL file under the same missing-or-empty guard, covering clean user-stop cases where `persist_latest_bundle` never ran.
+
+Neither path overwrites a file that `persist_latest_bundle` already wrote.
+
 ### Cooperation with feature 006 (input dispatch)
 
 While a pause is outstanding, the broker does NOT advance any queued input-dispatch events. The outstanding pause must be resolved (or timeout) before input dispatch resumes.

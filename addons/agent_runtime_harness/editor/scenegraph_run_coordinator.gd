@@ -34,6 +34,10 @@ var _input_dispatch_validator := InputDispatchRequestValidator.new()
 ## Tracks the last runtime error anchor for crash classification (US3/T030).
 var _last_error_anchor := {}
 var _runtime_error_record_count := 0
+## Fix #19: Coordinator-side dedup map for emergency persist on crash.
+## Key: "<scriptPath>|<line>|<severity>".  Mirrors the runtime dedup rule.
+var _runtime_error_dedup: Dictionary = {}
+var _runtime_error_ordinal := 0
 ## T025: Outstanding pause tracking and decision log.
 var _active_pause := {}
 var _pause_decision_log: Array = []
@@ -70,6 +74,8 @@ func start_run(config: Dictionary, request: Dictionary, capability: Dictionary, 
 	_last_build_failure = {}
 	_last_error_anchor = {}
 	_runtime_error_record_count = 0
+	_runtime_error_dedup = {}
+	_runtime_error_ordinal = 0
 	_active_pause = {}
 	_pause_decision_log = []
 	_pending_failure_kind = null
@@ -312,15 +318,50 @@ func handle_transport_error(message: String) -> void:
 func _on_runtime_error_record(record: Dictionary) -> void:
 	## Called when the bridge forwards a structured runtime error record (T018).
 	## Maintains the last-error anchor for crash classification (US3/T031).
+	## Fix #19: also accumulates into _runtime_error_dedup for emergency persist.
 	if not _active:
 		return
 	_runtime_error_record_count += 1
-	if String(record.get("severity", "")) == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
+	# Comment 6: guard severity to the two allowed enum values.
+	var severity := String(record.get("severity", ""))
+	if severity != InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR and severity != InspectionConstants.RUNTIME_ERROR_SEVERITY_WARNING:
+		severity = InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR
+	if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
 		_last_error_anchor = {
 			"scriptPath": String(record.get("scriptPath", "unknown")),
 			"line": record.get("line"),
-			"severity": String(record.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+			"severity": severity,
 			"message": String(record.get("message", "")),
+		}
+	var script_path := String(record.get("scriptPath", "unknown"))
+	var line: int = int(record.get("line", -1))
+	# Comment 5: normalize line/function to schema-valid values.
+	var norm_line = line if line >= 1 else null
+	var raw_func = record.get("function")
+	var norm_func = raw_func if (raw_func != null and String(raw_func).length() > 0) else null
+	var dedup_key := "%s|%d|%s" % [script_path, line, severity]
+	var now_ts := InspectionConstants.utc_timestamp_now()
+	if _runtime_error_dedup.has(dedup_key):
+		var existing: Dictionary = _runtime_error_dedup[dedup_key]
+		var count: int = int(existing.get("repeatCount", 1))
+		if count < InspectionConstants.RUNTIME_ERROR_REPEAT_CAP:
+			existing["repeatCount"] = count + 1
+			existing["lastSeenAt"] = now_ts
+		else:
+			existing["truncatedAt"] = InspectionConstants.RUNTIME_ERROR_REPEAT_CAP
+	else:
+		_runtime_error_ordinal += 1
+		_runtime_error_dedup[dedup_key] = {
+			"runId": String(record.get("runId", String(_active_request.get("runId", "")))),
+			"ordinal": _runtime_error_ordinal,
+			"scriptPath": script_path,
+			"line": norm_line,
+			"function": norm_func,
+			"message": String(record.get("message", "")),
+			"severity": severity,
+			"firstSeenAt": now_ts,
+			"lastSeenAt": now_ts,
+			"repeatCount": 1,
 		}
 
 
@@ -520,10 +561,62 @@ func _fail_run(failure_kind: String, message: String) -> void:
 	_finalize_run("failed", failure_kind, _derive_failure_termination_status(), message)
 
 
+## Fix #19: Emergency persist of any in-memory error records accumulated by
+## _on_runtime_error_record when the run ends abnormally before the runtime
+## had a chance to write runtime-error-records.jsonl itself.  Only writes
+## when the target file is missing or empty so a runtime-written file is never
+## overwritten.
+func _emergency_persist_runtime_errors() -> void:
+	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var abs_dir: String
+	if output_dir.begins_with("res://"):
+		var project_path := ProjectSettings.globalize_path("res://")
+		abs_dir = output_dir.replace("res://", project_path)
+	else:
+		abs_dir = output_dir
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var vn: Array = _last_validation.get("notes", []).duplicate(true)
+	if _runtime_error_dedup.is_empty():
+		if not "runtime_error_records: none_observed" in vn:
+			vn.append("runtime_error_records: none_observed")
+		_last_validation["notes"] = vn
+		return
+	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+	var should_write := not FileAccess.file_exists(jsonl_path)
+	if not should_write:
+		var fh := FileAccess.open(jsonl_path, FileAccess.READ)
+		if fh != null:
+			should_write = fh.get_length() == 0
+			fh.close()
+	if should_write:
+		var records: Array = _runtime_error_dedup.values().duplicate(true)
+		records.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
+		var fh := FileAccess.open(jsonl_path, FileAccess.WRITE)
+		if fh != null:
+			for r in records:
+				fh.store_line(JSON.stringify(r))
+			fh.close()
+	# Comment 1: always stamp when records exist, independent of whether a write was
+	# needed — the runtime may have already written the file on a clean exit.
+	if not "runtime_error_records: emergency_persisted" in vn:
+		vn.append("runtime_error_records: emergency_persisted")
+	_last_validation["notes"] = vn
+	if not _last_error_anchor.is_empty():
+		var anchor_path := abs_dir.path_join(InspectionConstants.DEFAULT_LAST_ERROR_ANCHOR_FILE)
+		if not FileAccess.file_exists(anchor_path):
+			var fh := FileAccess.open(anchor_path, FileAccess.WRITE)
+			if fh != null:
+				fh.store_string(JSON.stringify(_last_error_anchor))
+				fh.close()
+
+
 ## T031: Called on abnormal disconnect (no manifest, no stop request).
 ## Reads the coordinator's in-memory last-error anchor (populated by _on_runtime_error_record)
 ## or the on-disk sidecar written by T030, and finalizes the run with termination = crashed.
 func _fail_run_as_crashed() -> void:
+	# Fix #19: flush any in-memory error records the runtime never got to persist.
+	_emergency_persist_runtime_errors()
 	var anchor := _last_error_anchor.duplicate(true)
 	# Also try reading the sidecar from disk as a recovery fallback.
 	if anchor.is_empty():

@@ -61,6 +61,8 @@ func _exit_tree() -> void:
 	_startup_capture_fired = true
 	_cancel_session_ready_watchdog()
 	_flush_pending_input_dispatch_outcomes()
+	# Fix #19: best-effort flush of any unwritten runtime error records on exit.
+	_flush_runtime_error_records_on_exit()
 	if EngineDebugger.is_active():
 		EngineDebugger.unregister_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL)
 
@@ -445,6 +447,36 @@ func _flush_last_error_anchor(error_record: Dictionary) -> void:
 	if handle != null:
 		handle.store_string(JSON.stringify(anchor))
 		handle.close()
+
+
+## Fix #19: On any clean exit (user stop or end-of-run without persist_latest_bundle),
+## flush whatever is in _runtime_error_dedup to runtime-error-records.jsonl.
+## Only writes when the file is missing or empty so it never overwrites a file
+## already written by persist_latest_bundle.  Uses FileAccess/DirAccess only —
+## no SceneTree access — so it is safe to call from _exit_tree.
+func _flush_runtime_error_records_on_exit() -> void:
+	if _runtime_error_dedup.is_empty():
+		return
+	var output_dir := String(_session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var abs_dir := ProjectSettings.globalize_path(output_dir)
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+	var should_write := not FileAccess.file_exists(jsonl_path)
+	if not should_write:
+		var fh := FileAccess.open(jsonl_path, FileAccess.READ)
+		if fh != null:
+			should_write = fh.get_length() == 0
+			fh.close()
+	if not should_write:
+		return
+	# Comment 2: reuse get_runtime_error_records() so ordering stays consistent.
+	var records: Array = get_runtime_error_records()
+	var fh := FileAccess.open(jsonl_path, FileAccess.WRITE)
+	if fh != null:
+		for r in records:
+			fh.store_line(JSON.stringify(r))
+		fh.close()
 
 
 ## US2/T021: Raise the engine's debug-pause state and emit a runtime_pause message.

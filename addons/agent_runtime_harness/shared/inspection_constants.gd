@@ -185,6 +185,17 @@ const RUNTIME_ERROR_MSG_SET_TERMINATION := "set_termination"
 ## T034: sent by coordinator at session start to configure degraded mode.
 const RUNTIME_ERROR_MSG_SET_PAUSE_ON_ERROR_MODE := "set_pause_on_error_mode"
 
+## Fix #17: Handshake messages to eliminate the configure_session race condition.
+## Runtime → editor: sent after _register_debugger_transport() so the editor
+## knows it can now deliver configure_session and the runtime is ready to receive it.
+const RUNTIME_TO_EDITOR_MSG_SESSION_READY := "session_ready"
+## Editor → runtime: sent when no broker session context is pending, allowing the
+## runtime to proceed with its file-loaded context without waiting further.
+const EDITOR_TO_RUNTIME_MSG_CONFIGURE_SESSION_SKIP := "configure_session_skip"
+## Watchdog: milliseconds the runtime waits for an editor handshake reply before
+## self-starting the startup capture with the currently-loaded context.
+const SESSION_READY_WATCHDOG_MSEC := 1500
+
 ## Default pause-decision timeout in seconds
 const PAUSE_DECISION_TIMEOUT_SECONDS := 30
 const DEFAULT_OUTPUT_DIRECTORY := "res://evidence/scenegraph/latest"

@@ -281,8 +281,7 @@ func handle_manifest_persisted(manifest: Dictionary) -> void:
 		# when the session disconnects.
 		_emit_status(InspectionConstants.AUTOMATION_STATUS_VALIDATING,
 				"Evidence bundle failed validation; deferring failure — coordinator remains active.", {
-					"validationFailed": true,
-					"deferredFailureKind": String(_pending_failure_kind),
+					"failureKind": String(_pending_failure_kind),
 				})
 		return
 

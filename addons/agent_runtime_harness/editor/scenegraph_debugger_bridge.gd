@@ -68,6 +68,10 @@ func _capture(message: String, data: Array, session_id: int) -> bool:
 			# Fix #17: runtime transport is registered; deliver the broker context now
 			# (or skip if no automation run is active) so the startup capture uses the
 			# correct runId instead of the stale inspection-run-config.json value.
+			# Bind the active session to this session_id so the handshake reply is
+			# routed to the exact session that sent session_ready, not whichever
+			# session _get_active_session() might resolve to.
+			_active_session_id = session_id
 			_on_runtime_session_ready()
 			return true
 		"runtime_error":

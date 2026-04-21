@@ -57,6 +57,9 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	# Fix #17: prevent the watchdog from firing into a dead tree after teardown.
+	_startup_capture_fired = true
+	_cancel_session_ready_watchdog()
 	_flush_pending_input_dispatch_outcomes()
 	if EngineDebugger.is_active():
 		EngineDebugger.unregister_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL)

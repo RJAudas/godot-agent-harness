@@ -44,8 +44,8 @@ This manifest records how each PowerShell script under `tools/` is exercised by 
 
 ## RuntimeErrorEmergencyPersist.Tests.ps1
 
-- Purpose: verify that the coordinator-side emergency-persist path (Fix #19) produces schema-valid `runtime-error-records.jsonl` rows and that the two validation notes stamps (`emergency_persisted` / `none_observed`) are correctly shaped strings.
+- Purpose: validate synthetic `runtime-error-records.jsonl` rows against the runtime error record schema and confirm the expected validation-note literals (`emergency_persisted` / `none_observed`) are represented as correctly shaped strings.
 - Primary schema: `specs/007-report-runtime-errors/contracts/runtime-error-record.schema.json`.
-- Success cases: single error-severity record, single warning-severity record, capped record (`repeatCount=100`, `truncatedAt=100`), two-record JSONL, multi-record ordinal monotonicity, notes stamp format.
-- Failure cases: n/a (format/schema coverage; failure paths exercised by the schema's own rejection tests in `RuntimeErrorCapture.Tests.ps1`).
-- Assertions: each emergency-persist record shape passes schema, ordinals are sequential, notes stamps match expected literal strings.
+- Success cases: single error-severity record, single warning-severity record, capped record (`repeatCount=100`, `truncatedAt=100`), two-record JSONL, multi-record ordinal monotonicity, expected validation-note literal format.
+- Failure cases: n/a (synthetic format/schema coverage only; coordinator-path behavior is not exercised here, and schema rejection coverage lives in `RuntimeErrorCapture.Tests.ps1`).
+- Assertions: each synthetic runtime-error record shape passes schema, ordinals are sequential, and validation-note values match the expected literal strings.

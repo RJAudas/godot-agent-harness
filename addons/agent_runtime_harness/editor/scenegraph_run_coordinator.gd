@@ -307,7 +307,10 @@ func _on_runtime_error_record(record: Dictionary) -> void:
 	if not _active:
 		return
 	_runtime_error_record_count += 1
+	# Comment 6: guard severity to the two allowed enum values.
 	var severity := String(record.get("severity", ""))
+	if severity != InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR and severity != InspectionConstants.RUNTIME_ERROR_SEVERITY_WARNING:
+		severity = InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR
 	if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
 		_last_error_anchor = {
 			"scriptPath": String(record.get("scriptPath", "unknown")),
@@ -317,6 +320,10 @@ func _on_runtime_error_record(record: Dictionary) -> void:
 		}
 	var script_path := String(record.get("scriptPath", "unknown"))
 	var line: int = int(record.get("line", -1))
+	# Comment 5: normalize line/function to schema-valid values.
+	var norm_line = line if line >= 1 else null
+	var raw_func = record.get("function")
+	var norm_func = raw_func if (raw_func != null and String(raw_func).length() > 0) else null
 	var dedup_key := "%s|%d|%s" % [script_path, line, severity]
 	var now_ts := InspectionConstants.utc_timestamp_now()
 	if _runtime_error_dedup.has(dedup_key):
@@ -333,8 +340,8 @@ func _on_runtime_error_record(record: Dictionary) -> void:
 			"runId": String(record.get("runId", String(_active_request.get("runId", "")))),
 			"ordinal": _runtime_error_ordinal,
 			"scriptPath": script_path,
-			"line": record.get("line"),
-			"function": record.get("function"),
+			"line": norm_line,
+			"function": norm_func,
 			"message": String(record.get("message", "")),
 			"severity": severity,
 			"firstSeenAt": now_ts,
@@ -575,9 +582,11 @@ func _emergency_persist_runtime_errors() -> void:
 			for r in records:
 				fh.store_line(JSON.stringify(r))
 			fh.close()
-			if not "runtime_error_records: emergency_persisted" in vn:
-				vn.append("runtime_error_records: emergency_persisted")
-			_last_validation["notes"] = vn
+	# Comment 1: always stamp when records exist, independent of whether a write was
+	# needed — the runtime may have already written the file on a clean exit.
+	if not "runtime_error_records: emergency_persisted" in vn:
+		vn.append("runtime_error_records: emergency_persisted")
+	_last_validation["notes"] = vn
 	if not _last_error_anchor.is_empty():
 		var anchor_path := abs_dir.path_join(InspectionConstants.DEFAULT_LAST_ERROR_ANCHOR_FILE)
 		if not FileAccess.file_exists(anchor_path):

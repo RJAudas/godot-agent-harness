@@ -470,14 +470,8 @@ func _flush_runtime_error_records_on_exit() -> void:
 			fh.close()
 	if not should_write:
 		return
-	var records: Array = _runtime_error_dedup.values().duplicate(true)
-	records.sort_custom(func(a, b):
-		var ta := String(a.get("firstSeenAt", ""))
-		var tb := String(b.get("firstSeenAt", ""))
-		if ta != tb:
-			return ta < tb
-		return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0))
-	)
+	# Comment 2: reuse get_runtime_error_records() so ordering stays consistent.
+	var records: Array = get_runtime_error_records()
 	var fh := FileAccess.open(jsonl_path, FileAccess.WRITE)
 	if fh != null:
 		for r in records:

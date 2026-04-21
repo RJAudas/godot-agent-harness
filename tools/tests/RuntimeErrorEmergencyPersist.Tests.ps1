@@ -1,8 +1,11 @@
 #Requires -Version 7.0
 # RuntimeErrorEmergencyPersist.Tests.ps1
-# Fix #19 — Validates that the coordinator-side emergency-persist path produces
-# runtime-error-record.schema.json-valid JSONL rows and that the notes stamps
-# ("emergency_persisted" / "none_observed") are correctly shaped strings.
+# Fix #19 — Pure PowerShell shape/schema tests for the record format and note-stamp
+# string literals that the coordinator emergency-persist path produces.
+# No Godot process is required or invoked; the coordinator code path itself is not
+# exercised here.  These tests confirm that synthetic records built in the coordinator's
+# expected shape pass runtime-error-record.schema.json, and that the note-stamp strings
+# used by _emergency_persist_runtime_errors have the correct literal values.
 
 BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')

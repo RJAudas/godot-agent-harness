@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/008-agent-runbook/contracts/runbook-entry.schema.json",
+  "title": "RUNBOOK.md Workflow Entry",
+  "description": "Logical schema (not a JSON file format) for each workflow row in RUNBOOK.md. Used by the Pester static-check test to parse and validate the table.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "workflow",
+    "description",
+    "orchestrationScript",
+    "fixture",
+    "recipe"
+  ],
+  "properties": {
+    "workflow": {
+      "type": "string",
+      "enum": [
+        "Input dispatch",
+        "Scene inspection",
+        "Behavior watch",
+        "Build-error triage",
+        "Runtime-error triage"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "orchestrationScript": {
+      "description": "Repo-relative path to a tracked tools/automation/invoke-*.ps1 file that MUST exist.",
+      "type": "string",
+      "pattern": "^tools/automation/invoke-[a-z][a-z0-9-]+\\.ps1$"
+    },
+    "fixture": {
+      "description": "Either a repo-relative path to a tracked fixture under tools/tests/fixtures/runbook/, OR the literal string 'no payload' for workflows that take no request body.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^tools/tests/fixtures/runbook/[a-z][a-z0-9-]+/[a-z0-9._-]+\\.json$"
+        },
+        {
+          "type": "string",
+          "const": "no payload"
+        }
+      ]
+    },
+    "recipe": {
+      "description": "Repo-relative path to a tracked docs/runbook/<workflow>.md file that MUST exist.",
+      "type": "string",
+      "pattern": "^docs/runbook/[a-z][a-z0-9-]+\\.md$"
+    }
+  }
+}

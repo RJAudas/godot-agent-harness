@@ -44,6 +44,8 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-[specs/007-report-runtime-errors/plan.md](../specs/007-report-runtime-errors/plan.md)
+shell commands, and other important information, read the current plan
+at `specs/008-agent-runbook/plan.md`. Companion artifacts:
+`specs/008-agent-runbook/spec.md`, `research.md`, `data-model.md`,
+`contracts/`, and `quickstart.md`.
 <!-- SPECKIT END -->

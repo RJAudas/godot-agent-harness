@@ -21,13 +21,17 @@ Choose the correct validation mode for a Godot change, perform Scenegraph Harnes
 
 ## Runtime verification workflow
 
-1. Confirm harness availability and read the latest capability artifact first. From this repository checkout, prefer `pwsh ./tools/automation/get-editor-evidence-capability.ps1 -ProjectRoot <game-root>`.
-2. If capability is blocked, missing, or schema-invalid, report that blocked state explicitly instead of guessing around the editor.
-3. Submit a brokered run request through the workspace-side helper: `pwsh ./tools/automation/request-editor-evidence-run.ps1 -ProjectRoot <game-root> -RequestFixturePath <fixture-path>`.
-4. Wait for the final run result. If it reports `failureKind = build`, stop there, do not expect a manifest, and read `details`, `buildFailurePhase`, `buildDiagnostics`, and `rawBuildOutput`.
-5. For build-failed runs, report each diagnostic with `resourcePath`, `message`, and `line`/`column` when available, and include the relevant raw build-output lines verbatim instead of paraphrasing them away.
-6. If the run completed with a manifest, read the evidence manifest first, then the summary, then diagnostics or snapshot only if needed.
-7. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, no persisted bundle, or build-failed runs that ended before runtime capture.
+1. Read `RUNBOOK.md` first to identify the correct `invoke-*.ps1` script, fixture template, and recipe doc for the requested workflow.
+<!-- runbook:do-not-read-addon-source -->
+2. Do **not** read addon source files (`addons/agent_runtime_harness/`) to understand the harness protocol. All agent-facing contracts are in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, and the existing `specs/` and `tools/` trees.
+<!-- /runbook:do-not-read-addon-source -->
+3. Confirm harness availability and read the latest capability artifact first. From this repository checkout, use the matching invoke script: `pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>`, or `invoke-input-dispatch.ps1`, etc. The script checks capability internally and returns a JSON stdout envelope.
+4. If capability is blocked, missing, or schema-invalid, report that blocked state explicitly instead of guessing around the editor.
+5. Submit a brokered run request through the invoke script. Parse the JSON stdout envelope (conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`) for `status`, `manifestPath`, and `diagnostics`.
+6. Wait for the final run result. If it reports `failureKind = build`, stop there, do not expect a manifest, and read `details`, `buildFailurePhase`, `buildDiagnostics`, and `rawBuildOutput`.
+7. For build-failed runs, report each diagnostic with `resourcePath`, `message`, and `line`/`column` when available, and include the relevant raw build-output lines verbatim instead of paraphrasing them away.
+8. If the run completed with a manifest, read the evidence manifest first, then the summary, then diagnostics or snapshot only if needed.
+9. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, no persisted bundle, or build-failed runs that ended before runtime capture.
 
 ## Output
 

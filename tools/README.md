@@ -5,7 +5,7 @@ accept repository-relative paths so they compose cleanly in CI and agent flows.
 
 ## Layout
 
-- `automation/` — autonomous-run brokers, capability lookups, and write-boundary contracts.
+- `automation/` — autonomous-run brokers, capability lookups, write-boundary contracts, and the five parameterized orchestration scripts (`invoke-*.ps1`). See `RUNBOOK.md` for the quick-reference index.
 - `evals/` — seeded eval prompts, fixtures, and result files.
 - `evidence/` — manifest-centered evidence helpers (creation and validation).
 - `tests/` — Pester regressions for the PowerShell scripts. Run them with
@@ -16,6 +16,20 @@ accept repository-relative paths so they compose cleanly in CI and agent flows.
   the in-editor **Deploy Agent Assets** button will seed the rest.
 - `check-addon-parse.ps1` — runs Godot headless against a sandbox project
   and fails when the addon emits parse or compile errors. See below.
+
+## Orchestration scripts (`invoke-*.ps1`)
+
+Five parameterized scripts in `automation/` are the preferred harness entrypoints for agent-driven workflows. Each accepts `-ProjectRoot <game-root>` and optional payload parameters, runs the full capability check → run request → manifest validation flow, and emits a single JSON stdout envelope.
+
+| Script | Workflow |
+|--------|---------|
+| `invoke-input-dispatch.ps1 -FixtureOrPayload <fixture-or-json>` | Dispatch keypresses or InputMap actions |
+| `invoke-scene-inspection.ps1` | Startup scene-tree capture |
+| `invoke-build-error-triage.ps1 [-IncludeRawBuildOutput]` | Build-error capture and diagnosis |
+| `invoke-runtime-error-triage.ps1 [-IncludeFullStack]` | Runtime-error triage with pause-on-error |
+| `invoke-behavior-watch.ps1 -FixtureOrPayload <fixture-or-json>` | Multi-frame property / signal watch |
+
+Envelope schema: `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`. Recipe docs: `docs/runbook/`. Quick-reference index: `RUNBOOK.md`.
 
 ## `check-addon-parse.ps1`
 

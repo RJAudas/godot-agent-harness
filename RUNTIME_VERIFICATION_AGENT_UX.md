@@ -1,5 +1,11 @@
 # Runtime-verification agent UX
 
+> **Phase 1 (fixture templates + runbook) and Phase 2 (parameterized orchestration scripts)
+> are now implemented.** Deliverables: `RUNBOOK.md` (five-row quick-reference index),
+> `docs/runbook/` (per-workflow recipes), and `tools/automation/invoke-*.ps1`
+> (end-to-end orchestration scripts). See `RUNBOOK.md` to run any workflow with a
+> single `pwsh` call.
+
 Findings and proposed approach for streamlining "launch the game and send a
 keypress" workflows that currently stall the LLM. Start small (fixture
 templates + runbook), evolve toward an MCP server only if needed.
@@ -34,7 +40,22 @@ captured 30-call trace using the `godot-evidence-triage` agent showed:
 
 The agent in the captured trace never reached fixture authoring.
 
-## Approach — start small, evolve toward MCP
+## Implementation status
+
+**Phase 1 and Phase 2 are complete (spec 008).** The deliverables shipped as:
+
+- Fixture templates under `tools/tests/fixtures/runbook/` (input-dispatch, inspect-scene-tree, build-error-triage, runtime-error-triage, behavior-watch).
+- `RUNBOOK.md` — five-row quick-reference index.
+- `docs/runbook/` — per-workflow recipe docs with concrete copy-paste commands.
+- Five parameterized orchestration scripts under `tools/automation/`: `invoke-input-dispatch.ps1`, `invoke-scene-inspection.ps1`, `invoke-build-error-triage.ps1`, `invoke-runtime-error-triage.ps1`, `invoke-behavior-watch.ps1`.
+- Shared module: `tools/automation/RunbookOrchestration.psm1`.
+- Pester tests: `tools/tests/InvokeRunbookScripts.Tests.ps1`.
+
+The "Phase 2 orchestration script" described below as a single `invoke-runtime-verification.ps1` was split into five workflow-specific scripts (one per row in RUNBOOK.md) to give agents a narrower, more predictable surface per workflow.
+
+Phase 3 (MCP server) is still optional and has not started.
+
+
 
 Three phases. Each phase reuses what the previous one built. Phase 3 (MCP)
 is optional; phases 1 and 2 may be sufficient.

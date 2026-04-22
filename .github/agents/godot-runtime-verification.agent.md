@@ -18,8 +18,9 @@ Interpret a Godot change request, choose between ordinary tests, Scenegraph Harn
 
 - Read `.github/copilot-instructions.md`, `AGENTS.md`, and any relevant `.github/instructions/*.instructions.md` file before acting.
 - Route runtime-visible requests to the Scenegraph Harness workflow.
+- Read `RUNBOOK.md` before selecting a harness script. Never read addon source files (`addons/agent_runtime_harness/`) to understand the harness protocol; all agent-facing contracts are in `RUNBOOK.md`, `docs/runbook/`, and `specs/008-agent-runbook/contracts/`.
 - If the user already provides an evidence manifest and only wants diagnosis, stop and route to `godot-evidence-triage.agent.md`.
-- For runtime verification from this repository checkout, prefer `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1` over hand-editing broker files.
+- For runtime verification from this repository checkout, prefer the parameterized orchestration scripts (`tools/automation/invoke-*.ps1`); fall back to `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1` only when needed.
 - For requests that need to start the game and send keys or input actions (for example "press Enter to start"), use the same brokered run-request flow with an `overrides.inputDispatchScript` payload as documented in `specs/006-input-dispatch/quickstart.md`. Do not invent a separate broker entrypoint or new agent. Confirm `inputDispatch.supported = true` on the capability artifact first, then read `input-dispatch-outcomes.jsonl` from the evidence bundle alongside the manifest.
 - Read the manifest first once a run has persisted evidence.
 - If `run-result.json` reports `failureKind = build`, stop before manifest lookup and report `buildFailurePhase`, `details`, each `buildDiagnostics` entry with `resourcePath`, `message`, and `line`/`column` when present, plus the relevant `rawBuildOutput` lines.

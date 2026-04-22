@@ -97,6 +97,10 @@ request, read results, validate manifest) lives in
 Use `integration-testing/<name>` as the `-ProjectRoot` for every helper
 invocation.
 
+For agent-driven workflows, prefer the parameterized orchestration scripts
+(`tools/automation/invoke-*.ps1`). See [`RUNBOOK.md`](../RUNBOOK.md) for
+the quick-reference index of scripts, fixture templates, and recipe docs.
+
 ## Cleanup
 
 ```pwsh

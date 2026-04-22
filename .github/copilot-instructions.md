@@ -8,10 +8,11 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 
 1. `README.md` for repository purpose and layout.
 2. `AGENTS.md` for agent-facing workflow rules.
-3. Relevant path-specific files under `.github/instructions/`.
-4. `docs/AGENT_RUNTIME_HARNESS.md` for harness architecture and evidence expectations.
-5. `docs/AI_TOOLING_BEST_PRACTICES.md` when adding or changing agent tooling assets.
-6. `docs/INTEGRATION_TESTING.md` and the "End-to-end plugin testing" section of `tools/README.md` BEFORE doing anything that involves a real Godot editor, real playtest, or real input dispatch.
+3. `RUNBOOK.md` as the five-row quick-reference index before running any runtime workflow (scene inspection, input dispatch, behavior watch, build-error triage, runtime-error triage).
+4. Relevant path-specific files under `.github/instructions/`.
+5. `docs/AGENT_RUNTIME_HARNESS.md` for harness architecture and evidence expectations.
+6. `docs/AI_TOOLING_BEST_PRACTICES.md` when adding or changing agent tooling assets.
+7. `docs/INTEGRATION_TESTING.md` and the "End-to-end plugin testing" section of `tools/README.md` BEFORE doing anything that involves a real Godot editor, real playtest, or real input dispatch.
 
 ## Durable rules
 
@@ -21,7 +22,7 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - Use three validation modes consistently: ordinary tests, Scenegraph Harness runtime verification, and combined validation.
 - Choose Scenegraph Harness runtime verification for requests about runtime-visible behavior, what appears in game, node presence, hierarchy, or other outcomes that must be proven from a running project.
 - Choose combined validation when a change affects runtime-visible behavior and there is already an existing deterministic test surface; run the existing tests plus the runtime harness flow, but do not invent new ordinary tests solely to satisfy the rule.
-- When routing to runtime verification from this repository checkout, prefer the workspace-side helper flow: check capability, request a brokered run, then read the persisted evidence manifest first. Treat blocked or missing capability and run-result artifacts as explicit unsupported states.
+- When routing to runtime verification from this repository checkout, prefer the parameterized orchestration scripts (`tools/automation/invoke-*.ps1`); consult `RUNBOOK.md` for the right script, fixture template, and recipe doc for each workflow. Fall back to the raw helper flow only when the invoke script cannot satisfy the need. Treat blocked or missing capability and run-result artifacts as explicit unsupported states.
 - Auto-delegate runtime work to the matching custom agent instead of handling it inline. Invoke `godot-runtime-verification` whenever a fresh harness run is needed (runtime-visible verification, starting the game, dispatching keys or `InputMap` actions, reproducing a runtime crash). Invoke `godot-evidence-triage` when an evidence manifest already exists and the user only wants diagnosis. Do not ask the user which agent to pick when the routing rule is unambiguous.
 - Keep repo-wide guidance concise. Put durable rules here, agent operating workflow in `AGENTS.md`, and subtree-specific constraints in `.github/instructions/`.
 - For the current agent-tooling foundation work, prefer changes in `.github/`, `docs/`, `tools/`, and `specs/001-agent-tooling-foundation/` unless the task explicitly requires addon or scenario edits.
@@ -34,6 +35,11 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - `pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <artifact-id> -RequestedPath <path> -RequestedEditType <edit-type>` checks whether an autonomous action stays inside the declared write boundary.
 - `pwsh ./tools/automation/submit-pause-decision.ps1 -ProjectRoot <path> -RunId <id> -PauseId <n> -Decision continue|stop -SubmittedBy <agent>` submits a pause-on-error decision during an active harness run.
 - `pwsh ./tools/check-addon-parse.ps1` opens a minimal headless Godot project and surfaces GDScript parse, compile, or script-load errors in the addon. Run it after any edit under `addons/agent_runtime_harness/`; a non-zero exit is a blocking failure.
+- `pwsh ./tools/automation/invoke-input-dispatch.ps1 -ProjectRoot <game-root> -FixtureOrPayload <fixture-or-json>` runs an input-dispatch workflow end-to-end and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>` runs a startup scene-tree capture and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-build-error-triage.ps1 -ProjectRoot <game-root>` runs a build-error triage workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-runtime-error-triage.ps1 -ProjectRoot <game-root>` runs a runtime-error triage workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-behavior-watch.ps1 -ProjectRoot <game-root> -FixtureOrPayload <fixture-or-json>` runs a behavior-watch workflow and emits a JSON stdout envelope.
 
 ## Output locations
 

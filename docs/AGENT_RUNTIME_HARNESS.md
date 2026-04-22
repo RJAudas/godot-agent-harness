@@ -189,6 +189,24 @@ Requirements:
 
 Agents need one stable way to execute the harness.
 
+#### Agent runbook entry point
+
+`RUNBOOK.md` at the repository root is the quick-reference index for all supported runtime workflows. Each row maps a workflow name to its orchestration script, fixture template, and recipe doc.
+
+The five parameterized orchestration scripts under `tools/automation/` are the preferred harness entrypoints:
+
+| Script | Workflow |
+|--------|---------|
+| `invoke-input-dispatch.ps1` | Dispatch keypresses or `InputMap` actions |
+| `invoke-scene-inspection.ps1` | Startup scene-tree capture |
+| `invoke-build-error-triage.ps1` | Build-error capture and diagnosis |
+| `invoke-runtime-error-triage.ps1` | Runtime-error triage with pause-on-error |
+| `invoke-behavior-watch.ps1` | Multi-frame property / signal behavior watch |
+
+Each script accepts `-ProjectRoot <game-root>` plus optional payload/fixture parameters and emits a single JSON stdout envelope conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`.
+
+Agents should read `RUNBOOK.md` and the matching recipe doc under `docs/runbook/` instead of reading addon source files to understand harness protocols.
+
 Requirements:
 
 - run a named scenario
@@ -421,3 +439,23 @@ Neither path overwrites a file that `persist_latest_bundle` already wrote.
 ### Cooperation with feature 006 (input dispatch)
 
 While a pause is outstanding, the broker does NOT advance any queued input-dispatch events. The outstanding pause must be resolved (or timeout) before input dispatch resumes.
+
+## Agent runbook entry point
+
+For agents that need to run a runtime workflow, the preferred entry point is `RUNBOOK.md` at the repository root. It provides a five-row quick-reference table linking each workflow to:
+
+- An orchestration script (`tools/automation/invoke-*.ps1`) that wraps the full capability-check → request → poll → manifest-read loop into a single invocation.
+- A tracked request fixture under `tools/tests/fixtures/runbook/<workflow>/` as a starting template.
+- A step-by-step recipe under `docs/runbook/<workflow>.md`.
+
+Every orchestration script emits a stable JSON stdout envelope conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`. Parse the `status`, `failureKind`, `manifestPath`, and `outcome` fields to determine next steps without reading harness internals.
+
+The five supported workflows are:
+
+| Workflow | Script |
+|---|---|
+| Input dispatch | `tools/automation/invoke-input-dispatch.ps1` |
+| Scene inspection | `tools/automation/invoke-scene-inspection.ps1` |
+| Behavior watch | `tools/automation/invoke-behavior-watch.ps1` |
+| Build-error triage | `tools/automation/invoke-build-error-triage.ps1` |
+| Runtime-error triage | `tools/automation/invoke-runtime-error-triage.ps1` |

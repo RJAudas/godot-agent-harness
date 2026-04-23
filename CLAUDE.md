@@ -69,3 +69,8 @@ These are the behaviors that waste runs.
 - [docs/runbook/](docs/runbook/) — recipe docs for each workflow
 - [specs/008-agent-runbook/contracts/](specs/008-agent-runbook/contracts/) — schemas
 - `.claude/agents/` — subagents to delegate to
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

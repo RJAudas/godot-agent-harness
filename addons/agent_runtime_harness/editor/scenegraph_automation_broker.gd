@@ -22,6 +22,8 @@ var _run_coordinator := ScenegraphRunCoordinator.new()
 var _config_path := "res://harness/inspection-run-config.json"
 var _poll_timer: Timer
 var _last_capability_signature := ""
+var _last_capability_publish_msec: int = -1
+const _CAPABILITY_HEARTBEAT_INTERVAL_MSEC: int = 30_000
 var _script_error_summary_regexes: Array[RegEx] = []
 var _script_error_line_regex: RegEx = null
 ## Pause-decision polling state (T024)
@@ -264,12 +266,19 @@ func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -
 	var signature_payload := capability.duplicate(true)
 	signature_payload.erase("checkedAt")
 	var signature := JSON.stringify(signature_payload)
-	if signature == _last_capability_signature and FileAccess.file_exists(_artifact_store.get_capability_result_path(config)):
+	var now_msec := Time.get_ticks_msec()
+	var file_exists := FileAccess.file_exists(_artifact_store.get_capability_result_path(config))
+	var content_changed := signature != _last_capability_signature
+	var heartbeat_due := _last_capability_publish_msec < 0 \
+		or now_msec - _last_capability_publish_msec >= _CAPABILITY_HEARTBEAT_INTERVAL_MSEC
+	if not content_changed and file_exists and not heartbeat_due:
 		return
 
 	_last_capability_signature = signature
+	_last_capability_publish_msec = now_msec
 	_artifact_store.write_capability_result(config, capability)
-	emit_signal("capability_updated", capability)
+	if content_changed or not file_exists:
+		emit_signal("capability_updated", capability)
 
 
 func _collect_build_failure_payload(request: Dictionary, build_failure_phase: String) -> Dictionary:

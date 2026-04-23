@@ -1,6 +1,31 @@
-# Claude Code instructions
+# CLAUDE.md
 
-Start here. This file is the fast-path summary for Claude Code working in this repo. The full agent-facing operating guide is [AGENTS.md](AGENTS.md); read it once per session.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Start here. This file is the fast-path summary; the full agent-facing operating guide is [AGENTS.md](AGENTS.md), and repo-wide durable rules live in [.github/copilot-instructions.md](.github/copilot-instructions.md).
+
+## Architecture (one-pager)
+
+Plugin-first Godot harness that gives agents machine-readable runtime evidence instead of human retellings. Two sides talk via a file broker:
+
+- **Editor side** ([addons/agent_runtime_harness/editor/](addons/agent_runtime_harness/editor/)): dock UI, automation broker, run coordinator, artifact store. Watches `harness/automation/requests/` in the target project and writes to `harness/automation/results/`.
+- **Runtime side** ([addons/agent_runtime_harness/runtime/](addons/agent_runtime_harness/runtime/)): autoload singleton loaded into the *playtest* game — scene capture, input dispatch, behavior-watch sampler, artifact writer.
+- **Evidence is manifest-centered**: every run produces `evidence-manifest.json` that references the workflow-specific artifact (e.g. `input-dispatch-outcomes.jsonl`, `scene-tree.json`). Read the manifest, not raw artifacts.
+- **Agent-facing contracts** live in [specs/008-agent-runbook/contracts/](specs/008-agent-runbook/contracts/) (schemas) and [docs/runbook/](docs/runbook/) (recipes). The `invoke-*.ps1` scripts wrap the full capability-check → request → poll → manifest-read loop so agents never hand-author `run-request.json`.
+- **Integration testing** uses git-ignored sandboxes at `integration-testing/<name>/`. Never scaffold ad-hoc projects elsewhere, never commit a Godot binary, never hard-code an install path.
+
+## Common commands
+
+- `pwsh ./tools/tests/run-tool-tests.ps1` — Pester suite for all PowerShell scripts; no live editor needed.
+- `pwsh ./tools/check-addon-parse.ps1` — headless GDScript parse/compile check. **Run after every edit under `addons/agent_runtime_harness/`**; non-zero exit is a blocking failure.
+- `pwsh ./tools/validate-json.ps1 -InputPath <json> -SchemaPath <schema>` — JSON-schema validation for fixtures, requests, config.
+- `pwsh ./tools/evidence/validate-evidence-manifest.ps1 -ManifestPath <path>` — validates an evidence manifest and confirms referenced artifacts exist.
+- `pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <id> -RequestedPath <path> -RequestedEditType <type>` — run before recording an autonomous write as compliant.
+- Godot binary resolution (for any script that needs it): `$env:GODOT_BIN` first, then `godot`/`godot4`/`Godot*` on PATH. If neither resolves, check the User-scope environment before concluding Godot is missing.
+
+## Safe edit targets
+
+Default write zones: `.github/`, `docs/`, `tools/`, `specs/`. Avoid casual edits under `addons/agent_runtime_harness/` and `scenarios/` unless the task requires runtime-facing behavior or deterministic fixture changes. `integration-testing/` is git-ignored and yours to use freely. First-release autonomous artifacts must stay inside the paths declared in [tools/automation/write-boundaries.json](tools/automation/write-boundaries.json).
 
 ## Runtime verification (the common ask)
 
@@ -32,7 +57,7 @@ See the full list in [RUNBOOK.md](RUNBOOK.md).
 These are the behaviors that waste runs.
 
 - **Do not read prior-run artifacts to plan a new run.** That includes earlier `run-result.json`, `lifecycle-status.json`, previous request files, or anything under `evidence/` that your new request did not produce.
-- **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the protocol. Every agent-facing contract is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, or an invoke script's `Get-Help` output.
+- **Do not read addon source to understand the agent protocol.** Every agent-facing contract is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, or an invoke script's `Get-Help` output. (When the *task itself* is editing the addon to fix a bug, reading it is expected — then run `tools/check-addon-parse.ps1`.)
 - **Do not hand-author `run-request.json`** when an invoke script exists for the workflow.
 - **Do not generate request IDs via shell, search for sample payloads, or build requests from raw config.** The invoke script owns all of that.
 - **Do not vary capture or stop policies speculatively.** Fixture defaults are correct for the common case.

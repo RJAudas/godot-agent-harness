@@ -274,9 +274,16 @@ func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -
 	if not content_changed and file_exists and not heartbeat_due:
 		return
 
+	var write_result := _artifact_store.write_capability_result(config, capability)
+	if not bool(write_result.get("ok", false)):
+		# Do not advance heartbeat state on failure — the next poll must retry
+		# immediately, otherwise orchestration can read a stale file for up to
+		# the heartbeat interval while we silently skip writes.
+		push_warning("Failed to publish capability.json: %s" % String(write_result.get("error", "unknown error")))
+		return
+
 	_last_capability_signature = signature
 	_last_capability_publish_msec = now_msec
-	_artifact_store.write_capability_result(config, capability)
 	if content_changed or not file_exists:
 		emit_signal("capability_updated", capability)
 

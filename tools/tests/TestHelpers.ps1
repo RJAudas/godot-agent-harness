@@ -24,17 +24,30 @@ function Invoke-RepoPowerShell {
     )
 
     $resolvedScriptPath = Get-RepoPath -Path $ScriptPath
-    $commandArguments = @('-NoProfile', '-File', $resolvedScriptPath) + $Arguments
-    $output = & pwsh @commandArguments 2>&1
-    $exitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+    $stdoutTmp = [System.IO.Path]::GetTempFileName()
+    $stderrTmp = [System.IO.Path]::GetTempFileName()
+    try {
+        $procArgs = @('-NoProfile', '-File', $resolvedScriptPath) + $Arguments
+        $process = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutTmp `
+            -RedirectStandardError $stderrTmp
+        $exitCode = [int]$process.ExitCode
 
-    [pscustomobject]@{
-        ExitCode = $exitCode
-        Output = (($output | ForEach-Object {
-                    if ($null -ne $_) {
-                        $_.ToString()
-                    }
-                }) -join [System.Environment]::NewLine).Trim()
+        $stdout = (Get-Content -LiteralPath $stdoutTmp -Raw)
+        if ($null -eq $stdout) { $stdout = '' }
+        $stderr = (Get-Content -LiteralPath $stderrTmp -Raw)
+        if ($null -eq $stderr) { $stderr = '' }
+
+        [pscustomobject]@{
+            ExitCode = $exitCode
+            Output = $stdout.Trim()
+            Stderr = $stderr.Trim()
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutTmp -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrTmp -ErrorAction SilentlyContinue
     }
 }
 

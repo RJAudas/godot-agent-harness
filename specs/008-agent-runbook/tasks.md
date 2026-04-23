@@ -4,7 +4,7 @@ description: "Tasks: Agent Runbook & Parameterized Harness Scripts (008-agent-ru
 
 # Tasks: Agent Runbook & Parameterized Harness Scripts
 
-**Input**: Design documents from `D:\dev\godot-agent-harness\specs\008-agent-runbook\`
+**Input**: Design documents from `specs/008-agent-runbook/`
 **Branch**: `008-agent-runbook`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md (all present)
 

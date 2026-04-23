@@ -23,11 +23,11 @@ Five parameterized scripts in `automation/` are the preferred harness entrypoint
 
 | Script | Workflow |
 |--------|---------|
-| `invoke-input-dispatch.ps1 -FixtureOrPayload <fixture-or-json>` | Dispatch keypresses or InputMap actions |
+| `invoke-input-dispatch.ps1 [-RequestFixturePath <path> \| -RequestJson <json>]` | Dispatch keypresses or InputMap actions |
 | `invoke-scene-inspection.ps1` | Startup scene-tree capture |
-| `invoke-build-error-triage.ps1 [-IncludeRawBuildOutput]` | Build-error capture and diagnosis |
-| `invoke-runtime-error-triage.ps1 [-IncludeFullStack]` | Runtime-error triage with pause-on-error |
-| `invoke-behavior-watch.ps1 -FixtureOrPayload <fixture-or-json>` | Multi-frame property / signal watch |
+| `invoke-build-error-triage.ps1 [-RequestFixturePath <path> \| -RequestJson <json>] [-IncludeRawBuildOutput]` | Build-error capture and diagnosis |
+| `invoke-runtime-error-triage.ps1 [-RequestFixturePath <path> \| -RequestJson <json>] [-IncludeFullStack]` | Runtime-error triage with pause-on-error |
+| `invoke-behavior-watch.ps1 [-RequestFixturePath <path> \| -RequestJson <json>]` | Multi-frame property / signal watch |
 
 Envelope schema: `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`. Recipe docs: `docs/runbook/`. Quick-reference index: `RUNBOOK.md`.
 

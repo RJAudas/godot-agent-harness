@@ -35,11 +35,11 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - `pwsh ./tools/automation/validate-write-boundary.ps1 -ArtifactId <artifact-id> -RequestedPath <path> -RequestedEditType <edit-type>` checks whether an autonomous action stays inside the declared write boundary.
 - `pwsh ./tools/automation/submit-pause-decision.ps1 -ProjectRoot <path> -RunId <id> -PauseId <n> -Decision continue|stop -SubmittedBy <agent>` submits a pause-on-error decision during an active harness run.
 - `pwsh ./tools/check-addon-parse.ps1` opens a minimal headless Godot project and surfaces GDScript parse, compile, or script-load errors in the addon. Run it after any edit under `addons/agent_runtime_harness/`; a non-zero exit is a blocking failure.
-- `pwsh ./tools/automation/invoke-input-dispatch.ps1 -ProjectRoot <game-root> -FixtureOrPayload <fixture-or-json>` runs an input-dispatch workflow end-to-end and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-input-dispatch.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>]` runs an input-dispatch workflow end-to-end and emits a JSON stdout envelope.
 - `pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>` runs a startup scene-tree capture and emits a JSON stdout envelope.
-- `pwsh ./tools/automation/invoke-build-error-triage.ps1 -ProjectRoot <game-root>` runs a build-error triage workflow and emits a JSON stdout envelope.
-- `pwsh ./tools/automation/invoke-runtime-error-triage.ps1 -ProjectRoot <game-root>` runs a runtime-error triage workflow and emits a JSON stdout envelope.
-- `pwsh ./tools/automation/invoke-behavior-watch.ps1 -ProjectRoot <game-root> -FixtureOrPayload <fixture-or-json>` runs a behavior-watch workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-build-error-triage.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>] [-IncludeRawBuildOutput]` runs a build-error triage workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-runtime-error-triage.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>] [-IncludeFullStack]` runs a runtime-error triage workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-behavior-watch.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>]` runs a behavior-watch workflow and emits a JSON stdout envelope.
 
 ## Output locations
 

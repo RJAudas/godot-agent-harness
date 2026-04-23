@@ -92,6 +92,7 @@ function Exit-Failure {
             latestErrorSummary      = $null
             terminationReason       = 'unknown'
         }
+    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
 }
 
@@ -146,6 +147,14 @@ if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
     $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
 }
 
+# Validate manifest when present.
+if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
+    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+    if (-not $manifestCheck.Ok) {
+        Exit-Failure 'internal' $manifestCheck.Diagnostic
+    }
+}
+
 # Step 9: Build outcome
 $runtimeErrorRecordsPath = $null
 $latestErrorSummary      = $null
@@ -185,19 +194,41 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
             }
         }
     }
-    catch { }
+    catch {
+        Exit-Failure 'internal' "Failed to assemble runtime-error outcome from manifest: $($_.Exception.Message)"
+    }
 }
 
-# Check for runtime failure
-if ($rr.finalStatus -eq 'failed' -and [string]$rr.failureKind -eq 'runtime') {
-    $msg = if ($null -ne $latestErrorSummary) { "Runtime error at $($latestErrorSummary.file):$($latestErrorSummary.line): $($latestErrorSummary.message)" } else { 'Runtime error. Check the manifest for details.' }
-    Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' -ManifestPath $absManifest `
+# Pass through any harness-reported failure (runtime, build, timeout, internal, ...).
+# Only the runtime case carries enriched outcome.latestErrorSummary; all other
+# kinds still surface failureKind on the envelope so callers can route accordingly.
+if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]$rr.failureKind)) {
+    $fk = [string]$rr.failureKind
+    if ($fk -eq 'runtime') {
+        $msg = if ($null -ne $latestErrorSummary) { "Runtime error at $($latestErrorSummary.file):$($latestErrorSummary.line): $($latestErrorSummary.message)" } else { 'Runtime error. Check the manifest for details.' }
+        Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' -ManifestPath $absManifest `
+            -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
+                runtimeErrorRecordsPath = $runtimeErrorRecordsPath
+                latestErrorSummary      = $latestErrorSummary
+                terminationReason       = $terminationReason
+            }
+        Write-RunbookStderrSummary "FAIL: runtime; $msg"
+        exit 1
+    }
+    $msg = "Run failed with failureKind='$fk' (runtime-error triage handles diagnostics for failureKind=runtime only)."
+    Write-RunbookEnvelope -Status 'failure' -FailureKind $fk -ManifestPath $absManifest `
         -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
             runtimeErrorRecordsPath = $runtimeErrorRecordsPath
             latestErrorSummary      = $latestErrorSummary
             terminationReason       = $terminationReason
         }
+    Write-RunbookStderrSummary "FAIL: $fk; $msg"
     exit 1
+}
+
+# Success path requires non-null manifestPath per envelope schema.
+if ([string]::IsNullOrWhiteSpace($absManifest)) {
+    Exit-Failure 'internal' "run-result.json did not contain a manifestPath on a successful run."
 }
 
 # Steps 10-12
@@ -208,4 +239,5 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         terminationReason       = $terminationReason
     }
 $envelope
+Write-RunbookStderrSummary "OK: no runtime errors; manifest at $absManifest"
 exit 0

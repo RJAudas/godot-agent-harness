@@ -67,7 +67,7 @@ function New-RunbookRequestId {
         [Parameter(Mandatory)][string]$Workflow
     )
 
-    $ts = (Get-Date -Format 'yyyyMMddTHHmmssZ').Replace('+', 'Z')
+    $ts = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
     $rand = ([System.Guid]::NewGuid().ToString('N').Substring(0, 6))
     return "runbook-$Workflow-$ts-$rand"
 }
@@ -300,12 +300,75 @@ function Write-RunbookEnvelope {
         manifestPath = if ($PSBoundParameters.ContainsKey('ManifestPath') -and -not [string]::IsNullOrWhiteSpace($ManifestPath)) { $ManifestPath } else { $null }
         runId        = $RunId
         requestId    = $RequestId
-        completedAt  = (Get-Date -Format 'o')
+        completedAt  = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
         diagnostics  = @($Diagnostics | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         outcome      = $Outcome
     }
 
     $envelope | ConvertTo-Json -Depth 20 -Compress:$false
+}
+
+function Test-RunbookManifest {
+    <#
+    .SYNOPSIS
+        Validate an evidence manifest at the given absolute path.
+
+    .OUTPUTS
+        PSCustomObject: { Ok [bool], Diagnostic [string|null] }. When Ok=$false,
+        Diagnostic is a single-line summary suitable for inclusion in the
+        envelope's diagnostics array.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ManifestPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+        return [pscustomobject]@{ Ok = $false; Diagnostic = 'manifestPath is null or empty' }
+    }
+    if (-not (Test-Path -LiteralPath $ManifestPath)) {
+        return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest not found at '$ManifestPath'" }
+    }
+
+    $repoRoot = Get-RunbookRepoRoot
+    $validator = Join-Path $repoRoot 'tools/evidence/validate-evidence-manifest.ps1'
+    if (-not (Test-Path -LiteralPath $validator)) {
+        return [pscustomobject]@{ Ok = $false; Diagnostic = "validate-evidence-manifest.ps1 not found at '$validator'" }
+    }
+
+    $stdoutTmp = [System.IO.Path]::GetTempFileName()
+    $stderrTmp = [System.IO.Path]::GetTempFileName()
+    try {
+        $procArgs = @('-NoProfile', '-File', $validator, '-ManifestPath', $ManifestPath)
+        $proc = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutTmp `
+            -RedirectStandardError $stderrTmp
+        if ($proc.ExitCode -ne 0) {
+            $errText = (Get-Content -LiteralPath $stderrTmp -Raw)
+            if ([string]::IsNullOrWhiteSpace($errText)) {
+                $errText = (Get-Content -LiteralPath $stdoutTmp -Raw)
+            }
+            $first = ($errText -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+            return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $($first.Trim())" }
+        }
+        return [pscustomobject]@{ Ok = $true; Diagnostic = $null }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutTmp -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrTmp -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-RunbookStderrSummary {
+    <#
+    .SYNOPSIS
+        Emit a single-line human-readable summary to stderr (does not affect
+        the JSON envelope on stdout).
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Message)
+    [Console]::Error.WriteLine($Message)
 }
 
 Export-ModuleMember -Function @(
@@ -314,6 +377,8 @@ Export-ModuleMember -Function @(
     'Resolve-RunbookPayload',
     'Invoke-RunbookRequest',
     'Write-RunbookEnvelope',
+    'Test-RunbookManifest',
+    'Write-RunbookStderrSummary',
     'Invoke-Helper',
     'Get-RunbookRepoRoot',
     'Resolve-RunbookRepoPath'

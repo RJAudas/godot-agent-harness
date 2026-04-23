@@ -91,6 +91,7 @@ function Exit-Failure {
             rawBuildOutputPath = $null
             firstDiagnostic   = $null
         }
+    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
 }
 
@@ -145,6 +146,14 @@ if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
     $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
 }
 
+# Validate the manifest when present (run-result-failed runs may not produce one).
+if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
+    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+    if (-not $manifestCheck.Ok) {
+        Exit-Failure 'internal' $manifestCheck.Diagnostic
+    }
+}
+
 # Step 9: Build outcome
 $rawBuildOutputPath = $null
 $firstDiagnostic    = $null
@@ -176,18 +185,39 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
             }
         }
     }
-    catch { }
+    catch {
+        Exit-Failure 'internal' "Failed to assemble build-error outcome from manifest: $($_.Exception.Message)"
+    }
 }
 
-# Check for build failure
-if ($rr.finalStatus -eq 'failed' -and [string]$rr.failureKind -eq 'build') {
-    $msg = if ($null -ne $firstDiagnostic) { "Build error at $($firstDiagnostic.file):$($firstDiagnostic.line): $($firstDiagnostic.message)" } else { 'Build failed. Check the run-result for details.' }
-    Write-RunbookEnvelope -Status 'failure' -FailureKind 'build' -ManifestPath $absManifest `
+# Pass through any harness-reported failure (build, runtime, timeout, internal, ...).
+# Only the build case carries enriched outcome.firstDiagnostic; all other kinds
+# still surface failureKind on the envelope so callers can route accordingly.
+if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]$rr.failureKind)) {
+    $fk = [string]$rr.failureKind
+    if ($fk -eq 'build') {
+        $msg = if ($null -ne $firstDiagnostic) { "Build error at $($firstDiagnostic.file):$($firstDiagnostic.line): $($firstDiagnostic.message)" } else { 'Build failed. Check the run-result for details.' }
+        Write-RunbookEnvelope -Status 'failure' -FailureKind 'build' -ManifestPath $absManifest `
+            -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
+                rawBuildOutputPath = $rawBuildOutputPath
+                firstDiagnostic   = $firstDiagnostic
+            }
+        Write-RunbookStderrSummary "FAIL: build; $msg"
+        exit 1
+    }
+    $msg = "Run failed with failureKind='$fk' (build-error triage handles diagnostics for failureKind=build only)."
+    Write-RunbookEnvelope -Status 'failure' -FailureKind $fk -ManifestPath $absManifest `
         -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
             rawBuildOutputPath = $rawBuildOutputPath
             firstDiagnostic   = $firstDiagnostic
         }
+    Write-RunbookStderrSummary "FAIL: $fk; $msg"
     exit 1
+}
+
+# Success path requires non-null manifestPath per envelope schema.
+if ([string]::IsNullOrWhiteSpace($absManifest)) {
+    Exit-Failure 'internal' "run-result.json did not contain a manifestPath on a successful run."
 }
 
 # Steps 10-12
@@ -197,4 +227,5 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         firstDiagnostic   = $null
     }
 $envelope
+Write-RunbookStderrSummary "OK: build clean; manifest at $absManifest"
 exit 0

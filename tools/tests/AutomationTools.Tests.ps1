@@ -83,7 +83,7 @@ Describe 'tools/automation/validate-write-boundary.ps1' {
         )
 
         $result.ExitCode | Should -Be 1
-        $result.Output | Should -Match "No write boundary found for artifact 'unknown-artifact'"
+        ($result.Output + $result.Stderr) | Should -Match "No write boundary found for artifact 'unknown-artifact'"
     }
 
     It 'rejects mismatched path and edit-type counts' {

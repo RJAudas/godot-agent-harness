@@ -82,6 +82,7 @@ function Exit-Failure {
             sampleCount      = 0
             frameRangeCovered = $null
         }
+    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
 }
 
@@ -141,6 +142,11 @@ if ([string]::IsNullOrWhiteSpace($manifestPath)) {
 }
 $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
 
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+if (-not $manifestCheck.Ok) {
+    Exit-Failure 'internal' $manifestCheck.Diagnostic
+}
+
 # Step 9: Build outcome
 $samplesPath       = $null
 $sampleCount       = 0
@@ -149,21 +155,25 @@ $frameRangeCovered = $null
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
     $samplesRef = $manifest.artifactRefs | Where-Object { $_.kind -in @('behavior-samples', 'behavior-trace') } | Select-Object -First 1
-    if ($null -ne $samplesRef) {
-        $samplesPath = Resolve-RunbookRepoPath -Path $samplesRef.path
-        if (Test-Path -LiteralPath $samplesPath) {
-            $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                    ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
-                    Where-Object { $null -ne $_ }
-            $sampleCount = @($rows).Count
-            if ($sampleCount -gt 0) {
-                $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
-                $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
-            }
-        }
+    if ($null -eq $samplesRef) {
+        Exit-Failure 'internal' "manifest did not contain a 'behavior-samples' or 'behavior-trace' artifact reference"
+    }
+    $samplesPath = Resolve-RunbookRepoPath -Path $samplesRef.path
+    if (-not (Test-Path -LiteralPath $samplesPath)) {
+        Exit-Failure 'internal' "behavior samples artifact missing on disk at '$samplesPath'"
+    }
+    $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
+            Where-Object { $null -ne $_ }
+    $sampleCount = @($rows).Count
+    if ($sampleCount -gt 0) {
+        $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
+        $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
     }
 }
-catch { }
+catch {
+    Exit-Failure 'internal' "Failed to assemble behavior-watch outcome from manifest: $($_.Exception.Message)"
+}
 
 # Steps 10-12
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
@@ -173,4 +183,5 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         frameRangeCovered = $frameRangeCovered
     }
 $envelope
+Write-RunbookStderrSummary "OK: $sampleCount samples captured; manifest at $absManifest"
 exit 0

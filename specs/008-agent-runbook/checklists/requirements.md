@@ -32,7 +32,7 @@
 ## Notes
 
 - 2026-04-22 clarification session resolved 5 questions: trace instrumentation deferred (Q1), capability freshness window pinned to 300s (Q2), end-to-end timeout pinned to 60s (Q3), inline JSON payloads supported alongside fixtures (Q4), SC-002 reworded to a static-check-verifiable form (Q5). See spec `## Clarifications` for the full record.
-- PowerShell is namedin functional requirements because it is the existing
+- PowerShell is named in functional requirements because it is the existing
   scripting layer of the repository (`tools/automation/*.ps1`,
   `tools/evidence/*.ps1`) and the spec is constrained to extend that layer
   rather than introduce a new runtime. This is treated as an environmental

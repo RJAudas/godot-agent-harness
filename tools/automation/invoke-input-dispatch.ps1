@@ -89,6 +89,7 @@ function Exit-Failure {
             dispatchedEventCount = 0
             firstFailureSummary = $null
         }
+    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
 }
 
@@ -151,6 +152,11 @@ if ([string]::IsNullOrWhiteSpace($manifestPath)) {
 }
 $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
 
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+if (-not $manifestCheck.Ok) {
+    Exit-Failure 'internal' $manifestCheck.Diagnostic
+}
+
 # Step 9: Build outcome
 $outcomesPath        = $null
 $dispatchedCount     = 0
@@ -175,7 +181,7 @@ try {
     }
 }
 catch {
-    # Non-fatal: outcome assembly failed; still emit envelope
+    Exit-Failure 'internal' "Failed to assemble input-dispatch outcome from manifest: $($_.Exception.Message)"
 }
 
 # Steps 10-12: Emit envelope and exit
@@ -186,4 +192,5 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         firstFailureSummary = $firstFailureSummary
     }
 $envelope
+Write-RunbookStderrSummary "OK: dispatched $dispatchedCount events; manifest at $absManifest"
 exit 0

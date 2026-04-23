@@ -440,22 +440,5 @@ Neither path overwrites a file that `persist_latest_bundle` already wrote.
 
 While a pause is outstanding, the broker does NOT advance any queued input-dispatch events. The outstanding pause must be resolved (or timeout) before input dispatch resumes.
 
-## Agent runbook entry point
+<!-- The "Agent runbook entry point" section above (under "6. Agent-friendly CLI / run mode") is the canonical home for the runbook overview. -->
 
-For agents that need to run a runtime workflow, the preferred entry point is `RUNBOOK.md` at the repository root. It provides a five-row quick-reference table linking each workflow to:
-
-- An orchestration script (`tools/automation/invoke-*.ps1`) that wraps the full capability-check → request → poll → manifest-read loop into a single invocation.
-- A tracked request fixture under `tools/tests/fixtures/runbook/<workflow>/` as a starting template.
-- A step-by-step recipe under `docs/runbook/<workflow>.md`.
-
-Every orchestration script emits a stable JSON stdout envelope conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`. Parse the `status`, `failureKind`, `manifestPath`, and `outcome` fields to determine next steps without reading harness internals.
-
-The five supported workflows are:
-
-| Workflow | Script |
-|---|---|
-| Input dispatch | `tools/automation/invoke-input-dispatch.ps1` |
-| Scene inspection | `tools/automation/invoke-scene-inspection.ps1` |
-| Behavior watch | `tools/automation/invoke-behavior-watch.ps1` |
-| Build-error triage | `tools/automation/invoke-build-error-triage.ps1` |
-| Runtime-error triage | `tools/automation/invoke-runtime-error-triage.ps1` |

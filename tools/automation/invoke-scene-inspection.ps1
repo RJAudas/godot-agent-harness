@@ -64,6 +64,7 @@ function Exit-Failure {
     param([string]$Kind, [string]$Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
         -Diagnostics @($Message) -Outcome @{ sceneTreePath = $null; nodeCount = 0 }
+    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
 }
 
@@ -121,6 +122,11 @@ if ([string]::IsNullOrWhiteSpace($manifestPath)) {
 }
 $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
 
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+if (-not $manifestCheck.Ok) {
+    Exit-Failure 'internal' $manifestCheck.Diagnostic
+}
+
 # Step 9: Build outcome
 $sceneTreePath = $null
 $nodeCount     = 0
@@ -128,17 +134,20 @@ $nodeCount     = 0
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
     $treeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'scene-tree' } | Select-Object -First 1
-    if ($null -ne $treeRef) {
-        $sceneTreePath = Resolve-RunbookRepoPath -Path $treeRef.path
-        if (Test-Path -LiteralPath $sceneTreePath) {
-            $tree = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
-            # Count nodes recursively
-            function Count-Nodes { param($n); $c = 1; foreach ($child in @($n.children)) { $c += Count-Nodes $child }; $c }
-            $nodeCount = Count-Nodes $tree.root
-        }
+    if ($null -eq $treeRef) {
+        Exit-Failure 'internal' "manifest did not contain a 'scene-tree' artifact reference"
     }
+    $sceneTreePath = Resolve-RunbookRepoPath -Path $treeRef.path
+    if (-not (Test-Path -LiteralPath $sceneTreePath)) {
+        Exit-Failure 'internal' "scene-tree artifact missing on disk at '$sceneTreePath'"
+    }
+    $tree = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
+    function Count-Nodes { param($n); $c = 1; foreach ($child in @($n.children)) { $c += Count-Nodes $child }; $c }
+    $nodeCount = Count-Nodes $tree.root
 }
-catch { }
+catch {
+    Exit-Failure 'internal' "Failed to assemble scene-tree outcome: $($_.Exception.Message)"
+}
 
 # Steps 10-12
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
@@ -147,4 +156,5 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         nodeCount     = $nodeCount
     }
 $envelope
+Write-RunbookStderrSummary "OK: $nodeCount nodes captured; manifest at $absManifest"
 exit 0

@@ -29,6 +29,9 @@ config/name="Sandbox Game"
         (Join-Path $gameRoot '.github/agents/godot-evidence-triage.agent.md') | Should -Exist
         (Join-Path $gameRoot '.github/agents/godot-runtime-verification.agent.md') | Should -Exist
         (Join-Path $gameRoot 'AGENTS.md') | Should -Exist
+        (Join-Path $gameRoot 'CLAUDE.md') | Should -Exist
+        (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') | Should -Exist
+        (Join-Path $gameRoot '.claude/agents/godot-evidence-triage.md') | Should -Exist
 
         $projectContent = Get-Content -LiteralPath $projectPath -Raw
         $projectContent | Should -Match '\[autoload\]'
@@ -40,11 +43,22 @@ config/name="Sandbox Game"
 
         $copilotInstructions = Get-Content -LiteralPath (Join-Path $gameRoot '.github/copilot-instructions.md') -Raw
         $copilotInstructions | Should -Match 'BEGIN AGENT_RUNTIME_HARNESS'
-        $copilotInstructions | Should -Match 'evidence/scenegraph/latest/evidence-manifest.json'
+        $copilotInstructions | Should -Match 'harness/automation/requests/run-request.json'
+        $copilotInstructions | Should -Match 'Do not read prior-run artifacts'
         $copilotInstructions | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
 
         $agentsContent = Get-Content -LiteralPath (Join-Path $gameRoot 'AGENTS.md') -Raw
+        $agentsContent | Should -Match 'Do not read prior-run artifacts'
         $agentsContent | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
+
+        $claudeContent = Get-Content -LiteralPath (Join-Path $gameRoot 'CLAUDE.md') -Raw
+        $claudeContent | Should -Match 'Runtime Harness'
+        $claudeContent | Should -Match 'godot-runtime-verification'
+        $claudeContent | Should -Match 'Do not read prior-run artifacts'
+
+        $claudeRuntimeAgent = Get-Content -LiteralPath (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') -Raw
+        $claudeRuntimeAgent | Should -Match '(?m)^name:\s+godot-runtime-verification'
+        $claudeRuntimeAgent | Should -Match 'harness/automation/requests/run-request.json'
     }
 
     It 'preserves an existing harness config file' {
@@ -140,6 +154,9 @@ old agents block
         $actions | Should -Contain 'skipped-write-runtime-prompt'
         $actions | Should -Contain 'skipped-write-agent'
         $actions | Should -Contain 'skipped-write-runtime-agent'
+        $actions | Should -Contain 'claude-md-skipped'
+        $actions | Should -Contain 'skipped-write-claude-runtime-agent'
+        $actions | Should -Contain 'skipped-write-claude-triage-agent'
 
         (Join-Path $gameRoot 'addons/agent_runtime_harness/plugin.cfg') | Should -Not -Exist
         (Join-Path $gameRoot 'harness/inspection-run-config.json') | Should -Not -Exist
@@ -147,5 +164,8 @@ old agents block
         (Join-Path $gameRoot '.github/prompts/godot-runtime-verification.prompt.md') | Should -Not -Exist
         (Join-Path $gameRoot '.github/agents/godot-evidence-triage.agent.md') | Should -Not -Exist
         (Join-Path $gameRoot '.github/agents/godot-runtime-verification.agent.md') | Should -Not -Exist
+        (Join-Path $gameRoot 'CLAUDE.md') | Should -Not -Exist
+        (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') | Should -Not -Exist
+        (Join-Path $gameRoot '.claude/agents/godot-evidence-triage.md') | Should -Not -Exist
     }
 }

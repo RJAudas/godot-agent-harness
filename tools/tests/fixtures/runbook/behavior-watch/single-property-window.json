@@ -1,0 +1,27 @@
+{
+  "requestId": "runbook-behavior-watch-FIXTURE",
+  "scenarioId": "runbook-behavior-watch-scenario",
+  "runId": "runbook-behavior-watch-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/runbook-behavior-watch",
+  "artifactRoot": "tools/tests/fixtures/runbook/behavior-watch/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-04-22T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/Paddle",
+        "properties": ["position"]
+      }
+    ],
+    "frameCount": 10
+  }
+}

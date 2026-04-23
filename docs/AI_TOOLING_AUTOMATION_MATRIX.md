@@ -25,14 +25,17 @@ Use this matrix to decide whether a repository concern belongs in instructions, 
 | Request shape | Validation mode | Best fit | Why |
 |------|----------|----------|-----|
 | Unit, contract, framework, or schema check with no running-game claim | Ordinary tests | Existing test runner or validation script | The task can be proven without runtime scenegraph evidence. |
-| "Verify at runtime," "test the running code," "make sure the node appears in game," or another runtime-visible claim | Scenegraph Harness runtime verification | Runtime-verification prompt or agent plus the editor-evidence workflow | The task needs a brokered run and persisted runtime evidence. |
+| "Verify at runtime," "test the running code," "make sure the node appears in game," or another runtime-visible claim | Scenegraph Harness runtime verification | `invoke-scene-inspection.ps1` (or runtime-verification prompt/agent) | The task needs a brokered run and persisted runtime evidence. Prefer the invoke script for single-step orchestration. |
 | Runtime-visible behavior change plus an existing deterministic direct test surface | Combined validation | Ordinary tests plus runtime-verification workflow | The task needs both code-level and live-runtime proof. |
 | Existing evidence manifest with a request to diagnose the result | Evidence triage | Evidence-triage prompt or agent | A fresh run is unnecessary because the manifest-centered bundle already exists. |
-| Drive deterministic keyboard or input-action events through the running game | Scenegraph Harness runtime verification with an `inputDispatchScript` | Editor-evidence workflow plus the input-dispatch contract | The validator and runtime dispatch live inside the existing harness and persist a fixed `input-dispatch-outcomes.jsonl` artifact in the run's evidence bundle (see `specs/006-input-dispatch/`). |
-| Capture runtime errors and warnings from a running playtest | Scenegraph Harness runtime verification | Editor-evidence workflow with the broker's error-capture path | `runtime-error-records.jsonl` and the `runtimeErrorReporting` manifest block are emitted automatically; no additional request parameters needed (see `specs/007-report-runtime-errors/`). |
+| Drive deterministic keyboard or input-action events through the running game | Scenegraph Harness runtime verification with an `inputDispatchScript` | `invoke-input-dispatch.ps1` (see `docs/runbook/input-dispatch.md`) | Single-step orchestration script handles capability gate, request, poll, and outcome assembly. |
+| Sample a node property or signal over a frame window | Scenegraph Harness runtime verification with a `behaviorWatchRequest` | `invoke-behavior-watch.ps1` (see `docs/runbook/behavior-watch.md`) | Single-step orchestration returns `samplesPath`, `sampleCount`, and `frameRangeCovered` in the stdout envelope. |
+| Diagnose a GDScript or resource build failure | Build-error triage | `invoke-build-error-triage.ps1` (see `docs/runbook/build-error-triage.md`) | Returns `failureKind = "build"` with `firstDiagnostic` and optional `rawBuildOutputPath`. |
+| Capture runtime errors and warnings from a running playtest | Scenegraph Harness runtime verification | `invoke-runtime-error-triage.ps1` (see `docs/runbook/runtime-error-triage.md`) | `runtime-error-records.jsonl` is emitted automatically. Script returns `latestErrorSummary` and `terminationReason` in the envelope. |
 | Pause the running game on a runtime error and wait for an agent decision | Scenegraph Harness runtime verification with `submit-pause-decision.ps1` | Pause-on-error flow in the editor broker | Requires `pauseOnError.supported = true` in the capability artifact. Submit `pause-decision.json` via `tools/automation/submit-pause-decision.ps1` within the 30-second window. |
 
 Runtime harness invocation is a routed workflow chosen by task intent.
+Prefer the matching `invoke-*.ps1` script (see `RUNBOOK.md`) over composing the raw helper calls manually.
 It is not a replacement for ordinary tests, and evidence triage is not a replacement for a fresh runtime-verification run.
 
 ## Safety rules

@@ -1,0 +1,24 @@
+{
+  "requestId": "runbook-input-dispatch-FIXTURE",
+  "scenarioId": "runbook-input-dispatch-action-scenario",
+  "runId": "runbook-input-dispatch-action-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/runbook-input-dispatch-action",
+  "artifactRoot": "tools/tests/fixtures/runbook/input-dispatch/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-04-22T00:00:00Z",
+  "inputDispatchScript": {
+    "events": [
+      { "kind": "action", "identifier": "ui_accept", "phase": "press",   "frame": 10 },
+      { "kind": "action", "identifier": "ui_accept", "phase": "release", "frame": 12 }
+    ]
+  }
+}

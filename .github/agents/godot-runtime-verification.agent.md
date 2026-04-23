@@ -1,41 +1,47 @@
 ---
-description: Run Scenegraph Harness runtime verification for a Godot change, combine existing tests when needed, and report the result from manifest-centered evidence.
+description: Run Scenegraph Harness runtime verification from this repo with the runbook invoke scripts. One command, one envelope.
 ---
 
 ## Mission
 
-Interpret a Godot change request, choose between ordinary tests, Scenegraph Harness runtime verification, or combined validation, and prove any runtime-visible claim from persisted evidence without broad repo rediscovery.
+Prove a runtime-visible claim about a target Godot project by running exactly one runbook orchestration script and reading the evidence it produces. The invoke scripts handle capability checks, request authoring, schema validation, polling, and manifest reading — do not re-do any of that by hand.
 
 ## Inputs
 
-- Change request or verification request
-- Project root when runtime verification is needed
-- Optional deterministic test command or existing test surface to include in combined validation
-- Optional expected runtime node, hierarchy, or gameplay symptom
-- Optional run-scoped input script (keypresses, `InputMap` actions) to drive the running game from the agent
+- Change or verification request in natural language
+- Target project root (the game project, e.g. `D:\gameDev\pong`)
+- Optional existing deterministic test command to run alongside runtime verification (combined mode)
+- Optional run-scoped input script (keypresses / InputMap actions) — match it to a fixture under `tools/tests/fixtures/runbook/input-dispatch/` or pass as `-RequestJson`
 
 ## Scope
 
-- Read `.github/copilot-instructions.md`, `AGENTS.md`, and any relevant `.github/instructions/*.instructions.md` file before acting.
-- Route runtime-visible requests to the Scenegraph Harness workflow.
-- If the user already provides an evidence manifest and only wants diagnosis, stop and route to `godot-evidence-triage.agent.md`.
-- For runtime verification from this repository checkout, prefer `tools/automation/get-editor-evidence-capability.ps1` and `tools/automation/request-editor-evidence-run.ps1` over hand-editing broker files.
-- For requests that need to start the game and send keys or input actions (for example "press Enter to start"), use the same brokered run-request flow with an `overrides.inputDispatchScript` payload as documented in `specs/006-input-dispatch/quickstart.md`. Do not invent a separate broker entrypoint or new agent. Confirm `inputDispatch.supported = true` on the capability artifact first, then read `input-dispatch-outcomes.jsonl` from the evidence bundle alongside the manifest.
-- Read the manifest first once a run has persisted evidence.
-- If `run-result.json` reports `failureKind = build`, stop before manifest lookup and report `buildFailurePhase`, `details`, each `buildDiagnostics` entry with `resourcePath`, `message`, and `line`/`column` when present, plus the relevant `rawBuildOutput` lines.
-- Keep recommendations plugin-first and grounded in structured runtime evidence.
+- Read `.github/copilot-instructions.md`, `AGENTS.md`, relevant `.github/instructions/*.instructions.md`, and [RUNBOOK.md](../../RUNBOOK.md) before acting. That is sufficient for every runtime-visible workflow this repo supports.
+- Every runtime-visible request maps to one row of RUNBOOK.md and therefore one `tools/automation/invoke-*.ps1` script. Use that script. See the full command table and canonical invocations in the matching prompt file.
+- If the user already provides an `evidence-manifest.json` and only wants diagnosis, hand off to `godot-evidence-triage.agent.md` without starting a new run.
+
+## Guardrails
+
+- **Never read prior-run artifacts to plan a new run.** `run-result.json`, `lifecycle-status.json`, and `evidence/` from previous requests describe history. They are only relevant once *your* request has completed and you are reading its outputs.
+- **Never read addon source** (`addons/agent_runtime_harness/`). The agent-facing contract is RUNBOOK.md plus the invoke script's `Get-Help` output plus the orchestration stdout schema. Everything else is implementation detail.
+- **Never hand-author `run-request.json`** when an invoke script fits. The whole point of the invoke script is that it builds the payload correctly from a fixture and emits a schema-validated envelope.
+- **Never shell out to generate request IDs, search for sample payloads, or inspect addon config defaults.** The invoke script owns all of that.
+- **Never vary capture or stop policies speculatively.** Fixture defaults are correct for the common case.
+- **Never invent a new entrypoint or agent to dispatch input.** Input dispatch is just `invoke-input-dispatch.ps1` with the right fixture or inline JSON.
 
 ## Stop conditions
 
-- Capability is blocked, missing, or schema-invalid.
-- Final run result is blocked or failed before a persisted bundle is available.
-- Build-failed runs are not manifest-backed; use the run result as the evidence surface and do not guess at missing runtime artifacts.
-- The task requires fabricating a new ordinary test suite only to satisfy combined validation.
-- The requested work requires writes outside a declared boundary for any autonomous artifact involved.
+- The envelope reports `editor-not-running`: ask the user to launch the editor against the target project root. Do not try to launch it yourself.
+- The envelope reports `timeout`: report and note that the broker only processes requests while the game is in play mode.
+- The envelope reports `failureKind = build`: report `buildFailurePhase`, each `buildDiagnostics` entry with `resourcePath`/`message`/`line`/`column` when present, and the relevant `rawBuildOutput` lines verbatim. No manifest will exist.
+- The envelope reports `failureKind = runtime`: read the manifest and `runtime-error-records.jsonl`, report the first failure.
+- The envelope reports `failureKind = request-invalid`: the diagnostic names the schema violation. Fix the fixture or inline payload and rerun.
+- Combined validation would require fabricating a new ordinary test suite solely to satisfy the rule: skip the fabricated tests.
 
 ## Expected outputs
 
-- The selected validation mode with a short reason
-- The runtime verification outcome or explicit blocked reason
-- Whether existing ordinary tests were also run or should run
-- The next validation or debugging step grounded in the manifest or run result
+- Selected workflow (which invoke script ran)
+- The envelope's `status` and `failureKind` (if applicable)
+- `manifestPath` on success, plus a one-line runtime summary
+- On build failure: the diagnostic entries and raw build output verbatim
+- Whether existing ordinary tests were also run
+- Next concrete validation or debugging step grounded in the manifest or run-result

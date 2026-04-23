@@ -1,0 +1,19 @@
+{
+  "requestId": "runbook-runtime-error-triage-FIXTURE",
+  "scenarioId": "runbook-runtime-error-triage-scenario",
+  "runId": "runbook-runtime-error-triage-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/runbook-runtime-error-triage",
+  "artifactRoot": "tools/tests/fixtures/runbook/runtime-error-triage/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "pauseOnError": true,
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-04-22T00:00:00Z"
+}

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness.local/specs/008-agent-runbook/contracts/orchestration-stdout.schema.json",
+  "title": "Runbook Orchestration Script Stdout Envelope",
+  "description": "Stable JSON envelope emitted exactly once on stdout by every tools/automation/invoke-<workflow>.ps1 script.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "failureKind",
+    "manifestPath",
+    "runId",
+    "requestId",
+    "completedAt",
+    "diagnostics",
+    "outcome"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["success", "failure"]
+    },
+    "failureKind": {
+      "description": "One of the harness failureKind values when the editor produced a result; otherwise an orchestration-synthesized value. null on success.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "enum": [
+            "editor-not-running",
+            "request-invalid",
+            "build",
+            "runtime",
+            "timeout",
+            "internal"
+          ]
+        }
+      ]
+    },
+    "manifestPath": {
+      "description": "Absolute filesystem path to the persisted evidence-manifest.json, or null if no manifest was produced (e.g., editor-not-running, request-invalid).",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "runId": {
+      "description": "The runId reported by the run-result, or the runId the orchestration script generated when no run was started.",
+      "type": "string",
+      "minLength": 1
+    },
+    "requestId": {
+      "description": "The fresh requestId the orchestration script generated for this invocation. Round-tripped through run-result.json to confirm freshness.",
+      "type": "string",
+      "minLength": 1
+    },
+    "completedAt": {
+      "description": "ISO-8601 UTC timestamp when the orchestration script finished. Always populated, even on failure.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "diagnostics": {
+      "description": "Zero or more single-line diagnostic strings. Empty on success. On failure, the first entry MUST be an actionable message.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "maxItems": 32
+    },
+    "outcome": {
+      "description": "Workflow-specific outcome block. Shape documented per script in docs/runbook/<workflow>.md and in this feature's data-model.md.",
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "success" } } },
+      "then": {
+        "properties": {
+          "failureKind": { "const": null },
+          "manifestPath": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failure" } } },
+      "then": {
+        "properties": {
+          "failureKind": { "type": "string" },
+          "diagnostics": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}

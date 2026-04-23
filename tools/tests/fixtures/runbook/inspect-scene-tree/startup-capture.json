@@ -1,0 +1,19 @@
+{
+  "_note": "Scene inspection takes no request payload. The invoke-scene-inspection.ps1 script synthesizes a minimal capturePolicy.startup=true payload internally. This file is a placeholder so the fixtures directory is non-empty and discoverable by agents browsing it.",
+  "requestId": "runbook-inspect-scene-tree-FIXTURE",
+  "scenarioId": "runbook-inspect-scene-tree-scenario",
+  "runId": "runbook-inspect-scene-tree-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/runbook-inspect-scene-tree",
+  "artifactRoot": "tools/tests/fixtures/runbook/inspect-scene-tree/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": false,
+    "failure": false
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-04-22T00:00:00Z"
+}

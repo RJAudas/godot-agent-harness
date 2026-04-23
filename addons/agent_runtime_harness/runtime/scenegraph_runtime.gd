@@ -149,6 +149,12 @@ func persist_latest_bundle() -> Dictionary:
 	if _latest_snapshot.is_empty():
 		return {}
 
+	# Flush any undelivered input-dispatch events as skipped before the manifest
+	# is assembled. The _exit_tree flush only fires when the game process ends,
+	# but stopAfterValidation persists mid-run, so without this the outcomes
+	# file does not exist yet when the writer validates it. (issue #25 §1)
+	_flush_pending_input_dispatch_outcomes()
+
 	var session_context := _session_context.duplicate(true)
 
 	# Attach runtime error records for T016 (artifact writer flush).

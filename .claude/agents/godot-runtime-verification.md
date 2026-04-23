@@ -1,6 +1,6 @@
 ---
 name: godot-runtime-verification
-description: Use for every runtime-visible Godot request (run the game, press keys, verify at runtime, inspect the scene, watch for errors). Drives the Scenegraph Harness via one runbook invoke script and reads the envelope it produces. Do NOT hand-author run-request.json, do NOT read prior-run artifacts.
+description: MUST BE USED proactively whenever the user asks to run the Godot game, press keys or dispatch input actions, verify runtime behavior, inspect the scene tree, watch for runtime errors, reproduce a crash, or otherwise prove something about the running game. Delegate to this subagent instead of handling the request in the main context — it drives the Scenegraph Harness via one runbook invoke script and reads the envelope. Trigger phrases include "run the game", "press Enter", "test at runtime", "verify in game", "inspect scene", "watch for errors", "test the running code", "use the agent harness".
 tools: Bash, Read, Glob, Grep, Write
 ---
 

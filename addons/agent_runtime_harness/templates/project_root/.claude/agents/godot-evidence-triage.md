@@ -1,6 +1,6 @@
 ---
 name: godot-evidence-triage
-description: Use when an evidence-manifest.json already exists in this project and the user wants diagnosis, not a new run. Interprets the manifest, explains the outcome, and names the next debugging step. Do NOT launch a fresh run from this agent — hand off to godot-runtime-verification for that.
+description: MUST BE USED proactively whenever the user points at an existing evidence-manifest.json, evidence bundle, run-result, or prior harness output and wants diagnosis, interpretation, or a "what happened" summary — as opposed to launching a fresh run. Delegate to this subagent instead of reading manifest artifacts in the main context. Trigger phrases include "what happened in this run", "diagnose this manifest", "triage the evidence", "explain this run-result", "why did the last run fail" (when a manifest exists). If the user wants a new run, route to godot-runtime-verification instead.
 tools: Read, Glob, Grep
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: godot-runtime-verification
-description: Use for every runtime-visible request in this Godot project (run the game, press keys, verify at runtime, inspect the scene, watch for errors). Writes one brokered run-request.json and reads the resulting evidence. Do NOT read prior-run artifacts, do NOT read addon source, do NOT spelunk for policy variants.
+description: MUST BE USED proactively whenever the user asks to run this Godot game, press keys or dispatch input actions, verify runtime behavior, inspect the scene tree, watch for runtime errors, reproduce a crash, or otherwise prove something about the running game. Delegate to this subagent instead of handling the request in the main context — it writes one brokered run-request.json and reads the resulting evidence. Trigger phrases include "run the game", "press Enter", "start the game", "test at runtime", "verify in game", "inspect scene", "watch for errors", "test the running code", "use the agent harness".
 tools: Bash, Read, Glob, Grep, Write
 ---
 

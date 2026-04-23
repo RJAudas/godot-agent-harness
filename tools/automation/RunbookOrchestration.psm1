@@ -34,17 +34,33 @@ function Resolve-RunbookRepoPath {
 # ---------------------------------------------------------------------------
 function Invoke-Helper {
     <#
-    .SYNOPSIS Thin wrapper around external script invocations. Mockable in Pester. #>
+    .SYNOPSIS
+        Thin wrapper around external script invocations. Mockable in Pester.
+
+    .DESCRIPTION
+        Captures stderr/stdout so callers can include diagnostics on failure.
+        Returns a PSCustomObject with ExitCode and CapturedOutput so callers
+        can decide whether a non-zero exit is fatal (e.g. critical path) or
+        tolerable (e.g. bootstrap capability probe that checks a file next). #>
     param(
         [Parameter(Mandatory)][string]$ScriptPath,
         [Parameter(Mandatory)][array]$ArgumentList
     )
 
     $resolvedScript = Resolve-RunbookRepoPath -Path $ScriptPath
-    # Suppress all output (stdout+stderr) from helper scripts so it doesn't
-    # pollute the envelope. Side effects (files written) are all that matter.
-    $null = & pwsh -NoProfile -File $resolvedScript @ArgumentList 2>&1
-    return $LASTEXITCODE
+    $captured = & pwsh -NoProfile -File $resolvedScript @ArgumentList 2>&1
+    $exitCode = $LASTEXITCODE
+
+    $capturedText = if ($null -ne $captured) {
+        ($captured | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+    } else {
+        ''
+    }
+
+    return [pscustomobject]@{
+        ExitCode       = $exitCode
+        CapturedOutput = $capturedText
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -94,7 +110,10 @@ function Test-RunbookCapability {
     )
 
     $capabilityScript = 'tools/automation/get-editor-evidence-capability.ps1'
-    Invoke-Helper -ScriptPath $capabilityScript -ArgumentList @('-ProjectRoot', $ProjectRoot) | Out-Null
+    # The capability probe is tolerate-and-check: if the helper fails we still
+    # fall through to the file-age check below, which produces the canonical
+    # "editor-not-running" diagnostic.
+    $null = Invoke-Helper -ScriptPath $capabilityScript -ArgumentList @('-ProjectRoot', $ProjectRoot)
 
     $capabilityPath = Join-Path $ProjectRoot 'harness/automation/results/capability.json'
     if (-not (Test-Path -LiteralPath $capabilityPath)) {
@@ -173,16 +192,28 @@ function Resolve-RunbookPayload {
     $payload = $json | ConvertFrom-Json -Depth 20 -AsHashtable
     $payload['requestId'] = $RequestId
 
+    # Schema requires expectationFiles, but runbook fixtures typically omit it
+    # because they declare their expectations via capturePolicy + outcome
+    # artifacts. Default to empty so schema validation passes without forcing
+    # every fixture to repeat the boilerplate.
+    if (-not $payload.ContainsKey('expectationFiles')) {
+        $payload['expectationFiles'] = @()
+    }
+
+    # Write to the canonical request path the editor broker watches. The addon
+    # defaults (inspection-run-config.json -> automation.requestPath) point at
+    # res://harness/automation/requests/run-request.json; a dynamic per-request
+    # filename would never be picked up.
     $requestsDir = Join-Path $ProjectRoot 'harness/automation/requests'
     if (-not (Test-Path -LiteralPath $requestsDir)) {
         New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
     }
-    $tempPath = Join-Path $requestsDir "$RequestId.json"
-    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tempPath -Encoding utf8
+    $canonicalPath = Join-Path $requestsDir 'run-request.json'
+    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
 
     return [pscustomobject]@{
         Payload         = $payload
-        TempRequestPath = $tempPath
+        TempRequestPath = $canonicalPath
     }
 }
 
@@ -219,8 +250,48 @@ function Invoke-RunbookRequest {
         [int]$PollIntervalMilliseconds = 250
     )
 
-    $requestScript = 'tools/automation/request-editor-evidence-run.ps1'
-    Invoke-Helper -ScriptPath $requestScript -ArgumentList @('-ProjectRoot', $ProjectRoot, '-RequestPath', $RequestPath) | Out-Null
+    # Validate the payload in place. Historically this was delegated to
+    # request-editor-evidence-run.ps1, but that script regenerates a payload
+    # from CLI args + config and overwrites the file, stripping runbook-only
+    # fields like inputDispatchScript and replacing the requestId with a fresh
+    # GUID. Both behaviors guaranteed the broker either saw a malformed request
+    # or a request the poll loop could never match. We validate the existing
+    # file directly instead and surface validation errors as a loud failure.
+    $schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+    $validator  = 'tools/validate-json.ps1'
+    $validationResult = Invoke-Helper -ScriptPath $validator -ArgumentList @(
+        '-InputPath', $RequestPath,
+        '-SchemaPath', $schemaPath,
+        '-AllowInvalid'
+    )
+    if ($validationResult.ExitCode -ne 0) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'request-invalid'
+            Diagnostic  = "Schema validator failed to run (exit $($validationResult.ExitCode)). Output: $($validationResult.CapturedOutput)"
+            RunResult   = $null
+        }
+    }
+    try {
+        $parsedValidation = $validationResult.CapturedOutput | ConvertFrom-Json -Depth 20
+    }
+    catch {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'request-invalid'
+            Diagnostic  = "Could not parse schema-validation output. Raw: $($validationResult.CapturedOutput)"
+            RunResult   = $null
+        }
+    }
+    if (-not $parsedValidation.valid) {
+        $errDetail = if ($null -ne $parsedValidation.PSObject.Properties['error']) { $parsedValidation.error } else { 'schema validation failed' }
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'request-invalid'
+            Diagnostic  = "Run request at '$RequestPath' does not satisfy schema '$schemaPath': $errDetail"
+            RunResult   = $null
+        }
+    }
 
     $runResultPath = Join-Path $ProjectRoot 'harness/automation/results/run-result.json'
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)

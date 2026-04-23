@@ -17,8 +17,8 @@
   "createdAt": "2026-04-22T00:00:00Z",
   "inputDispatchScript": {
     "events": [
-      { "kind": "key", "identifier": "KEY_ENTER", "phase": "press", "frame": 30 },
-      { "kind": "key", "identifier": "KEY_ENTER", "phase": "release", "frame": 32 }
+      { "kind": "key", "identifier": "ENTER", "phase": "press", "frame": 30 },
+      { "kind": "key", "identifier": "ENTER", "phase": "release", "frame": 32 }
     ]
   }
 }

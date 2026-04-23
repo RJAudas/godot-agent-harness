@@ -17,14 +17,14 @@
   "createdAt": "2026-04-22T00:00:00Z",
   "inputDispatchScript": {
     "events": [
-      { "kind": "key", "identifier": "KEY_LEFT",  "phase": "press",   "frame": 10 },
-      { "kind": "key", "identifier": "KEY_LEFT",  "phase": "release", "frame": 12 },
-      { "kind": "key", "identifier": "KEY_RIGHT", "phase": "press",   "frame": 20 },
-      { "kind": "key", "identifier": "KEY_RIGHT", "phase": "release", "frame": 22 },
-      { "kind": "key", "identifier": "KEY_UP",    "phase": "press",   "frame": 30 },
-      { "kind": "key", "identifier": "KEY_UP",    "phase": "release", "frame": 32 },
-      { "kind": "key", "identifier": "KEY_DOWN",  "phase": "press",   "frame": 40 },
-      { "kind": "key", "identifier": "KEY_DOWN",  "phase": "release", "frame": 42 }
+      { "kind": "key", "identifier": "LEFT",  "phase": "press",   "frame": 10 },
+      { "kind": "key", "identifier": "LEFT",  "phase": "release", "frame": 12 },
+      { "kind": "key", "identifier": "RIGHT", "phase": "press",   "frame": 20 },
+      { "kind": "key", "identifier": "RIGHT", "phase": "release", "frame": 22 },
+      { "kind": "key", "identifier": "UP",    "phase": "press",   "frame": 30 },
+      { "kind": "key", "identifier": "UP",    "phase": "release", "frame": 32 },
+      { "kind": "key", "identifier": "DOWN",  "phase": "press",   "frame": 40 },
+      { "kind": "key", "identifier": "DOWN",  "phase": "release", "frame": 42 }
     ]
   }
 }

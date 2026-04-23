@@ -305,6 +305,26 @@ function Get-RuntimeVerificationAgentContent {
     return (Get-TemplateContent -RelativePath '.github/agents/godot-runtime-verification.agent.md')
 }
 
+function Get-ClaudeInstructionsBlock {
+    return (Get-TemplateContent -RelativePath 'CLAUDE.runtime-harness.md')
+}
+
+function Get-ClaudeFileContent {
+    return @"
+# CLAUDE.md
+
+$(Get-ClaudeInstructionsBlock).TrimEnd()
+"@
+}
+
+function Get-ClaudeRuntimeVerificationAgentContent {
+    return (Get-TemplateContent -RelativePath '.claude/agents/godot-runtime-verification.md')
+}
+
+function Get-ClaudeEvidenceTriageAgentContent {
+    return (Get-TemplateContent -RelativePath '.claude/agents/godot-evidence-triage.md')
+}
+
 function Get-InspectionRunConfigContent {
     return (Get-TemplateContent -RelativePath 'harness/inspection-run-config.json')
 }
@@ -471,6 +491,49 @@ if (-not $SkipAgentAssets) {
         $runtimeAgentAction = 'skipped-write-runtime-agent'
     }
     Add-Operation -Operations $operations -Path $runtimeAgentPath -Action $runtimeAgentAction
+
+    # Claude Code assets (CLAUDE.md + .claude/agents/*.md). Claude Code reads
+    # CLAUDE.md and AGENTS.md natively; the subagents under .claude/agents/
+    # give it the same delegation surface Copilot gets from .github/agents/.
+    $claudePath = Join-Path $resolvedGameRoot 'CLAUDE.md'
+    if (Test-Path -LiteralPath $claudePath) {
+        if ($PSCmdlet.ShouldProcess($claudePath, 'Install runtime harness CLAUDE.md block')) {
+            $claudeAction = Set-OrAppendManagedBlock -Path $claudePath -MarkerName 'AGENT_RUNTIME_HARNESS' -BlockContent (Get-ClaudeInstructionsBlock)
+        }
+        else {
+            $claudeAction = 'skipped'
+        }
+    }
+    else {
+        if ($PSCmdlet.ShouldProcess($claudePath, 'Write CLAUDE.md')) {
+            Set-FileContent -Path $claudePath -Content (Get-ClaudeFileContent)
+            $claudeAction = 'created'
+        }
+        else {
+            $claudeAction = 'skipped'
+        }
+    }
+    Add-Operation -Operations $operations -Path $claudePath -Action "claude-md-$claudeAction"
+
+    $claudeRuntimeAgentPath = Join-Path $resolvedGameRoot '.claude/agents/godot-runtime-verification.md'
+    if ($PSCmdlet.ShouldProcess($claudeRuntimeAgentPath, 'Write Claude runtime-verification subagent')) {
+        Set-FileContent -Path $claudeRuntimeAgentPath -Content (Get-ClaudeRuntimeVerificationAgentContent)
+        $claudeRuntimeAgentAction = 'wrote-claude-runtime-agent'
+    }
+    else {
+        $claudeRuntimeAgentAction = 'skipped-write-claude-runtime-agent'
+    }
+    Add-Operation -Operations $operations -Path $claudeRuntimeAgentPath -Action $claudeRuntimeAgentAction
+
+    $claudeTriageAgentPath = Join-Path $resolvedGameRoot '.claude/agents/godot-evidence-triage.md'
+    if ($PSCmdlet.ShouldProcess($claudeTriageAgentPath, 'Write Claude evidence-triage subagent')) {
+        Set-FileContent -Path $claudeTriageAgentPath -Content (Get-ClaudeEvidenceTriageAgentContent)
+        $claudeTriageAgentAction = 'wrote-claude-triage-agent'
+    }
+    else {
+        $claudeTriageAgentAction = 'skipped-write-claude-triage-agent'
+    }
+    Add-Operation -Operations $operations -Path $claudeTriageAgentPath -Action $claudeTriageAgentAction
 }
 
 $result = [ordered]@{

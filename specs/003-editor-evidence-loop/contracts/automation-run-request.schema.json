@@ -61,6 +61,12 @@
       "type": "string",
       "format": "date-time"
     },
+    "behaviorWatchRequest": {
+      "$ref": "#/$defs/behaviorWatchRequest"
+    },
+    "inputDispatchScript": {
+      "$ref": "#/$defs/inputDispatchScript"
+    },
     "overrides": {
       "type": "object",
       "additionalProperties": false,

@@ -1,5 +1,5 @@
 ---
-description: Verify a Godot runtime-visible change with the Scenegraph Harness, combine existing tests when needed, and prove the outcome from persisted evidence.
+description: Drive a Godot runtime verification from this repository using the runbook invoke scripts. One command, one envelope. Stay on the fast path.
 ---
 
 ## User Input
@@ -8,34 +8,93 @@ description: Verify a Godot runtime-visible change with the Scenegraph Harness, 
 $ARGUMENTS
 ```
 
-## Goal
+## Fast path (for every runtime-visible request)
 
-Choose the correct validation mode for a Godot change, perform Scenegraph Harness runtime verification when the request is about running-game behavior, and keep ordinary tests in scope when the change also has an existing deterministic test surface.
+When the user asks to run the game, press keys, verify at runtime, inspect the scene, or watch behaviour:
 
-## Routing rules
+1. **Match the request to a runbook row in [RUNBOOK.md](../../RUNBOOK.md).** Pick the one `invoke-*.ps1` script that covers the workflow.
+2. **Call that script once.** Pass the target project root and (when applicable) a fixture from `tools/tests/fixtures/runbook/<workflow>/`.
+3. **Parse the JSON envelope the script emits on stdout** (conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`). That envelope is the single source of truth for the outcome — `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`.
+4. **On success, read `manifestPath`**, then the summary artifact referenced by the manifest. That is your evidence. Do not re-derive anything from earlier runs.
 
-1. Use ordinary tests only for unit, contract, framework, or schema checks that do not ask about the running game.
-2. Use Scenegraph Harness runtime verification for requests such as "verify at runtime," "test the running code," "make sure the node appears in game," "confirm the node exists while playing," or other runtime-visible outcomes.
-3. Use combined validation when the change affects runtime-visible behavior and there is already a direct deterministic test surface. Run the existing tests plus the runtime harness flow, but do not invent new ordinary tests solely to satisfy the combined rule.
-4. If the user already provides an evidence manifest and only wants diagnosis, hand the task to `godot-evidence-triage.prompt.md` instead of starting a fresh run.
+### Canonical invocations
 
-## Runtime verification workflow
+Copy these. The orchestration script handles capability checks, request authoring, schema validation, polling, and manifest reading. You do not author `run-request.json` yourself.
 
-1. Read `RUNBOOK.md` first to identify the correct `invoke-*.ps1` script, fixture template, and recipe doc for the requested workflow.
+```powershell
+# "Run the game and press Enter past the main menu"
+pwsh ./tools/automation/invoke-input-dispatch.ps1 `
+  -ProjectRoot <game-project-root> `
+  -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json
+
+# "Press arrow keys to move the player"
+pwsh ./tools/automation/invoke-input-dispatch.ps1 `
+  -ProjectRoot <game-project-root> `
+  -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-arrow-keys.json
+
+# "Run the game and capture the scene tree"
+pwsh ./tools/automation/invoke-scene-inspection.ps1 `
+  -ProjectRoot <game-project-root>
+
+# "Watch a property for drift"
+pwsh ./tools/automation/invoke-behavior-watch.ps1 `
+  -ProjectRoot <game-project-root> `
+  -RequestFixturePath tools/tests/fixtures/runbook/behavior-watch/single-property-window.json
+
+# "Capture build errors after a compile"
+pwsh ./tools/automation/invoke-build-error-triage.ps1 `
+  -ProjectRoot <game-project-root> `
+  -RequestFixturePath tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json
+
+# "Run and watch for runtime errors"
+pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
+  -ProjectRoot <game-project-root> `
+  -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
+```
+
+For an ad-hoc input script that no fixture covers, pass `-RequestJson '<inline JSON>'` to `invoke-input-dispatch.ps1` — see its `.EXAMPLE` block. Key identifiers are bare Godot logical names (`ENTER`, `SPACE`, `LEFT`), not `KEY_*` constants.
+
+## Do not
+
+These are the behaviors that waste runs. Prior agents burned five to ten minutes on each.
+
+- **Do not read prior-run artifacts to plan a new run.** That includes earlier `run-result.json`, `lifecycle-status.json`, previous `run-request*.json` files, or anything under `evidence/` that your new request did not produce. They describe the past; they do not tell you what to do now.
+
 <!-- runbook:do-not-read-addon-source -->
-2. Do **not** read addon source files (`addons/agent_runtime_harness/`) to understand the harness protocol. All agent-facing contracts are in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, and the existing `specs/` and `tools/` trees.
+- **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the harness protocol. Everything you need is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, and the invoke script's `Get-Help` output.
 <!-- /runbook:do-not-read-addon-source -->
-3. Confirm harness availability and read the latest capability artifact first. From this repository checkout, use the matching invoke script: `pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>`, or `invoke-input-dispatch.ps1`, etc. The script checks capability internally and returns a JSON stdout envelope.
-4. If capability is blocked, missing, or schema-invalid, report that blocked state explicitly instead of guessing around the editor.
-5. Submit a brokered run request through the invoke script. Parse the JSON stdout envelope (conforming to `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`) for `status`, `manifestPath`, and `diagnostics`.
-6. Wait for the final run result. If it reports `failureKind = build`, stop there, do not expect a manifest, and read `details`, `buildFailurePhase`, `buildDiagnostics`, and `rawBuildOutput`.
-7. For build-failed runs, report each diagnostic with `resourcePath`, `message`, and `line`/`column` when available, and include the relevant raw build-output lines verbatim instead of paraphrasing them away.
-8. If the run completed with a manifest, read the evidence manifest first, then the summary, then diagnostics or snapshot only if needed.
-9. Separate gameplay failures from harness wiring or automation failures such as missing autoload setup, blocked capability, no persisted bundle, or build-failed runs that ended before runtime capture.
+
+- **Do not hand-author `run-request.json`** when an invoke script exists. The scripts exist precisely to replace that step.
+- **Do not shell out to generate request IDs, spelunk for example payloads, or construct payloads from raw config files.** The fixture + the invoke script give you a complete payload.
+- **Do not vary `capturePolicy`, `stopPolicy`, or event timing speculatively** — the fixture defaults are correct for the common case.
+
+## Routing
+
+- Evidence triage on an existing manifest: hand off to `godot-evidence-triage.prompt.md`. Do not start a new run.
+- Pure unit / contract / schema tests with no runtime behavior in scope: run ordinary tests, not the harness.
+- Combined validation (runtime-visible change *and* existing deterministic test surface): run both, but do not fabricate a new test suite to satisfy the rule.
+
+## Reading the envelope
+
+The invoke script's stdout JSON contains everything you need to report:
+
+- `status` = `success` or `failure`
+- `failureKind` on failure: `editor-not-running`, `timeout`, `request-invalid`, `build`, `runtime`, or `internal`
+- `manifestPath` on success — read the manifest next, then one summary artifact
+- `diagnostics` array — include these in your report verbatim, especially for build failures (line/column, raw output)
+- `outcome` — workflow-specific details (dispatched event count, node count, etc.)
+
+## When the fast path fails
+
+- If the invoke script reports `editor-not-running`, ask the user to launch the editor against the target project root. Do not try to launch it yourself.
+- If it reports `timeout`, the broker did not pick up the request. Note: the plugin only processes requests while the game is in play mode — the user may need to press Play.
+- If it reports `request-invalid`, the script's diagnostic will name the schema violation. Fix the fixture or the inline payload and rerun.
+- If it reports `build`, report the diagnostic entries (`resourcePath`, `message`, `line`, `column`) and the relevant `rawBuildOutput` lines verbatim. Do not paraphrase.
 
 ## Output
 
-- Selected validation mode
-- Runtime evidence result or blocked reason, or the build-failure result with its diagnostic details and raw output
-- Whether ordinary tests were also required
-- Next concrete validation or debugging step
+- Selected workflow (which invoke script)
+- The envelope's `status` + `failureKind` (on failure)
+- Manifest path and one-line runtime summary on success
+- Whether any ordinary tests were also required
+- Next concrete debugging step

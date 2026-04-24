@@ -46,12 +46,9 @@ For delegation, the `godot-runtime-verification` subagent in [.claude/agents/](.
 pwsh ./tools/automation/invoke-input-dispatch.ps1 `
   -ProjectRoot <game-root> `
   -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json
-
-# Run the game + capture the scene tree
-pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>
 ```
 
-See the full list in [RUNBOOK.md](RUNBOOK.md).
+Scene-tree capture is now a slash command: `/godot-inspect <game-root>`. See [RUNBOOK.md](RUNBOOK.md) for the full workflow list and migration status.
 
 ## Do not
 

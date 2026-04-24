@@ -453,10 +453,15 @@ function Get-RunZoneClassification {
 
     .DESCRIPTION
         Keys are filename globs (matched case-insensitively). Values are one of:
-        "transient", "pinned", "oracle", "input", or "marker".
+        "transient", "editor-state", "pinned", "oracle", "input", or "marker".
 
-        "transient" files are cleared by Initialize-RunbookTransientZone.
-        "marker"    (.in-flight.json) is transient but explicitly SKIPPED by cleanup.
+        "transient"    files are cleared by Initialize-RunbookTransientZone.
+        "editor-state" files (capability.json) are owned by the editor's
+                       heartbeat loop and PRESERVED by cleanup — wiping them
+                       creates a window where invoke scripts mis-report
+                       editor-not-running.
+        "marker"       (.in-flight.json) is transient but explicitly SKIPPED
+                       by cleanup and cleared on orchestration exit.
 
     .OUTPUTS
         Hashtable of glob -> zone-enum string.
@@ -466,7 +471,7 @@ function Get-RunZoneClassification {
 
     return [ordered]@{
         '.in-flight.json'            = 'marker'
-        'capability.json'            = 'transient'
+        'capability.json'            = 'editor-state'
         'lifecycle-status.json'      = 'transient'
         'run-result.json'            = 'transient'
         'run-request.json'           = 'transient'
@@ -734,6 +739,9 @@ function Initialize-RunbookTransientZone {
                     break
                 }
             }
+            # Skip editor-owned state (heartbeated by the editor on its own cadence).
+            # Wiping these creates a window where invoke scripts mis-report editor-not-running.
+            if ($zone -eq 'editor-state') { continue }
             # Unmatched files in the transient directories are also cleared
             if ($null -eq $zone -or $zone -eq 'transient') {
                 # Attempt delete with one retry

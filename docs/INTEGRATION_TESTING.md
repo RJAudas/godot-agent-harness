@@ -114,8 +114,8 @@ pwsh ./tools/automation/invoke-pin-run.ps1 `
     -PinName my-baseline
 ```
 
-See [RUNBOOK.md](../RUNBOOK.md) and [docs/runbook/pin-run.md](runbook/pin-run.md)
-for full details.
+See [RUNBOOK.md](../RUNBOOK.md) for the workflow index or invoke `/godot-pin`
+in Claude Code for details on the pin skill.
 
 ## Cleanup
 

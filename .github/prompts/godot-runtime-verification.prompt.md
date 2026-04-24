@@ -8,9 +8,11 @@ description: Drive a Godot runtime verification from this repository using the r
 $ARGUMENTS
 ```
 
+> **Claude Code users**: every workflow below is also available as a `/godot-*` slash command (`/godot-inspect`, `/godot-press`, `/godot-debug-runtime`, `/godot-debug-build`, `/godot-watch`, `/godot-pin`, `/godot-unpin`, `/godot-pins`). The skill auto-invocation is the preferred path. This prompt remains the canonical guidance for Copilot and other non-Claude tools that don't have skill routing.
+
 ## Fast path (for every runtime-visible request)
 
-When the user asks to run the game, press keys, verify at runtime, inspect the scene, or watch behaviour:
+When the user asks to run the game, press keys, verify at runtime, or watch behaviour:
 
 1. **Match the request to a runbook row in [RUNBOOK.md](../../RUNBOOK.md).** Pick the one `invoke-*.ps1` script that covers the workflow.
 2. **Call that script once.** Pass the target project root and (when applicable) a fixture from `tools/tests/fixtures/runbook/<workflow>/`.
@@ -31,10 +33,6 @@ pwsh ./tools/automation/invoke-input-dispatch.ps1 `
 pwsh ./tools/automation/invoke-input-dispatch.ps1 `
   -ProjectRoot <game-project-root> `
   -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-arrow-keys.json
-
-# "Run the game and capture the scene tree"
-pwsh ./tools/automation/invoke-scene-inspection.ps1 `
-  -ProjectRoot <game-project-root>
 
 # "Watch a property for drift"
 pwsh ./tools/automation/invoke-behavior-watch.ps1 `
@@ -61,7 +59,7 @@ These are the behaviors that waste runs. Prior agents burned five to ten minutes
 - **Do not read prior-run artifacts to plan a new run.** The transient zone (`harness/automation/results/` and `evidence/automation/`) is wiped automatically before every new run. Any file you find there belongs to the *current* run. If you need a prior run, it must have been pinned with `invoke-pin-run.ps1` — use `invoke-list-pinned-runs.ps1` to locate it; do not scan the transient zone for historical data.
 
 <!-- runbook:do-not-read-addon-source -->
-- **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the harness protocol. Everything you need is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, and the invoke script's `Get-Help` output.
+- **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the harness protocol. Everything you need is in `RUNBOOK.md`, `.claude/skills/godot-*/SKILL.md`, `specs/008-agent-runbook/contracts/`, and the invoke script's `Get-Help` output.
 <!-- /runbook:do-not-read-addon-source -->
 
 - **Do not hand-author `run-request.json`** when an invoke script exists. The scripts exist precisely to replace that step.

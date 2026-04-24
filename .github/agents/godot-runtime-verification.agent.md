@@ -1,32 +1,46 @@
 ---
-description: Run Scenegraph Harness runtime verification from this repo with the runbook invoke scripts. One command, one envelope.
+description: Use for multi-step Godot runtime flows that chain multiple harness invocations. Single-step runtime checks (inspect, press, watch) go directly to the matching `invoke-*.ps1` script or `/godot-*` slash command — not here.
 ---
 
-## Mission
+## When to use this agent
 
-Prove a runtime-visible claim about a target Godot project by running exactly one runbook orchestration script and reading the evidence it produces. The invoke scripts handle capability checks, request authoring, schema validation, polling, and manifest reading — do not re-do any of that by hand.
+Every single-step runtime workflow has a `/godot-*` slash command (Claude Code) or a direct `invoke-*.ps1` script (other tools): `/godot-inspect`, `/godot-press`, `/godot-debug-runtime`, `/godot-debug-build`, `/godot-watch`, `/godot-pin`, `/godot-unpin`, `/godot-pins`. Delegate to this agent ONLY when the request requires **multiple such invocations chained together** and the orchestration between them needs planning.
+
+Examples of correct delegation:
+
+- "Repro the crash, pin the run, compare it against the baseline from last week."
+- "Sweep a batch of input fixtures against this build and summarize which ones trigger the bug."
+- "Run build-error triage, apply the fix, re-run to confirm clean, then capture the scene tree."
+
+Do NOT delegate here for:
+
+- Single-step runtime workflows — use the matching slash command or `invoke-*.ps1` directly.
+- Evidence triage on an existing manifest — use `godot-evidence-triage.agent.md`.
+
+## Mission (for multi-step flows only)
+
+Plan and execute a sequence of harness invocations, coordinate their evidence, and report a single consolidated outcome. Each constituent invocation still goes through an `invoke-*.ps1` script — this agent orchestrates the sequence.
 
 ## Inputs
 
-- Change or verification request in natural language
+- Multi-step request in natural language
 - Target project root (the game project, e.g. `D:\gameDev\pong`)
 - Optional existing deterministic test command to run alongside runtime verification (combined mode)
-- Optional run-scoped input script (keypresses / InputMap actions) — match it to a fixture under `tools/tests/fixtures/runbook/input-dispatch/` or pass as `-RequestJson`
 
 ## Scope
 
-- Read `.github/copilot-instructions.md`, `AGENTS.md`, relevant `.github/instructions/*.instructions.md`, and [RUNBOOK.md](../../RUNBOOK.md) before acting. That is sufficient for every runtime-visible workflow this repo supports.
-- Every runtime-visible request maps to one row of RUNBOOK.md and therefore one `tools/automation/invoke-*.ps1` script. Use that script. See the full command table and canonical invocations in the matching prompt file.
+- Read `.github/copilot-instructions.md`, `AGENTS.md`, relevant `.github/instructions/*.instructions.md`, and [RUNBOOK.md](../../RUNBOOK.md) before planning.
+- Every individual step still maps to one row of RUNBOOK.md → one `tools/automation/invoke-*.ps1` script. Use those scripts; do not invent new entry points.
 - If the user already provides an `evidence-manifest.json` and only wants diagnosis, hand off to `godot-evidence-triage.agent.md` without starting a new run.
 
 ## Guardrails
 
-- **Never read prior-run artifacts to plan a new run.** `run-result.json`, `lifecycle-status.json`, and `evidence/` from previous requests describe history. They are only relevant once *your* request has completed and you are reading its outputs.
-- **Never read addon source** (`addons/agent_runtime_harness/`). The agent-facing contract is RUNBOOK.md plus the invoke script's `Get-Help` output plus the orchestration stdout schema. Everything else is implementation detail.
-- **Never hand-author `run-request.json`** when an invoke script fits. The whole point of the invoke script is that it builds the payload correctly from a fixture and emits a schema-validated envelope.
+- **Never read prior-run artifacts to plan a new run.** `run-result.json`, `lifecycle-status.json`, and `evidence/` from previous requests describe history. They are only relevant once *your* request has completed and you are reading its outputs. Use `invoke-list-pinned-runs.ps1` to locate a prior run's evidence when comparing across runs.
+- **Never read addon source** (`addons/agent_runtime_harness/`). The agent-facing contract is RUNBOOK.md plus the invoke script's `Get-Help` output plus the orchestration stdout schema.
+- **Never hand-author `run-request.json`** when an invoke script fits.
 - **Never shell out to generate request IDs, search for sample payloads, or inspect addon config defaults.** The invoke script owns all of that.
 - **Never vary capture or stop policies speculatively.** Fixture defaults are correct for the common case.
-- **Never invent a new entrypoint or agent to dispatch input.** Input dispatch is just `invoke-input-dispatch.ps1` with the right fixture or inline JSON.
+- **Never invent a new entrypoint to dispatch input.** Input dispatch is `invoke-input-dispatch.ps1` with the right fixture or inline JSON.
 
 ## Stop conditions
 
@@ -39,9 +53,8 @@ Prove a runtime-visible claim about a target Godot project by running exactly on
 
 ## Expected outputs
 
-- Selected workflow (which invoke script ran)
-- The envelope's `status` and `failureKind` (if applicable)
-- `manifestPath` on success, plus a one-line runtime summary
-- On build failure: the diagnostic entries and raw build output verbatim
+- The sequence of workflows that ran (which invoke scripts, in what order)
+- For each step: `status` and (on failure) `failureKind` + `manifestPath`
+- Consolidated outcome across all steps
 - Whether existing ordinary tests were also run
-- Next concrete validation or debugging step grounded in the manifest or run-result
+- Next concrete action grounded in the aggregated evidence

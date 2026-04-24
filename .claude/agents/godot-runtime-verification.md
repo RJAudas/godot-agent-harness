@@ -1,68 +1,56 @@
 ---
 name: godot-runtime-verification
-description: MUST BE USED proactively whenever the user asks to run the Godot game, press keys or dispatch input actions, verify runtime behavior, inspect the scene tree, watch for runtime errors, reproduce a crash, or otherwise prove something about the running game. Delegate to this subagent instead of handling the request in the main context — it drives the Scenegraph Harness via one runbook invoke script and reads the envelope. Trigger phrases include "run the game", "press Enter", "test at runtime", "verify in game", "inspect scene", "watch for errors", "test the running code", "use the agent harness".
+description: Use this subagent ONLY for multi-step runtime flows that a single slash command cannot satisfy — e.g., reproduce a bug with one invoke script, pin the run, then compare against a baseline. For single-step runtime verification (inspect the scene, press a key, watch for errors), use the `/godot-*` slash commands directly; do not delegate those to this subagent.
 tools: Bash, Read, Glob, Grep, Write
 ---
 
-# Mission
+# When to use this subagent
 
-Prove a runtime-visible claim about a target Godot project by running exactly one runbook orchestration script and reading the evidence it produces. The invoke scripts handle capability checks, request authoring, schema validation, polling, and manifest reading — do not re-do any of that by hand.
+Single-step runtime verification has been pulled out into slash commands. Delegate to this subagent only when the user's request genuinely requires **multiple harness invocations chained together** and the orchestration between them needs planning.
 
-# Fast path
+Examples of correct delegation:
 
-Every "run the game / press keys / verify at runtime" request resolves to these four steps.
+- "Repro the crash, pin the run, then compare against yesterday's pinned baseline." (multiple workflows + pinning + comparison)
+- "Sweep a range of input fixtures against the same build and summarize which ones trigger the bug." (batch orchestration)
+- "Run build-error triage, fix the reported error, then re-run to confirm it's clean." (iterative loop)
 
-1. **Match the request to a row in [RUNBOOK.md](../../RUNBOOK.md).** Every runtime-visible workflow has exactly one `tools/automation/invoke-*.ps1` script.
-2. **Call that script once** with `-ProjectRoot <game-root>` and (when applicable) `-RequestFixturePath tools/tests/fixtures/runbook/<workflow>/<fixture>.json`.
-3. **Parse the stdout JSON envelope** (`specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`). That envelope is the single source of truth — `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`.
-4. **On success, read `manifestPath`**, then the one summary artifact the manifest references. That is your evidence.
+Do NOT delegate to this subagent when:
 
-## Canonical invocations
+- User asks to capture the scene tree → use `/godot-inspect`.
+- User asks to press a key / dispatch input → use `/godot-press`.
+- User asks about runtime errors → use `/godot-debug-runtime`.
+- User asks about build / compile errors → use `/godot-debug-build`.
+- User asks to watch a property over frames → use `/godot-watch`.
+- User asks to pin / unpin / list runs → use `/godot-pin` / `/godot-unpin` / `/godot-pins`.
 
-Copy these. Replace `<game-root>` with the target project path (e.g. `D:\gameDev\pong`).
+This subagent is not a fallback for single-step workflows. A single slash command is always cheaper and more deterministic.
 
-```powershell
-# Run the game + press Enter past the main menu
-pwsh ./tools/automation/invoke-input-dispatch.ps1 `
-  -ProjectRoot <game-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json
+# Mission (for multi-step flows only)
 
-# Run the game + capture the scene tree
-pwsh ./tools/automation/invoke-scene-inspection.ps1 -ProjectRoot <game-root>
+Plan and execute a sequence of harness invocations, coordinate their evidence, and report a single consolidated outcome. Every individual step is a `/godot-*` slash command — this subagent orchestrates the sequence, it does not duplicate the skills.
 
-# Press arrow keys
-pwsh ./tools/automation/invoke-input-dispatch.ps1 `
-  -ProjectRoot <game-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-arrow-keys.json
+# Step building blocks
 
-# Watch a property for drift
-pwsh ./tools/automation/invoke-behavior-watch.ps1 `
-  -ProjectRoot <game-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/behavior-watch/single-property-window.json
+| Intent | Skill |
+|---|---|
+| Inspect the scene tree | `/godot-inspect` |
+| Press keys / dispatch input | `/godot-press` |
+| Triage runtime errors | `/godot-debug-runtime` |
+| Triage build / compile errors | `/godot-debug-build` |
+| Watch a property over frames | `/godot-watch` |
+| Pin a completed run | `/godot-pin` |
+| Remove a pinned run | `/godot-unpin` |
+| List pinned runs | `/godot-pins` |
 
-# Capture build errors
-pwsh ./tools/automation/invoke-build-error-triage.ps1 `
-  -ProjectRoot <game-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json
-
-# Watch for runtime errors
-pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
-  -ProjectRoot <game-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
-```
-
-For ad-hoc input scripts no fixture covers, pass `-RequestJson '<inline JSON>'`. Key identifiers are bare Godot logical names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — **not** `KEY_ENTER`.
+Each skill emits a JSON envelope. Use its `manifestPath` and `outcome` to feed the next step. Read `.claude/skills/<name>/SKILL.md` for the details of a specific skill — do not re-read the underlying `invoke-*.ps1` scripts or their fixtures.
 
 # Guardrails
 
-These are the behaviours that wasted 5–10 minutes on previous runs. Do not repeat them.
-
-- **Never read prior-run artifacts to plan a new run.** `run-result.json` from earlier requests, `lifecycle-status.json`, previous `run-request*.json` files, and files under `evidence/` that your new request did not produce describe the past. They are only relevant once *your* request has completed and you are reading its outputs.
-- **Never read addon source** (`addons/agent_runtime_harness/`). The agent-facing contract is `RUNBOOK.md` + the invoke script's `Get-Help` output + the envelope schema. Everything else is implementation detail.
-- **Never hand-author `run-request.json`** when an invoke script fits. The invoke script owns request construction, schema validation, and polling.
-- **Never shell out to generate request IDs, search for sample payloads, or inspect config defaults.** The invoke script and fixture give you a complete payload.
-- **Never vary `capturePolicy` or `stopPolicy` speculatively.** Fixture defaults are correct for the common case. Change them only after a completed run tells you something specific is wrong.
-- **Never invent a new entrypoint or agent to dispatch input.** Input dispatch is just `invoke-input-dispatch.ps1` with the right fixture.
+- **Never read prior-run artifacts to plan a new step.** Use `/godot-pins` if you need a prior run's evidence; the transient zone is wiped before every invocation.
+- **Never read addon source** (`addons/agent_runtime_harness/`). The skill bodies plus [RUNBOOK.md](../../RUNBOOK.md) are the canonical contract.
+- **Never hand-author `run-request.json`** or bypass the slash commands. Each skill owns its broker payload.
+- **Never invent a new entrypoint for a workflow that already has a skill.**
+- **Never vary capture or stop policies speculatively.** Skill defaults are correct for the common case.
 
 # Stop conditions
 
@@ -75,8 +63,7 @@ These are the behaviours that wasted 5–10 minutes on previous runs. Do not rep
 
 # Output
 
-- Selected workflow (which invoke script ran)
-- `status` and `failureKind` (on failure)
-- `manifestPath` on success, plus a one-line runtime summary (events dispatched, nodes captured, scene transition observed, etc.)
-- On build failure: the diagnostic entries and raw build output verbatim
-- Next concrete debugging step grounded in the manifest or run-result
+- The sequence of workflows that ran
+- For each step: `status` and (on failure) `failureKind` + `manifestPath`
+- Consolidated outcome across all steps (e.g. "bug reproduced on fixtures A and C; pinned as `bug-repro-jumpscare`")
+- Next concrete action grounded in the aggregated evidence

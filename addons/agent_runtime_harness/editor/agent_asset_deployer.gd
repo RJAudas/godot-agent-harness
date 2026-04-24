@@ -27,6 +27,7 @@ func deploy_into_project() -> Dictionary:
 
 	_copy_template_tree(".github/prompts", ".github/prompts", operations, errors)
 	_copy_template_tree(".github/agents", ".github/agents", operations, errors)
+	_copy_claude_skills(operations, errors)
 	_ensure_directory("res://evidence/scenegraph/latest", operations)
 
 	var harness_template_path := TEMPLATE_ROOT.path_join("harness/inspection-run-config.json")
@@ -108,6 +109,35 @@ func _copy_template_tree(template_relative_path: String, destination_relative_pa
 			errors.append(result.get("message", "Failed to copy %s." % destination_file))
 		
 	dir.list_dir_end()
+
+
+func _copy_claude_skills(operations: Array, errors: Array) -> void:
+	var skills_root := TEMPLATE_ROOT.path_join(".claude/skills")
+	var skills_absolute := ProjectSettings.globalize_path(skills_root)
+	var root_dir := DirAccess.open(skills_absolute)
+	if root_dir == null:
+		return
+
+	root_dir.list_dir_begin()
+	while true:
+		var skill_dir_name := root_dir.get_next()
+		if skill_dir_name == "":
+			break
+		if not root_dir.current_is_dir():
+			continue
+		if skill_dir_name.begins_with("."):
+			continue
+
+		var source_skill := skills_root.path_join(skill_dir_name).path_join("SKILL.md")
+		var destination_skill := "res://.claude/skills/%s/SKILL.md" % skill_dir_name
+		if not FileAccess.file_exists(source_skill):
+			continue
+
+		var result := _copy_template_file(source_skill, destination_skill)
+		operations.append(result)
+		if result.get("status", "") == "error":
+			errors.append(result.get("message", "Failed to copy %s." % destination_skill))
+	root_dir.list_dir_end()
 
 
 func _copy_template_file(source_path: String, destination_path: String) -> Dictionary:

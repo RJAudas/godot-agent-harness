@@ -552,6 +552,27 @@ if (-not $SkipAgentAssets) {
         $claudeTriageAgentAction = 'skipped-write-claude-triage-agent'
     }
     Add-Operation -Operations $operations -Path $claudeTriageAgentPath -Action $claudeTriageAgentAction
+
+    # Claude skills — directory-tree copy so new skills land automatically.
+    # Each SKILL.md passes through Get-TemplateContent, which substitutes
+    # {{HARNESS_REPO_ROOT}} via the existing $script:ResolvedHarnessRoot pipeline.
+    $skillTemplateRoot = Join-Path (Get-TemplateRoot) '.claude/skills'
+    if (Test-Path -LiteralPath $skillTemplateRoot) {
+        $skillFiles = Get-ChildItem -LiteralPath $skillTemplateRoot -Recurse -File -Filter 'SKILL.md' -ErrorAction SilentlyContinue
+        foreach ($skillFile in $skillFiles) {
+            $relative = $skillFile.FullName.Substring($skillTemplateRoot.Length).TrimStart('\', '/').Replace('\', '/')
+            $destinationPath = Join-Path $resolvedGameRoot ('.claude/skills/' + $relative)
+            $templateRelative = '.claude/skills/' + $relative
+            if ($PSCmdlet.ShouldProcess($destinationPath, 'Write Claude skill')) {
+                Set-FileContent -Path $destinationPath -Content (Get-TemplateContent -RelativePath $templateRelative)
+                $skillAction = 'wrote-claude-skill'
+            }
+            else {
+                $skillAction = 'skipped-write-claude-skill'
+            }
+            Add-Operation -Operations $operations -Path $destinationPath -Action $skillAction
+        }
+    }
 }
 
 $result = [ordered]@{

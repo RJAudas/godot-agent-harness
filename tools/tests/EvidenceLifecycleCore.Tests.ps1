@@ -47,6 +47,31 @@ Describe 'Get-RunZoneClassification' {
         $map = Get-RunZoneClassification
         $map['trace.jsonl'] | Should -Be 'transient'
     }
+
+    It 'classifies capability.json as editor-state (not transient)' {
+        $map = Get-RunZoneClassification
+        $map['capability.json'] | Should -Be 'editor-state'
+    }
+}
+
+Describe 'Initialize-RunbookTransientZone preserves editor-state files' {
+    It 'does not delete capability.json when wiping the transient zone' {
+        $sandbox = New-RepoSandboxDirectory
+        $resultsDir = Join-Path $sandbox 'harness/automation/results'
+        New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+
+        $capabilityPath = Join-Path $resultsDir 'capability.json'
+        '{"heartbeatAt":"2026-04-24T00:00:00Z"}' | Set-Content -LiteralPath $capabilityPath -Encoding utf8
+
+        $staleResult = Join-Path $resultsDir 'run-result.json'
+        '{"finalStatus":"completed"}' | Set-Content -LiteralPath $staleResult -Encoding utf8
+
+        $cleanup = Initialize-RunbookTransientZone -ProjectRoot $sandbox
+        $cleanup.Ok | Should -BeTrue
+
+        Test-Path -LiteralPath $capabilityPath | Should -BeTrue -Because "capability.json is editor-state and must survive cleanup"
+        Test-Path -LiteralPath $staleResult | Should -BeFalse -Because "run-result.json is transient and must be wiped"
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -240,7 +265,7 @@ Describe 'Initialize-RunbookTransientZone' {
     It 'returns PlannedPaths describing deleted files' {
         $resultsDir = Join-Path $script:CleanupSandbox 'harness/automation/results'
         New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
-        'data' | Set-Content -LiteralPath (Join-Path $resultsDir 'capability.json') -Encoding utf8
+        'data' | Set-Content -LiteralPath (Join-Path $resultsDir 'run-result.json') -Encoding utf8
 
         $cleanup = Initialize-RunbookTransientZone -ProjectRoot $script:CleanupSandbox
         $cleanup.Ok | Should -BeTrue

@@ -8,16 +8,11 @@ description: Drive a Godot runtime verification with the Scenegraph Harness usin
 $ARGUMENTS
 ```
 
+> **Claude Code users**: every workflow below is also a `/godot-*` slash command (`/godot-inspect`, `/godot-press`, `/godot-debug-runtime`, `/godot-debug-build`, `/godot-watch`, `/godot-pin`, `/godot-unpin`, `/godot-pins`). The skill auto-invocation is the preferred path. This prompt remains the canonical guidance for Copilot and other non-Claude tools.
+
 ## Fast path — one invoke script call
 
 Run the matching invoke script; it handles capability check, request authoring, polling, and manifest lookup in one call and emits a single JSON envelope to stdout.
-
-### Scene inspection (no input)
-
-```powershell
-pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 `
-  -ProjectRoot "<absolute path to this project>"
-```
 
 ### Input dispatch (keypresses / InputMap actions)
 
@@ -44,7 +39,7 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
 }'
 ```
 
-The `requestId` in the JSON is always overridden by the script with a fresh value. Key identifiers are bare Godot logical names — `ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE` — **not** `KEY_ENTER`. For InputMap actions use `{ "kind": "action", "identifier": "ui_accept", ... }`. For runs with no input, use scene inspection instead.
+The `requestId` in the JSON is always overridden by the script with a fresh value. Key identifiers are bare Godot logical names — `ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE` — **not** `KEY_ENTER`. For InputMap actions use `{ "kind": "action", "identifier": "ui_accept", ... }`. For runs with no input, call `{{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1` directly (or `/godot-inspect` in Claude Code).
 
 ### Runtime error triage
 
@@ -66,7 +61,7 @@ Parse stdout as JSON:
 | `diagnostics` | Human-readable messages; `diagnostics[0]` is the actionable one |
 | `outcome` | Workflow-specific summary (node count, dispatched events, error summary) |
 
-On success: read `manifestPath`, then the one summary artifact the manifest references (`input-dispatch-outcomes.jsonl` for keypresses, `scene-tree.json` for inspection, `runtime-error-records.jsonl` for error triage).
+On success: read `manifestPath`, then the one summary artifact the manifest references (`scene-tree.json` for runs with no input via scene inspection, `input-dispatch-outcomes.jsonl` for keypresses, `runtime-error-records.jsonl` for error triage).
 
 ## Failure handling
 

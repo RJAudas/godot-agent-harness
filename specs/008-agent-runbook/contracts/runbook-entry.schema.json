@@ -46,9 +46,17 @@
       ]
     },
     "recipe": {
-      "description": "Repo-relative path to a tracked docs/runbook/<workflow>.md file that MUST exist.",
-      "type": "string",
-      "pattern": "^docs/runbook/[a-z][a-z0-9-]+\\.md$"
+      "description": "Either a repo-relative path to a tracked docs/runbook/<workflow>.md file, OR a repo-relative path to a .claude/skills/<name>/SKILL.md file for workflows that have been migrated to slash commands. The referenced file MUST exist.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^docs/runbook/[a-z][a-z0-9-]+\\.md$"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\.claude/skills/[a-z][a-z0-9-]+/SKILL\\.md$"
+        }
+      ]
     }
   }
 }

@@ -466,7 +466,7 @@ function Get-RunZoneClassification {
 
     return [ordered]@{
         '.in-flight.json'            = 'marker'
-        'capability.json'            = 'transient'
+        'capability.json'            = 'editor-state'
         'lifecycle-status.json'      = 'transient'
         'run-result.json'            = 'transient'
         'run-request.json'           = 'transient'
@@ -734,6 +734,9 @@ function Initialize-RunbookTransientZone {
                     break
                 }
             }
+            # Skip editor-owned state (heartbeated by the editor on its own cadence).
+            # Wiping these creates a window where invoke scripts mis-report editor-not-running.
+            if ($zone -eq 'editor-state') { continue }
             # Unmatched files in the transient directories are also cleared
             if ($null -eq $zone -or $zone -eq 'transient') {
                 # Attempt delete with one retry

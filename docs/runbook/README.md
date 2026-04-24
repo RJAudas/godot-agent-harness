@@ -1,30 +1,18 @@
-# Runbook Recipes — Index
+# Runbook Recipes — Migrated to Skills
 
-This directory contains one recipe file per supported harness workflow.
+All per-workflow recipe files in this directory have been consolidated into Claude Code skills under [`.claude/skills/`](../../.claude/skills/). Use the table below to find the matching skill.
 
-| Recipe | Workflow |
+| Workflow | Skill |
 |---|---|
-| [input-dispatch.md](input-dispatch.md) | Input dispatch |
-| [inspect-scene-tree.md](inspect-scene-tree.md) | Scene inspection |
-| [behavior-watch.md](behavior-watch.md) | Behavior watch |
-| [build-error-triage.md](build-error-triage.md) | Build-error triage |
-| [runtime-error-triage.md](runtime-error-triage.md) | Runtime-error triage |
+| Scene inspection | [godot-inspect](../../.claude/skills/godot-inspect/SKILL.md) |
+| Input dispatch | [godot-press](../../.claude/skills/godot-press/SKILL.md) |
+| Behavior watch | [godot-watch](../../.claude/skills/godot-watch/SKILL.md) |
+| Build-error triage | [godot-debug-build](../../.claude/skills/godot-debug-build/SKILL.md) |
+| Runtime-error triage | [godot-debug-runtime](../../.claude/skills/godot-debug-runtime/SKILL.md) |
+| Pin run | [godot-pin](../../.claude/skills/godot-pin/SKILL.md) |
+| Unpin run | [godot-unpin](../../.claude/skills/godot-unpin/SKILL.md) |
+| List pinned runs | [godot-pins](../../.claude/skills/godot-pins/SKILL.md) |
 
-## Canonical do-not-read-addon-source callout
+## For non-Claude tools
 
-Every recipe's **Anti-patterns** section MUST include the following marker
-block verbatim. Copy-paste it exactly — the Pester static-check scans for
-`<!-- runbook:do-not-read-addon-source -->` and `<!-- /runbook:do-not-read-addon-source -->`
-as its boundary markers.
-
-```markdown
-<!-- runbook:do-not-read-addon-source -->
-> **Do not** read files under `addons/agent_runtime_harness/` to understand
-> what inputs are valid or what the runtime does. All valid inputs are
-> documented in `specs/` and `docs/`. Reading addon source is slow, fragile,
-> and likely to mislead.
-<!-- /runbook:do-not-read-addon-source -->
-```
-
-This rule is enforced by the `Describe 'RUNBOOK static checks'` Pester block
-in `tools/tests/InvokeRunbookScripts.Tests.ps1` (SC-002).
+The underlying `invoke-*.ps1` scripts in [`tools/automation/`](../../tools/automation/) are unchanged and remain the canonical entry points for Copilot, CI, and any other consumer. Each skill body documents the equivalent shell command.

@@ -20,9 +20,10 @@
     Godot editor is running against.
 
 .PARAMETER TargetScene
-    The res:// path to the scene to launch and inspect. Defaults to
-    "res://scenes/main.tscn". Override when the project's main scene lives
-    elsewhere (e.g. "res://main.tscn").
+    The res:// path to the scene to launch and inspect. When omitted, the
+    script reads `run/main_scene` from the target project's `project.godot`
+    and resolves UIDs via the project's `.tscn` files. Override only when
+    you need to target a scene other than the project's main scene.
 
 .PARAMETER TimeoutSeconds
     End-to-end wall-clock budget in seconds. Default: 60.
@@ -54,7 +55,7 @@ param(
     [Parameter(Mandatory)]
     [string]$ProjectRoot,
 
-    [string]$TargetScene = 'res://scenes/main.tscn',
+    [string]$TargetScene,
 
     [int]$TimeoutSeconds = 60,
 
@@ -73,6 +74,37 @@ $resolvedRoot = Resolve-RunbookRepoPath -Path $ProjectRoot
 $workflowSlug = 'scene-inspection'
 $requestId    = New-RunbookRequestId -Workflow $workflowSlug
 $runId        = $requestId
+
+# Resolve the target scene. Priority: (1) -TargetScene passed by caller,
+# (2) run/main_scene from the target project's project.godot (with UID
+# resolution), (3) fallback placeholder that will fail loudly with
+# target_scene_missing so the caller sees the misconfiguration.
+if (-not $PSBoundParameters.ContainsKey('TargetScene') -or [string]::IsNullOrWhiteSpace($TargetScene)) {
+    $projectFilePath = Join-Path $resolvedRoot 'project.godot'
+    $resolvedFromProject = $null
+    if (Test-Path -LiteralPath $projectFilePath) {
+        $projectContent = Get-Content -LiteralPath $projectFilePath -Raw
+        if ($projectContent -match 'run/main_scene\s*=\s*"([^"]+)"') {
+            $mainScene = $Matches[1]
+            if ($mainScene -match '^res://') {
+                $resolvedFromProject = $mainScene
+            }
+            elseif ($mainScene -match '^uid://') {
+                # Resolve UID by scanning .tscn files for a matching uid="..." in the header line.
+                $scenes = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -Filter '*.tscn' -File -ErrorAction SilentlyContinue
+                foreach ($scene in $scenes) {
+                    $firstLine = Get-Content -LiteralPath $scene.FullName -TotalCount 1 -ErrorAction SilentlyContinue
+                    if ($firstLine -and $firstLine -match ([regex]::Escape($mainScene))) {
+                        $relative = $scene.FullName.Substring($resolvedRoot.Length).TrimStart('\', '/').Replace('\', '/')
+                        $resolvedFromProject = "res://$relative"
+                        break
+                    }
+                }
+            }
+        }
+    }
+    $TargetScene = if ($resolvedFromProject) { $resolvedFromProject } else { 'res://scenes/main.tscn' }
+}
 
 $_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
 

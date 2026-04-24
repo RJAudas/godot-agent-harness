@@ -22,21 +22,23 @@ across future cleanups, pin it first — see the lifecycle workflows below and
 
 ### Runtime verification
 
+> **Claude Code users**: every workflow has a `/godot-*` slash command. Type the command or describe the intent in natural language; Claude's skill router handles invocation. Other tools continue to call `invoke-*.ps1` directly — the script contracts are unchanged.
+
 | Workflow | Description | Orchestration script | Fixture | Recipe |
 |---|---|---|---|---|
-| Input dispatch | Dispatch keys / actions and capture the resulting scene state. | `tools/automation/invoke-input-dispatch.ps1` | `tools/tests/fixtures/runbook/input-dispatch/press-enter.json` | [Recipe](docs/runbook/input-dispatch.md) |
-| Scene inspection | Capture the running game's scene tree with no payload authoring. | `tools/automation/invoke-scene-inspection.ps1` | no payload | [Recipe](docs/runbook/inspect-scene-tree.md) |
-| Behavior watch | Sample a node property over a frame window. | `tools/automation/invoke-behavior-watch.ps1` | `tools/tests/fixtures/runbook/behavior-watch/single-property-window.json` | [Recipe](docs/runbook/behavior-watch.md) |
-| Build-error triage | Run the project and surface any build / compile errors. | `tools/automation/invoke-build-error-triage.ps1` | `tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json` | [Recipe](docs/runbook/build-error-triage.md) |
-| Runtime-error triage | Run the project and surface any GDScript runtime errors. | `tools/automation/invoke-runtime-error-triage.ps1` | `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json` | [Recipe](docs/runbook/runtime-error-triage.md) |
+| Input dispatch | Dispatch keys / actions and capture the resulting scene state. | `tools/automation/invoke-input-dispatch.ps1` | `tools/tests/fixtures/runbook/input-dispatch/press-enter.json` | [Skill](.claude/skills/godot-press/SKILL.md) |
+| Scene inspection | Capture the running game's scene tree with no payload authoring. | `tools/automation/invoke-scene-inspection.ps1` | no payload | [Skill](.claude/skills/godot-inspect/SKILL.md) |
+| Behavior watch | Sample a node property over a frame window. | `tools/automation/invoke-behavior-watch.ps1` | `tools/tests/fixtures/runbook/behavior-watch/single-property-window.json` | [Skill](.claude/skills/godot-watch/SKILL.md) |
+| Build-error triage | Run the project and surface any build / compile errors. | `tools/automation/invoke-build-error-triage.ps1` | `tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json` | [Skill](.claude/skills/godot-debug-build/SKILL.md) |
+| Runtime-error triage | Run the project and surface any GDScript runtime errors. | `tools/automation/invoke-runtime-error-triage.ps1` | `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json` | [Skill](.claude/skills/godot-debug-runtime/SKILL.md) |
 
 ### Evidence lifecycle
 
 | Workflow | Description | Orchestration script | Recipe |
 |---|---|---|---|
-| Pin run | Copy the current transient run to a stable named slot. | `tools/automation/invoke-pin-run.ps1` | [Recipe](docs/runbook/pin-run.md) |
-| Unpin run | Remove a named pin to free disk space. | `tools/automation/invoke-unpin-run.ps1` | [Recipe](docs/runbook/unpin-run.md) |
-| List pinned runs | Enumerate all named pins for a project. | `tools/automation/invoke-list-pinned-runs.ps1` | [Recipe](docs/runbook/list-pinned-runs.md) |
+| Pin run | Copy the current transient run to a stable named slot. | `tools/automation/invoke-pin-run.ps1` | [Skill](.claude/skills/godot-pin/SKILL.md) |
+| Unpin run | Remove a named pin to free disk space. | `tools/automation/invoke-unpin-run.ps1` | [Skill](.claude/skills/godot-unpin/SKILL.md) |
+| List pinned runs | Enumerate all named pins for a project. | `tools/automation/invoke-list-pinned-runs.ps1` | [Skill](.claude/skills/godot-pins/SKILL.md) |
 
 ## Stdout envelope
 

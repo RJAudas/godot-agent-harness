@@ -32,6 +32,26 @@ config/name="Sandbox Game"
         (Join-Path $gameRoot 'CLAUDE.md') | Should -Exist
         (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') | Should -Exist
         (Join-Path $gameRoot '.claude/agents/godot-evidence-triage.md') | Should -Exist
+        # All 8 godot-* skills must deploy with their SKILL.md files and the
+        # harness-repo-root token must have been substituted to a real path.
+        $expectedSkills = @(
+            'godot-inspect',
+            'godot-press',
+            'godot-debug-runtime',
+            'godot-debug-build',
+            'godot-watch',
+            'godot-pin',
+            'godot-unpin',
+            'godot-pins'
+        )
+        foreach ($skillName in $expectedSkills) {
+            $skillPath = Join-Path $gameRoot ".claude/skills/$skillName/SKILL.md"
+            $skillPath | Should -Exist
+            $skillContent = Get-Content -LiteralPath $skillPath -Raw
+            $skillContent | Should -Match ('(?m)^name:\s*"' + [regex]::Escape($skillName) + '"')
+            $skillContent | Should -Match 'user-invocable:\s*true'
+            $skillContent | Should -Not -Match '\{\{HARNESS_REPO_ROOT\}\}'
+        }
 
         $projectContent = Get-Content -LiteralPath $projectPath -Raw
         $projectContent | Should -Match '\[autoload\]'
@@ -58,7 +78,9 @@ config/name="Sandbox Game"
 
         $claudeRuntimeAgent = Get-Content -LiteralPath (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') -Raw
         $claudeRuntimeAgent | Should -Match '(?m)^name:\s+godot-runtime-verification'
-        $claudeRuntimeAgent | Should -Match 'invoke-scene-inspection\.ps1'
+        $claudeRuntimeAgent | Should -Match 'multi-step'
+        $claudeRuntimeAgent | Should -Match '/godot-inspect'
+        $claudeRuntimeAgent | Should -Not -Match 'invoke-scene-inspection\.ps1'
     }
 
     It 'preserves an existing harness config file' {

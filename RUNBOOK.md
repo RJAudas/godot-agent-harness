@@ -1,8 +1,8 @@
 # Agent Runbook — Godot Agent Harness
 
-A one-stop index of the five supported runtime-verification workflows.
-Each row links to a copy-pasteable orchestration script, a tracked request
-fixture, and a step-by-step recipe.
+A one-stop index of the supported runtime-verification and evidence-lifecycle
+workflows. Each row links to a copy-pasteable orchestration script and a
+step-by-step recipe.
 
 > **Where to start**: Pick the workflow you need, run the linked script,
 > read the stdout JSON envelope, then follow the linked recipe for failure
@@ -10,7 +10,17 @@ fixture, and a step-by-step recipe.
 > this runbook — the scripts wrap the full capability-check → request →
 > poll → manifest-read loop.
 
+## How runs are cleaned
+
+Every runtime-verification script automatically clears the transient zone
+(`harness/automation/results/` and `evidence/automation/`) before dispatching
+a new request. You never need to delete output files manually. To keep a run
+across future cleanups, pin it first — see the lifecycle workflows below and
+[specs/009-evidence-lifecycle/quickstart.md](specs/009-evidence-lifecycle/quickstart.md).
+
 ## Workflows
+
+### Runtime verification
 
 | Workflow | Description | Orchestration script | Fixture | Recipe |
 |---|---|---|---|---|
@@ -19,6 +29,14 @@ fixture, and a step-by-step recipe.
 | Behavior watch | Sample a node property over a frame window. | `tools/automation/invoke-behavior-watch.ps1` | `tools/tests/fixtures/runbook/behavior-watch/single-property-window.json` | [Recipe](docs/runbook/behavior-watch.md) |
 | Build-error triage | Run the project and surface any build / compile errors. | `tools/automation/invoke-build-error-triage.ps1` | `tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json` | [Recipe](docs/runbook/build-error-triage.md) |
 | Runtime-error triage | Run the project and surface any GDScript runtime errors. | `tools/automation/invoke-runtime-error-triage.ps1` | `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json` | [Recipe](docs/runbook/runtime-error-triage.md) |
+
+### Evidence lifecycle
+
+| Workflow | Description | Orchestration script | Recipe |
+|---|---|---|---|
+| Pin run | Copy the current transient run to a stable named slot. | `tools/automation/invoke-pin-run.ps1` | [Recipe](docs/runbook/pin-run.md) |
+| Unpin run | Remove a named pin to free disk space. | `tools/automation/invoke-unpin-run.ps1` | [Recipe](docs/runbook/unpin-run.md) |
+| List pinned runs | Enumerate all named pins for a project. | `tools/automation/invoke-list-pinned-runs.ps1` | [Recipe](docs/runbook/list-pinned-runs.md) |
 
 ## Stdout envelope
 

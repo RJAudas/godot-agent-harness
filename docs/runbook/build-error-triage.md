@@ -87,8 +87,24 @@ Exit code: non-zero on failure, `0` on success.
 | `timeout` | Run did not complete in time. | Increase `-TimeoutSeconds`. |
 | `internal` | Harness-internal error. | Read `diagnostics[0]`; file a bug. |
 
+## Automatic cleanup
+
+Before every invocation the script clears the transient zone
+(`harness/automation/results/` and `evidence/automation/`) automatically.
+To keep a run for later comparison, pin it before the next invocation:
+
+```pwsh
+pwsh ./tools/automation/invoke-pin-run.ps1 `
+    -ProjectRoot integration-testing/<name> `
+    -PinName my-baseline
+```
+
+See [Recipe: Pin Run](pin-run.md) for details.
+
 ## Anti-patterns
 
+- **Do not** manually delete files under `harness/automation/results/` or
+  `evidence/automation/`. The script handles cleanup automatically.
 - **Do not** infer what is valid GDScript by reading the harness addon source.
   Fix the error at the reported file and line, re-run, and let the envelope tell
   you whether the build is now clean.

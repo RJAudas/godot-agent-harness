@@ -96,6 +96,23 @@ On failure: exit code is non-zero, `diagnostics[0]` is the actionable
 message, `firstFailureSummary` in the outcome reports the first failed
 event (if available).
 
+## Automatic cleanup
+
+Before every invocation the script clears the transient zone
+(`harness/automation/results/` and `evidence/automation/`) so stale output
+from a previous run never contaminates new evidence. You do **not** need to
+delete files manually between runs.
+
+To keep a run for later comparison, pin it before the next invocation:
+
+```pwsh
+pwsh ./tools/automation/invoke-pin-run.ps1 `
+    -ProjectRoot integration-testing/<name> `
+    -PinName my-baseline
+```
+
+See [Recipe: Pin Run](pin-run.md) for details.
+
 ## Anti-patterns
 
 - **Do not** hand-roll the capability → request → poll loop. Use this
@@ -103,6 +120,8 @@ event (if available).
 - **Do not** hardcode frame numbers without understanding the game's frame
   rate. Use the existing pong-testbed fixture frame values as a starting
   point and adjust if the game runs at a different tick rate.
+- **Do not** manually delete files under `harness/automation/results/` or
+  `evidence/automation/`. The script handles cleanup automatically.
 
 <!-- runbook:do-not-read-addon-source -->
 > **Do not** read files under `addons/agent_runtime_harness/` to understand

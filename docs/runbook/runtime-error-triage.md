@@ -101,8 +101,24 @@ Exit code: non-zero on failure, `0` on success.
 | `crashed` | The game process crashed. Check `lastErrorAnchor` in the manifest. |
 | `killed_by_harness` | The harness forcibly terminated the run. |
 
+## Automatic cleanup
+
+Before every invocation the script clears the transient zone
+(`harness/automation/results/` and `evidence/automation/`) automatically.
+To keep a run for later comparison, pin it before the next invocation:
+
+```pwsh
+pwsh ./tools/automation/invoke-pin-run.ps1 `
+    -ProjectRoot integration-testing/<name> `
+    -PinName my-baseline
+```
+
+See [Recipe: Pin Run](pin-run.md) for details.
+
 ## Anti-patterns
 
+- **Do not** manually delete files under `harness/automation/results/` or
+  `evidence/automation/`. The script handles cleanup automatically.
 - **Do not** use this script to detect build errors — use
   `invoke-build-error-triage.ps1` for that. Build errors appear before
   runtime and have their own envelope shape.

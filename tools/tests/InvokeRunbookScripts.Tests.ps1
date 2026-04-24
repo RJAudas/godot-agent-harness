@@ -509,3 +509,248 @@ Describe 'invoke-behavior-watch.ps1' {
         $validation.ParsedOutput.valid | Should -BeTrue
     }
 }
+
+# ---------------------------------------------------------------------------
+# T012-T015 — US1 evidence lifecycle: clean slate before every run
+# ---------------------------------------------------------------------------
+
+Describe 'US1 lifecycle: stale files cleared before second run (T012)' {
+    # Seeds a prior run-result.json, then invokes the script.
+    # With the T016 pre-run cleanup wired in, the stale file is deleted
+    # before the second run's capability check, so the second run's
+    # envelope cannot contain values from the first run's file.
+    It 'transient zone is cleared before capability check' {
+        $root = New-RepoSandboxDirectory
+        try {
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/requests') -Force | Out-Null
+
+            # Seed a prior run-result with a recognisable requestId
+            $priorResult = @{ requestId = 'PRIOR-RUN-001'; runId = 'prior-run'; finalStatus = 'completed'; completedAt = '2020-01-01T00:00:00Z' }
+            $priorResult | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $resultsDir 'run-result.json') -Encoding utf8
+
+            # Invoke the script — it will fail with editor-not-running but MUST clear the zone first
+            $result = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-input-dispatch.ps1' `
+                -Arguments @('-ProjectRoot', $root,
+                             '-RequestFixturePath', 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json')
+            $result.ExitCode | Should -Not -Be 0
+
+            # run-result.json from the PRIOR run must be gone — Initialize-RunbookTransientZone ran
+            $runResultPath = Join-Path $resultsDir 'run-result.json'
+            Test-Path -LiteralPath $runResultPath | Should -BeFalse -Because 'transient cleanup must have removed the prior run-result.json'
+
+            # The new envelope must not mention the prior requestId
+            $result.Output | Should -Not -Match 'PRIOR-RUN-001'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'US1 lifecycle: concurrent invocation refused (T013)' {
+    It 'script exits with run-in-progress when a live in-flight marker exists' {
+        $root = New-RepoSandboxDirectory
+        try {
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/requests') -Force | Out-Null
+
+            # Write a fake marker using the test runner's own PID — a live pwsh process
+            $liveMarker = [ordered]@{
+                schemaVersion = '1.0.0'
+                requestId     = 'live-run-99999'
+                invokeScript  = 'invoke-input-dispatch.ps1'
+                pid           = $PID
+                hostname      = $env:COMPUTERNAME
+                startedAt     = [DateTime]::UtcNow.AddSeconds(-5).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+            }
+            $liveMarker | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $resultsDir '.in-flight.json') -Encoding utf8
+
+            $result = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-input-dispatch.ps1' `
+                -Arguments @('-ProjectRoot', $root,
+                             '-RequestFixturePath', 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json')
+
+            $result.ExitCode | Should -Not -Be 0
+            $parsed = $result.Output | ConvertFrom-Json
+            # The envelope must indicate run-in-progress refusal
+            $parsed.status      | Should -Be 'failure'
+            $parsed.failureKind | Should -Be 'run-in-progress'
+            $parsed.diagnostics | Should -Not -BeNullOrEmpty
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'US1 lifecycle: stale marker auto-recovers (T014)' {
+    It 'script proceeds and records stale-recovery diagnostic when marker has dead PID' {
+        $root = New-RepoSandboxDirectory
+        try {
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/requests') -Force | Out-Null
+
+            # Write a stale marker (dead PID, old timestamp)
+            $staleMarker = [ordered]@{
+                schemaVersion = '1.0.0'
+                requestId     = 'stale-99999'
+                invokeScript  = 'invoke-input-dispatch.ps1'
+                pid           = 999999999
+                hostname      = 'DEADBOX'
+                startedAt     = [DateTime]::UtcNow.AddSeconds(-300).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+            }
+            $staleMarker | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $resultsDir '.in-flight.json') -Encoding utf8
+
+            # Script should NOT refuse with run-in-progress; it should recover and proceed
+            $result = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-input-dispatch.ps1' `
+                -Arguments @('-ProjectRoot', $root,
+                             '-RequestFixturePath', 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json')
+
+            # Script will still fail (editor not running), but NOT with run-in-progress
+            $parsed = $result.Output | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($null -ne $parsed) {
+                $parsed.failureKind | Should -Not -Be 'run-in-progress' -Because 'stale marker should have been auto-recovered'
+            }
+
+            # Stale marker must be deleted
+            $markerPath = Join-Path $resultsDir '.in-flight.json'
+            # The marker should be gone (or replaced with a fresh one that was then cleared in try/finally)
+            # Either the file is absent or it has a fresh startedAt (not the old stale one)
+            if (Test-Path -LiteralPath $markerPath) {
+                $remaining = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+                $remaining.requestId | Should -Not -Be 'stale-99999' -Because 'stale marker should have been overwritten by the new run'
+            }
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'US1 lifecycle: cleanup-blocked halts dispatch (T015)' {
+    It 'script exits with cleanup-blocked when a transient file cannot be deleted' {
+        $root = New-RepoSandboxDirectory
+        $lockedStream = $null
+        try {
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/requests') -Force | Out-Null
+
+            # Create a file and hold an exclusive lock on it so Remove-Item fails
+            $lockedFile = Join-Path $resultsDir 'run-result.json'
+            'old-data' | Set-Content -LiteralPath $lockedFile -Encoding utf8
+            $lockedStream = [System.IO.File]::Open($lockedFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+
+            $result = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-input-dispatch.ps1' `
+                -Arguments @('-ProjectRoot', $root,
+                             '-RequestFixturePath', 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json')
+
+            $result.ExitCode | Should -Not -Be 0
+            $parsed = $result.Output | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($null -ne $parsed) {
+                $parsed.status      | Should -Be 'failure'
+                $parsed.failureKind | Should -Be 'cleanup-blocked'
+                ($parsed.diagnostics | Where-Object { $_ -match 'cleanup-blocked|locked|delete' }) | Should -Not -BeNullOrEmpty
+            }
+        }
+        finally {
+            if ($null -ne $lockedStream) {
+                $lockedStream.Close()
+                $lockedStream.Dispose()
+            }
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# T020-T021 — US2 git hygiene: run output never reaches git
+# ---------------------------------------------------------------------------
+
+Describe 'US2 git hygiene: canonical runs produce zero git diff (T020)' {
+    It 'harness output files are ignored by the repo .gitignore rules' {
+        $root = New-RepoSandboxDirectory
+        try {
+            # Initialize a throwaway git repo inside the sandbox
+            & git -C $root init --quiet 2>$null
+
+            # Copy the repo-root .gitignore into the sandbox so the rules apply
+            $repoGitignore = Join-Path $script:RepoRootPath '.gitignore'
+            Copy-Item -LiteralPath $repoGitignore -Destination (Join-Path $root '.gitignore')
+            & git -C $root add '.gitignore' 2>$null
+            & git -C $root commit -m 'init' --allow-empty-message --quiet 2>$null
+
+            # Create the canonical transient-zone output files
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            $evidenceDir = Join-Path $root 'evidence/automation/run-001'
+            New-Item -ItemType Directory -Path $resultsDir  -Force | Out-Null
+            New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
+            'data' | Set-Content -LiteralPath (Join-Path $resultsDir 'run-result.json')        -Encoding utf8
+            'data' | Set-Content -LiteralPath (Join-Path $resultsDir 'lifecycle-status.json')  -Encoding utf8
+            'data' | Set-Content -LiteralPath (Join-Path $resultsDir '.in-flight.json')        -Encoding utf8
+            'data' | Set-Content -LiteralPath (Join-Path $evidenceDir 'evidence-manifest.json') -Encoding utf8
+
+            # git status --porcelain should be empty (all files ignored)
+            $status = & git -C $root status --porcelain 2>&1
+            $status | Should -BeNullOrEmpty -Because 'transient-zone files must be covered by .gitignore'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'US2 git hygiene: oracle files still tracked (T021)' {
+    It '*.expected.json files are NOT ignored by the .gitignore rules' {
+        $root = New-RepoSandboxDirectory
+        try {
+            & git -C $root init --quiet 2>$null
+            $repoGitignore = Join-Path $script:RepoRootPath '.gitignore'
+            Copy-Item -LiteralPath $repoGitignore -Destination (Join-Path $root '.gitignore')
+            & git -C $root add '.gitignore' 2>$null
+            & git -C $root commit -m 'init' --allow-empty-message --quiet 2>$null
+
+            $resultsDir = Join-Path $root 'harness/automation/results'
+            New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+            $oracleFile = Join-Path $resultsDir 'run-result.success.expected.json'
+            '{"status":"ok"}' | Set-Content -LiteralPath $oracleFile -Encoding utf8
+
+            # git check-ignore should say the file is NOT ignored (exit 1 = not ignored)
+            $ignored = & git -C $root check-ignore --no-index $oracleFile 2>&1
+            $ignored | Should -BeNullOrEmpty -Because '*.expected.json must not be ignored'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'US2 SC-001: git status clean after canonical invocation (T024)' {
+    It 'git status --porcelain is empty for harness output paths after a failed invocation' {
+        $root = New-RepoSandboxDirectory
+        try {
+            & git -C $root init --quiet 2>$null
+            $repoGitignore = Join-Path $script:RepoRootPath '.gitignore'
+            Copy-Item -LiteralPath $repoGitignore -Destination (Join-Path $root '.gitignore')
+            & git -C $root add '.gitignore' 2>$null
+            & git -C $root commit -m 'init' --allow-empty-message --quiet 2>$null
+
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/results') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $root 'harness/automation/requests') -Force | Out-Null
+
+            # Invoke script (will fail with editor-not-running but will write transient files)
+            $null = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-input-dispatch.ps1' `
+                -Arguments @('-ProjectRoot', $root,
+                             '-RequestFixturePath', 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json')
+
+            $status = & git -C $root status --porcelain 2>&1
+            $status | Should -BeNullOrEmpty -Because 'SC-001: git status must be empty after any orchestration invocation'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

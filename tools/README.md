@@ -28,8 +28,13 @@ Five parameterized scripts in `automation/` are the preferred harness entrypoint
 | `invoke-build-error-triage.ps1 [-RequestFixturePath <path> \| -RequestJson <json>] [-IncludeRawBuildOutput]` | Build-error capture and diagnosis |
 | `invoke-runtime-error-triage.ps1 [-RequestFixturePath <path> \| -RequestJson <json>] [-IncludeFullStack]` | Runtime-error triage with pause-on-error |
 | `invoke-behavior-watch.ps1 [-RequestFixturePath <path> \| -RequestJson <json>]` | Multi-frame property / signal watch |
+| `invoke-pin-run.ps1 -PinName <name> [-Force] [-DryRun]` | Pin the current transient run to a stable named slot |
+| `invoke-unpin-run.ps1 -PinName <name> [-DryRun]` | Remove a named pinned run |
+| `invoke-list-pinned-runs.ps1` | Enumerate all named pins for the project |
 
-Envelope schema: `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`. Recipe docs: `docs/runbook/`. Quick-reference index: `RUNBOOK.md`.
+Runtime-verification envelopes: `specs/008-agent-runbook/contracts/orchestration-stdout.schema.json`.
+Lifecycle envelopes: `specs/009-evidence-lifecycle/contracts/lifecycle-envelope.schema.json`.
+Recipe docs: `docs/runbook/`. Quick-reference index: `RUNBOOK.md`.
 
 ## `check-addon-parse.ps1`
 

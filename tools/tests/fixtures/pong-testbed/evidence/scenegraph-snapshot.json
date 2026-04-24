@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0.0",
+  "snapshot_id": "scenegraph-session-002-failure-01",
+  "session_id": "scenegraph-session-002",
+  "run_id": "pong-scenegraph-missing-node-01",
+  "scenario_id": "pong-scenegraph-missing-node",
+  "trigger": {
+    "trigger_type": "failure",
+    "requested_by": "runtime_failure_handler",
+    "reason": "missing_node_detected",
+    "frame": 34,
+    "timestamp": "2026-04-11T00:01:00Z"
+  },
+  "root_scene": {
+    "name": "Main",
+    "path": "/root/Main"
+  },
+  "frame": 34,
+  "captured_at": "2026-04-11T00:01:00Z",
+  "node_count": 5,
+  "nodes": [
+    {
+      "path": "/root/Main",
+      "type": "Node2D",
+      "parent_path": "/root",
+      "owner_path": "",
+      "groups": [],
+      "script_class": "",
+      "visibility_state": {
+        "visible": true
+      },
+      "processing_state": {
+        "process": true,
+        "physics_process": true
+      },
+      "transform_state": {
+        "position": [0, 0],
+        "rotation": 0,
+        "scale": [1, 1]
+      },
+      "properties": {
+        "name": "Main",
+        "child_count": 3
+      }
+    },
+    {
+      "path": "/root/Main/HUD",
+      "type": "CanvasLayer",
+      "parent_path": "/root/Main",
+      "owner_path": "/root/Main",
+      "groups": [],
+      "script_class": "",
+      "visibility_state": {
+        "visible": true
+      },
+      "processing_state": {
+        "process": true,
+        "physics_process": false
+      },
+      "transform_state": {},
+      "properties": {
+        "name": "HUD",
+        "child_count": 1
+      }
+    },
+    {
+      "path": "/root/Main/HUD/ScoreLabel",
+      "type": "Label",
+      "parent_path": "/root/Main/HUD",
+      "owner_path": "/root/Main",
+      "groups": [],
+      "script_class": "",
+      "visibility_state": {
+        "visible": true
+      },
+      "processing_state": {
+        "process": true,
+        "physics_process": false
+      },
+      "transform_state": {},
+      "properties": {
+        "name": "ScoreLabel",
+        "child_count": 0
+      }
+    },
+    {
+      "path": "/root/Main/LeftPaddle",
+      "type": "StaticBody2D",
+      "parent_path": "/root/Main",
+      "owner_path": "/root/Main",
+      "groups": [],
+      "script_class": "",
+      "visibility_state": {
+        "visible": true
+      },
+      "processing_state": {
+        "process": true,
+        "physics_process": true
+      },
+      "transform_state": {
+        "position": [12, 64],
+        "rotation": 0,
+        "scale": [1, 1]
+      },
+      "properties": {
+        "name": "LeftPaddle",
+        "child_count": 0
+      }
+    },
+    {
+      "path": "/root/Main/RightPaddle",
+      "type": "StaticBody2D",
+      "parent_path": "/root/Main",
+      "owner_path": "/root/Main",
+      "groups": [],
+      "script_class": "",
+      "visibility_state": {
+        "visible": true
+      },
+      "processing_state": {
+        "process": true,
+        "physics_process": true
+      },
+      "transform_state": {
+        "position": [284, 64],
+        "rotation": 0,
+        "scale": [1, 1]
+      },
+      "properties": {
+        "name": "RightPaddle",
+        "child_count": 0
+      }
+    }
+  ],
+  "capture_status": "partial"
+}

@@ -40,6 +40,11 @@ This repository builds a plugin-first Godot harness that gives coding agents mac
 - `pwsh ./tools/automation/invoke-build-error-triage.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>] [-IncludeRawBuildOutput]` runs a build-error triage workflow and emits a JSON stdout envelope.
 - `pwsh ./tools/automation/invoke-runtime-error-triage.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>] [-IncludeFullStack]` runs a runtime-error triage workflow and emits a JSON stdout envelope.
 - `pwsh ./tools/automation/invoke-behavior-watch.ps1 -ProjectRoot <game-root> [-RequestFixturePath <path> | -RequestJson <json>]` runs a behavior-watch workflow and emits a JSON stdout envelope.
+- `pwsh ./tools/automation/invoke-pin-run.ps1 -ProjectRoot <game-root> -PinName <name> [-Force] [-DryRun]` pins the current transient run to a stable named slot and emits a lifecycle envelope.
+- `pwsh ./tools/automation/invoke-unpin-run.ps1 -ProjectRoot <game-root> -PinName <name> [-DryRun]` removes a named pin and emits a lifecycle envelope.
+- `pwsh ./tools/automation/invoke-list-pinned-runs.ps1 -ProjectRoot <game-root>` lists all named pins and emits a lifecycle envelope with `pinnedRunIndex[]`.
+
+The transient zone (`harness/automation/results/` and `evidence/automation/`) is cleared automatically before every runtime run. Pin a run with `invoke-pin-run.ps1` before running again when you need to compare or preserve it. Never delete transient-zone files manually.
 
 ## Output locations
 

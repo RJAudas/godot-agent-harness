@@ -68,6 +68,23 @@ function Exit-Failure {
     exit 1
 }
 
+# Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
+$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
+$_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot
+if (-not $_assertResult.Ok) {
+    Exit-Failure $_assertResult.FailureKind $_assertResult.Diagnostics[0]
+}
+if ($null -ne $_assertResult.StaleDiagnostic) { $_lifecycleDiags.Add($_assertResult.StaleDiagnostic) }
+$null = New-RunbookInFlightMarker -ProjectRoot $resolvedRoot -RequestId $requestId -InvokeScript (Split-Path $PSCommandPath -Leaf)
+
+try {
+
+$_cleanup = Initialize-RunbookTransientZone -ProjectRoot $resolvedRoot
+if (-not $_cleanup.Ok) {
+    Exit-Failure $_cleanup.FailureKind ($_cleanup.Diagnostics | Select-Object -First 1)
+}
+foreach ($_d in $_cleanup.Diagnostics) { $_lifecycleDiags.Add($_d) }
+
 # Step 4: Capability check
 $cap = Test-RunbookCapability -ProjectRoot $resolvedRoot -MaxAgeSeconds $MaxCapabilityAgeSeconds
 if (-not $cap.Ok) {
@@ -158,3 +175,8 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
 $envelope
 Write-RunbookStderrSummary "OK: $nodeCount nodes captured; manifest at $absManifest"
 exit 0
+
+}
+finally {
+    Clear-RunbookInFlightMarker -ProjectRoot $resolvedRoot
+}

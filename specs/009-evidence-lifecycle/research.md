@@ -81,19 +81,20 @@ The copy is byte-identical to the transient state at pin time — no fields rewr
 
 ```gitignore
 # Harness runtime output (see specs/009-evidence-lifecycle/)
-# Transient zone — cleared between runs
-**/harness/automation/results/
+# Transient zone — cleared between runs (use * so git can still traverse the dir for re-includes)
+**/harness/automation/results/*
 # Pinned zone — preserved deliberately; ignored by default, pin explicitly to share
 **/harness/automation/pinned/
 # Per-run evidence trees
 **/evidence/automation/
 
 # Re-include committed test oracles (*.expected.json) so the Pester suite still sees them
-!**/harness/automation/results/
 !**/harness/automation/results/*.expected.json
 ```
 
-The re-include pattern works because `.expected.json` files live at the first level inside `harness/automation/results/` — no nested directories to traverse — so the negation `!` rule is a valid re-include per Git's rule-precedence ordering. The re-include opens the directory (required: Git won't descend into an ignored directory to find `!`-exceptions) and then only surfaces files matching `*.expected.json`.
+The `**/harness/automation/results/*` pattern (with `*` not `/`) ignores all files and subdirectories directly inside `results/` without ignoring the directory itself — this is required so Git can traverse the directory to honour the `!*.expected.json` re-include. Using the trailing `/` form (directory-level ignore) plus `!**/harness/automation/results/` to re-open the directory would leave individual files like `run-result.json` without any matching ignore pattern (since the directory pattern only matches the directory, not its contents), causing them to appear untracked. The `*` form correctly ignores the contents while keeping the directory traversable.
+
+The re-include `!**/harness/automation/results/*.expected.json` works because `.expected.json` files live at the first level inside `harness/automation/results/` — no nested directories to traverse.
 
 Before shipping this block, run `git check-ignore -v` against:
 
@@ -172,3 +173,26 @@ Not a new research question — already decided in the spec clarification (FR-00
 3. Re-run the Pester suite against the fixture to confirm oracle files (`*.expected.json`) still resolve correctly.
 
 No filesystem delete of the working-tree copies is necessary — they become untracked and can be removed locally at each contributor's discretion.
+
+### FR-004 baseline — files to be removed from the git index (T001)
+
+Captured via `git ls-files tools/tests/fixtures/pong-testbed/evidence/ tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json`:
+
+```
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/evidence-manifest.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-diagnostics.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-snapshot.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/scenegraph-summary.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-frame/trace.jsonl
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/evidence-manifest.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/scenegraph-diagnostics.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/scenegraph-snapshot.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/scenegraph-summary.json
+tools/tests/fixtures/pong-testbed/evidence/automation/pong-behavior-watch-wall-bounce-every-n/trace.jsonl
+tools/tests/fixtures/pong-testbed/evidence/scenegraph-diagnostics.json
+tools/tests/fixtures/pong-testbed/evidence/scenegraph-snapshot.json
+tools/tests/fixtures/pong-testbed/evidence/scenegraph-summary.json
+tools/tests/fixtures/pong-testbed/harness/expected-evidence-manifest.json
+```
+
+Total: 14 files (13 under `evidence/` + 1 `harness/expected-evidence-manifest.json`).

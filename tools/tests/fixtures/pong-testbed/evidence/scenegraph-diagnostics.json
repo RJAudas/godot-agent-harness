@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "snapshot_id": "scenegraph-session-002-failure-01",
+  "session_id": "scenegraph-session-002",
+  "run_id": "pong-scenegraph-missing-node-01",
+  "scenario_id": "pong-scenegraph-missing-node",
+  "diagnostics": [
+    {
+      "diagnostic_id": "scenegraph-session-002-failure-01-diagnostic-01",
+      "snapshot_id": "scenegraph-session-002-failure-01",
+      "expectation_id": "ball-node",
+      "status": "missing_node",
+      "message": "The Ball gameplay node must exist under the Main root.",
+      "expected_identity": "/root/Main/Ball"
+    }
+  ]
+}

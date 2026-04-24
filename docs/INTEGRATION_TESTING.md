@@ -101,6 +101,22 @@ For agent-driven workflows, prefer the parameterized orchestration scripts
 (`tools/automation/invoke-*.ps1`). See [`RUNBOOK.md`](../RUNBOOK.md) for
 the quick-reference index of scripts, fixture templates, and recipe docs.
 
+### Evidence lifecycle in sandboxes
+
+The transient zone (`harness/automation/results/` and `evidence/automation/`)
+is wiped automatically before every new run — you do not need to delete output
+files between runs. If you want to keep a run's evidence across future
+invocations, pin it first:
+
+```pwsh
+pwsh ./tools/automation/invoke-pin-run.ps1 `
+    -ProjectRoot integration-testing/<name> `
+    -PinName my-baseline
+```
+
+See [RUNBOOK.md](../RUNBOOK.md) and [docs/runbook/pin-run.md](runbook/pin-run.md)
+for full details.
+
 ## Cleanup
 
 ```pwsh

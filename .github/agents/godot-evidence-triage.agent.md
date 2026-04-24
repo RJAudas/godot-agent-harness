@@ -20,6 +20,7 @@ Interpret a Godot runtime evidence bundle from its manifest, explain the observe
 - Do **not** read addon source files (`addons/agent_runtime_harness/`) to understand the harness protocol; all agent-facing contracts are in `RUNBOOK.md`, `docs/runbook/`, and `specs/008-agent-runbook/contracts/`.
 <!-- /runbook:do-not-read-addon-source -->
 - Stay in post-run diagnosis mode. If the user needs a fresh runtime proof, stop and route to `godot-runtime-verification.agent.md` instead of launching a new evidence run from this artifact.
+- **Cross-run comparison**: if the task requires comparing two runs (e.g., "compare baseline to current"), use pinned runs — locate them with `invoke-list-pinned-runs.ps1` and reference each by its `manifestPath` entry in the index. Never reconstruct a prior run from stale transient-zone files; the transient zone belongs to the most recent invocation only.
 - Keep recommendations plugin-first and grounded in structured runtime evidence.
 - If asked to write machine-readable outputs, stay inside `tools/evals/001-agent-tooling-foundation/` and `tools/automation/run-records/` unless a different declared boundary explicitly permits more.
 

@@ -12,6 +12,7 @@ Plugin-first Godot harness that gives agents machine-readable runtime evidence i
 - **Runtime side** ([addons/agent_runtime_harness/runtime/](addons/agent_runtime_harness/runtime/)): autoload singleton loaded into the *playtest* game — scene capture, input dispatch, behavior-watch sampler, artifact writer.
 - **Evidence is manifest-centered**: every run produces `evidence-manifest.json` that references the workflow-specific artifact (e.g. `input-dispatch-outcomes.jsonl`, `scene-tree.json`). Read the manifest, not raw artifacts.
 - **Agent-facing contracts** live in [specs/008-agent-runbook/contracts/](specs/008-agent-runbook/contracts/) (schemas) and [docs/runbook/](docs/runbook/) (recipes). The `invoke-*.ps1` scripts wrap the full capability-check → request → poll → manifest-read loop so agents never hand-author `run-request.json`.
+- **Evidence lifecycle**: the transient zone (`harness/automation/results/` + `evidence/automation/`) is wiped automatically before every run. To keep a run, use `invoke-pin-run.ps1` — do not delete or copy files by hand. Zone classification is the single source of truth in `Get-RunZoneClassification` ([data-model](specs/009-evidence-lifecycle/data-model.md)). Pinned runs live in `harness/automation/pinned/<name>/`.
 - **Integration testing** uses git-ignored sandboxes at `integration-testing/<name>/`. Never scaffold ad-hoc projects elsewhere, never commit a Godot binary, never hard-code an install path.
 
 ## Common commands
@@ -56,7 +57,7 @@ See the full list in [RUNBOOK.md](RUNBOOK.md).
 
 These are the behaviors that waste runs.
 
-- **Do not read prior-run artifacts to plan a new run.** That includes earlier `run-result.json`, `lifecycle-status.json`, previous request files, or anything under `evidence/` that your new request did not produce.
+- **Do not read prior-run artifacts to plan a new run.** The transient zone is wiped automatically before each new run, so any file you read there belongs to the *current* run or is a stale artefact you should not trust. If you need a prior run's evidence, it must have been pinned first — use `invoke-list-pinned-runs.ps1` to find it, not a directory scan.
 - **Do not read addon source to understand the agent protocol.** Every agent-facing contract is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, or an invoke script's `Get-Help` output. (When the *task itself* is editing the addon to fix a bug, reading it is expected — then run `tools/check-addon-parse.ps1`.)
 - **Do not hand-author `run-request.json`** when an invoke script exists for the workflow.
 - **Do not generate request IDs via shell, search for sample payloads, or build requests from raw config.** The invoke script owns all of that.

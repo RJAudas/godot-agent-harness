@@ -1,8 +1,0 @@
-{
-  "schema_version": "1.0.0",
-  "snapshot_id": "pong-behavior-watch-wall-bounce-every-n-snapshot-01",
-  "session_id": "pong-request-watch-every-n-001",
-  "run_id": "pong-behavior-watch-wall-bounce-every-n-run-01",
-  "scenario_id": "pong-behavior-watch-wall-bounce-every-n",
-  "diagnostics": []
-}

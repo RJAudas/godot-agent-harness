@@ -1,4 +1,0 @@
-{"frame":12,"timestampMs":192,"nodePath":"/root/Main/Ball","position":[18.0,64.0],"velocity":[220.0,0.0],"collisionState":"none","lastCollider":null}
-{"frame":13,"timestampMs":208,"nodePath":"/root/Main/Ball","position":[22.0,64.0],"velocity":[220.0,0.0],"collisionState":"none","lastCollider":null}
-{"frame":14,"timestampMs":224,"nodePath":"/root/Main/Ball","position":[26.0,64.0],"velocity":[220.0,0.0],"collisionState":"contact","lastCollider":"/root/Main/RightWall"}
-{"frame":15,"timestampMs":240,"nodePath":"/root/Main/Ball","position":[30.0,64.0],"velocity":[-220.0,0.0],"collisionState":"none","lastCollider":null}

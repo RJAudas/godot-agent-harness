@@ -1,6 +1,6 @@
 # Copilot Slash Pivot — Research & Deferred TODO
 
-> **Status**: Research doc. Work listed here is *not* scheduled. It becomes active only after the Claude-side slash-command pivot (see `C:/Users/robau/.claude/plans/harmonic-shimmying-otter.md` Phase 1–3) validates the hypothesis that lexical `/godot-*` commands reduce agent discovery hunts.
+> **Status**: Research doc. Work listed here is *not* scheduled. It becomes active only after the Claude-side slash-command pivot plan (Phase 1–3) validates the hypothesis that lexical `/godot-*` commands reduce agent discovery hunts.
 
 ## 1. Why Copilot is deferred
 

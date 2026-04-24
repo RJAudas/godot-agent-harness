@@ -77,8 +77,9 @@ $runId        = $requestId
 
 # Resolve the target scene. Priority: (1) -TargetScene passed by caller,
 # (2) run/main_scene from the target project's project.godot (with UID
-# resolution), (3) fallback placeholder that will fail loudly with
-# target_scene_missing so the caller sees the misconfiguration.
+# resolution), (3) an obviously-invalid placeholder path so the broker
+# returns target_scene_missing loudly instead of silently running
+# whatever happens to live at a default guess.
 if (-not $PSBoundParameters.ContainsKey('TargetScene') -or [string]::IsNullOrWhiteSpace($TargetScene)) {
     $projectFilePath = Join-Path $resolvedRoot 'project.godot'
     $resolvedFromProject = $null
@@ -103,7 +104,7 @@ if (-not $PSBoundParameters.ContainsKey('TargetScene') -or [string]::IsNullOrWhi
             }
         }
     }
-    $TargetScene = if ($resolvedFromProject) { $resolvedFromProject } else { 'res://scenes/main.tscn' }
+    $TargetScene = if ($resolvedFromProject) { $resolvedFromProject } else { 'res://__main_scene_unresolved__.tscn' }
 }
 
 $_lifecycleDiags = [System.Collections.Generic.List[string]]::new()

@@ -453,10 +453,15 @@ function Get-RunZoneClassification {
 
     .DESCRIPTION
         Keys are filename globs (matched case-insensitively). Values are one of:
-        "transient", "pinned", "oracle", "input", or "marker".
+        "transient", "editor-state", "pinned", "oracle", "input", or "marker".
 
-        "transient" files are cleared by Initialize-RunbookTransientZone.
-        "marker"    (.in-flight.json) is transient but explicitly SKIPPED by cleanup.
+        "transient"    files are cleared by Initialize-RunbookTransientZone.
+        "editor-state" files (capability.json) are owned by the editor's
+                       heartbeat loop and PRESERVED by cleanup — wiping them
+                       creates a window where invoke scripts mis-report
+                       editor-not-running.
+        "marker"       (.in-flight.json) is transient but explicitly SKIPPED
+                       by cleanup and cleared on orchestration exit.
 
     .OUTPUTS
         Hashtable of glob -> zone-enum string.

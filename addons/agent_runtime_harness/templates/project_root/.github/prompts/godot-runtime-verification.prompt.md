@@ -61,7 +61,7 @@ Parse stdout as JSON:
 | `diagnostics` | Human-readable messages; `diagnostics[0]` is the actionable one |
 | `outcome` | Workflow-specific summary (node count, dispatched events, error summary) |
 
-On success: read `manifestPath`, then the one summary artifact the manifest references (`input-dispatch-outcomes.jsonl` for keypresses, `runtime-error-records.jsonl` for error triage).
+On success: read `manifestPath`, then the one summary artifact the manifest references (`scene-tree.json` for runs with no input via scene inspection, `input-dispatch-outcomes.jsonl` for keypresses, `runtime-error-records.jsonl` for error triage).
 
 ## Failure handling
 

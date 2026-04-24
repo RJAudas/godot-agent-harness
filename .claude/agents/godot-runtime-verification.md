@@ -16,9 +16,12 @@ Examples of correct delegation:
 
 Do NOT delegate to this subagent when:
 
-- User asks to capture the scene tree → use `/godot-inspect` instead.
-- User asks to press a key / dispatch input → use `invoke-input-dispatch.ps1` via the existing runbook (or a future `/godot-press` skill when it ships).
-- User asks about runtime / build errors → use the corresponding `invoke-*.ps1` or slash command directly.
+- User asks to capture the scene tree → use `/godot-inspect`.
+- User asks to press a key / dispatch input → use `/godot-press`.
+- User asks about runtime errors → use `/godot-debug-runtime`.
+- User asks about build / compile errors → use `/godot-debug-build`.
+- User asks to watch a property over frames → use `/godot-watch`.
+- User asks to pin / unpin / list runs → use `/godot-pin` / `/godot-unpin` / `/godot-pins`.
 
 This subagent is not a fallback for single-step workflows. A single slash command is always cheaper and more deterministic.
 

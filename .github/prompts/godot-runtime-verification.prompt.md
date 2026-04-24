@@ -58,7 +58,7 @@ For an ad-hoc input script that no fixture covers, pass `-RequestJson '<inline J
 
 These are the behaviors that waste runs. Prior agents burned five to ten minutes on each.
 
-- **Do not read prior-run artifacts to plan a new run.** That includes earlier `run-result.json`, `lifecycle-status.json`, previous `run-request*.json` files, or anything under `evidence/` that your new request did not produce. They describe the past; they do not tell you what to do now.
+- **Do not read prior-run artifacts to plan a new run.** The transient zone (`harness/automation/results/` and `evidence/automation/`) is wiped automatically before every new run. Any file you find there belongs to the *current* run. If you need a prior run, it must have been pinned with `invoke-pin-run.ps1` — use `invoke-list-pinned-runs.ps1` to locate it; do not scan the transient zone for historical data.
 
 <!-- runbook:do-not-read-addon-source -->
 - **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the harness protocol. Everything you need is in `RUNBOOK.md`, `docs/runbook/`, `specs/008-agent-runbook/contracts/`, and the invoke script's `Get-Help` output.

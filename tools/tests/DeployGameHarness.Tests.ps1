@@ -43,7 +43,7 @@ config/name="Sandbox Game"
 
         $copilotInstructions = Get-Content -LiteralPath (Join-Path $gameRoot '.github/copilot-instructions.md') -Raw
         $copilotInstructions | Should -Match 'BEGIN AGENT_RUNTIME_HARNESS'
-        $copilotInstructions | Should -Match 'harness/automation/requests/run-request.json'
+        $copilotInstructions | Should -Match 'invoke-scene-inspection\.ps1'
         $copilotInstructions | Should -Match 'Do not read prior-run artifacts'
         $copilotInstructions | Should -Match 'https://github.com/RJAudas/godot-agent-harness/issues'
 
@@ -58,7 +58,7 @@ config/name="Sandbox Game"
 
         $claudeRuntimeAgent = Get-Content -LiteralPath (Join-Path $gameRoot '.claude/agents/godot-runtime-verification.md') -Raw
         $claudeRuntimeAgent | Should -Match '(?m)^name:\s+godot-runtime-verification'
-        $claudeRuntimeAgent | Should -Match 'harness/automation/requests/run-request.json'
+        $claudeRuntimeAgent | Should -Match 'invoke-scene-inspection\.ps1'
     }
 
     It 'preserves an existing harness config file' {

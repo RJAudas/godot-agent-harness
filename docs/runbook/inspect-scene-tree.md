@@ -60,8 +60,24 @@ $tree.root | Select-Object name, type, children
 | `timeout` | Capture did not complete in time. | Increase `-TimeoutSeconds` or check if the editor is frozen. |
 | `internal` | Harness-internal error. | Read `diagnostics[0]`; file a bug. |
 
+## Automatic cleanup
+
+Before every invocation the script clears the transient zone
+(`harness/automation/results/` and `evidence/automation/`) automatically.
+To keep a run for later comparison, pin it before the next invocation:
+
+```pwsh
+pwsh ./tools/automation/invoke-pin-run.ps1 `
+    -ProjectRoot integration-testing/<name> `
+    -PinName my-baseline
+```
+
+See [Recipe: Pin Run](pin-run.md) for details.
+
 ## Anti-patterns
 
+- **Do not** manually delete files under `harness/automation/results/` or
+  `evidence/automation/`. The script handles cleanup automatically.
 - **Do not** attempt to pass `-RequestFixturePath` — scene inspection uses
   no external payload. The script synthesizes a minimal startup-capture
   request internally.

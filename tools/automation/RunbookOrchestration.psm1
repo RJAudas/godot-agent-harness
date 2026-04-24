@@ -442,15 +442,779 @@ function Write-RunbookStderrSummary {
     [Console]::Error.WriteLine($Message)
 }
 
+# ---------------------------------------------------------------------------
+# Evidence Lifecycle — Zone Classification (T004)
+# ---------------------------------------------------------------------------
+
+function Get-RunZoneClassification {
+    <#
+    .SYNOPSIS
+        Returns the FR-001 zone classification table as a hashtable.
+
+    .DESCRIPTION
+        Keys are filename globs (matched case-insensitively). Values are one of:
+        "transient", "pinned", "oracle", "input", or "marker".
+
+        "transient" files are cleared by Initialize-RunbookTransientZone.
+        "marker"    (.in-flight.json) is transient but explicitly SKIPPED by cleanup.
+
+    .OUTPUTS
+        Hashtable of glob -> zone-enum string.
+    #>
+    [CmdletBinding()]
+    param()
+
+    return [ordered]@{
+        '.in-flight.json'            = 'marker'
+        'capability.json'            = 'transient'
+        'lifecycle-status.json'      = 'transient'
+        'run-result.json'            = 'transient'
+        'run-request.json'           = 'transient'
+        'evidence-manifest.json'     = 'transient'
+        'trace.jsonl'                = 'transient'
+        'scenegraph-snapshot.json'   = 'transient'
+        'scenegraph-diagnostics.json' = 'transient'
+        'scenegraph-summary.json'    = 'transient'
+        'input-dispatch-outcomes.jsonl' = 'transient'
+        'runtime-error-records.jsonl' = 'transient'
+        'pause-decision-log.jsonl'   = 'transient'
+        'last-error-anchor.json'     = 'transient'
+        'build-errors.jsonl'         = 'transient'
+        '*.expected.json'            = 'oracle'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Evidence Lifecycle — In-Flight Marker (T005)
+# ---------------------------------------------------------------------------
+
+function New-RunbookInFlightMarker {
+    <#
+    .SYNOPSIS
+        Writes .in-flight.json into the transient zone before cleanup runs.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .PARAMETER RequestId
+        The GUID/request ID of the current orchestration call.
+
+    .PARAMETER InvokeScript
+        Basename of the calling invoke-*.ps1 script.
+
+    .OUTPUTS
+        Absolute path to the marker file.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string]$RequestId,
+        [Parameter(Mandatory)][string]$InvokeScript
+    )
+
+    $resultsDir = Join-Path $ProjectRoot 'harness/automation/results'
+    if (-not (Test-Path -LiteralPath $resultsDir)) {
+        New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+    }
+
+    $markerPath = Join-Path $resultsDir '.in-flight.json'
+    $marker = [ordered]@{
+        schemaVersion = '1.0.0'
+        requestId     = $RequestId
+        invokeScript  = $InvokeScript
+        pid           = $PID
+        hostname      = $env:COMPUTERNAME
+        startedAt     = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+    }
+    $marker | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $markerPath -Encoding utf8
+    return $markerPath
+}
+
+function Clear-RunbookInFlightMarker {
+    <#
+    .SYNOPSIS
+        Removes .in-flight.json from the transient zone. Called in try/finally.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot
+    )
+
+    $markerPath = Join-Path $ProjectRoot 'harness/automation/results/.in-flight.json'
+    if (Test-Path -LiteralPath $markerPath) {
+        Remove-Item -LiteralPath $markerPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-InFlightMarkerStaleness {
+    <#
+    .SYNOPSIS
+        Checks whether an existing .in-flight.json is stale (dead PID or old timestamp).
+
+    .DESCRIPTION
+        Returns a PSCustomObject with:
+          Active [bool]      — true = live run in progress, false = stale/absent
+          Stale  [bool]      — true = marker existed but was stale
+          Marker [object]    — parsed marker content when present, else $null
+          Diagnostic [string]
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .PARAMETER OrchestratorTimeoutSeconds
+        The timeout horizon used by the orchestrator (default 60). Staleness is
+        declared when startedAt is older than 2× this value.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [int]$OrchestratorTimeoutSeconds = 60
+    )
+
+    $markerPath = Join-Path $ProjectRoot 'harness/automation/results/.in-flight.json'
+    if (-not (Test-Path -LiteralPath $markerPath)) {
+        return [pscustomobject]@{ Active = $false; Stale = $false; Marker = $null; Diagnostic = $null }
+    }
+
+    try {
+        $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        # Corrupt marker — treat as stale
+        return [pscustomobject]@{
+            Active     = $false
+            Stale      = $true
+            Marker     = $null
+            Diagnostic = "Corrupt .in-flight.json (parse error); treating as stale and recovering."
+        }
+    }
+
+    # Check PID liveness
+    $pidAlive = $false
+    try {
+        $proc = Get-Process -Id $marker.pid -ErrorAction SilentlyContinue
+        if ($null -ne $proc) {
+            $name = $proc.ProcessName
+            $pidAlive = ($name -eq 'pwsh' -or $name -eq 'powershell')
+        }
+    }
+    catch { }
+
+    # Check timestamp horizon
+    $startedAt = [DateTime]::MinValue
+    try { $startedAt = [DateTime]::Parse($marker.startedAt).ToUniversalTime() } catch { }
+    $ageSeconds = ([DateTime]::UtcNow - $startedAt).TotalSeconds
+    $horizonSeconds = 2 * $OrchestratorTimeoutSeconds
+    $timestampStale = ($ageSeconds -gt $horizonSeconds)
+
+    if ($pidAlive -and -not $timestampStale) {
+        return [pscustomobject]@{
+            Active     = $true
+            Stale      = $false
+            Marker     = $marker
+            Diagnostic = "Run in progress: requestId=$($marker.requestId) pid=$($marker.pid) startedAt=$($marker.startedAt)"
+        }
+    }
+
+    $reason = if (-not $pidAlive) { "PID $($marker.pid) is no longer a pwsh process" } else { "marker is $([int]$ageSeconds)s old (horizon ${horizonSeconds}s)" }
+    return [pscustomobject]@{
+        Active     = $false
+        Stale      = $true
+        Marker     = $marker
+        Diagnostic = "Stale in-flight marker recovered ($reason). Prior requestId=$($marker.requestId)."
+    }
+}
+
+function Assert-NoInFlightRun {
+    <#
+    .SYNOPSIS
+        Fails fast if a live in-flight marker exists in the target project.
+
+    .DESCRIPTION
+        Returns a PSCustomObject:
+          Ok         [bool]
+          FailureKind [string|null]
+          Diagnostics [string[]]
+          StaleDiagnostic [string|null]   — set when a stale marker was auto-recovered
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [int]$OrchestratorTimeoutSeconds = 60
+    )
+
+    $check = Test-InFlightMarkerStaleness -ProjectRoot $ProjectRoot -OrchestratorTimeoutSeconds $OrchestratorTimeoutSeconds
+
+    if ($check.Active) {
+        return [pscustomobject]@{
+            Ok           = $false
+            FailureKind  = 'run-in-progress'
+            Diagnostics  = @($check.Diagnostic)
+            StaleDiagnostic = $null
+        }
+    }
+
+    if ($check.Stale) {
+        # Auto-recover: delete the stale marker
+        $markerPath = Join-Path $ProjectRoot 'harness/automation/results/.in-flight.json'
+        Remove-Item -LiteralPath $markerPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{
+            Ok           = $true
+            FailureKind  = $null
+            Diagnostics  = @()
+            StaleDiagnostic = $check.Diagnostic
+        }
+    }
+
+    return [pscustomobject]@{
+        Ok           = $true
+        FailureKind  = $null
+        Diagnostics  = @()
+        StaleDiagnostic = $null
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Evidence Lifecycle — Transient Zone Cleanup (T006)
+# ---------------------------------------------------------------------------
+
+function Initialize-RunbookTransientZone {
+    <#
+    .SYNOPSIS
+        Clears transient-zone files from a prior run in the target project.
+
+    .DESCRIPTION
+        Enumerates files classified as "transient" by Get-RunZoneClassification,
+        deletes them one-by-one with a 50 ms retry on failure, and skips
+        .in-flight.json explicitly. Partial cleanup surfaces into Diagnostics[]
+        (FR-010 — never silent).
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .OUTPUTS
+        PSCustomObject: { Ok [bool], FailureKind [string|null], Diagnostics [string[]], PlannedPaths [array] }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot
+    )
+
+    $classification = Get-RunZoneClassification
+    $diagnostics    = [System.Collections.Generic.List[string]]::new()
+    $plannedPaths   = [System.Collections.Generic.List[hashtable]]::new()
+    $blocked        = $false
+    $blockedPath    = $null
+
+    # Transient files live in two locations
+    $transientDirs = @(
+        (Join-Path $ProjectRoot 'harness/automation/results'),
+        (Join-Path $ProjectRoot 'evidence/automation')
+    )
+
+    foreach ($dir in $transientDirs) {
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+
+        $files = Get-ChildItem -LiteralPath $dir -Recurse -File -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+            $name = $file.Name
+            $relPath = $file.FullName.Replace($ProjectRoot, '').TrimStart('\', '/')
+
+            # Skip the in-flight marker
+            if ($name -eq '.in-flight.json') { continue }
+
+            # Determine zone
+            $zone = $null
+            foreach ($glob in $classification.Keys) {
+                if ($name -like $glob) {
+                    $zone = $classification[$glob]
+                    break
+                }
+            }
+            # Unmatched files in the transient directories are also cleared
+            if ($null -eq $zone -or $zone -eq 'transient') {
+                # Attempt delete with one retry
+                $deleted = $false
+                for ($attempt = 0; $attempt -lt 2; $attempt++) {
+                    try {
+                        Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                        $deleted = $true
+                        break
+                    }
+                    catch {
+                        if ($attempt -eq 0) { Start-Sleep -Milliseconds 50 }
+                    }
+                }
+
+                if ($deleted) {
+                    $plannedPaths.Add(@{ path = $relPath; action = 'delete' })
+                }
+                else {
+                    $blocked    = $true
+                    $blockedPath = $relPath
+                    $diagnostics.Add("cleanup-blocked: could not delete '$relPath' after 2 attempts (file may be locked).")
+                    $plannedPaths.Add(@{ path = $relPath; action = 'skip' })
+                }
+            }
+        }
+
+        # Also remove now-empty subdirectories (best effort)
+        if (Test-Path -LiteralPath $dir) {
+            Get-ChildItem -LiteralPath $dir -Recurse -Directory -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                ForEach-Object {
+                    $children = Get-ChildItem -LiteralPath $_.FullName -ErrorAction SilentlyContinue
+                    if ($null -eq $children -or @($children).Count -eq 0) {
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                    }
+                }
+        }
+    }
+
+    if ($blocked) {
+        return [pscustomobject]@{
+            Ok           = $false
+            FailureKind  = 'cleanup-blocked'
+            Diagnostics  = @($diagnostics)
+            PlannedPaths = @($plannedPaths)
+        }
+    }
+
+    return [pscustomobject]@{
+        Ok           = $true
+        FailureKind  = $null
+        Diagnostics  = @($diagnostics)
+        PlannedPaths = @($plannedPaths)
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Evidence Lifecycle — Lifecycle Envelope Writer (T007)
+# ---------------------------------------------------------------------------
+
+function Write-LifecycleEnvelope {
+    <#
+    .SYNOPSIS
+        Emits a lifecycle-envelope.schema.json-conformant JSON envelope on stdout.
+
+    .PARAMETER Status
+        "ok", "refused", or "failed".
+
+    .PARAMETER Operation
+        "cleanup", "pin", "unpin", or "list".
+
+    .PARAMETER DryRun
+        Whether this is a dry-run (no filesystem mutations occurred).
+
+    .PARAMETER PlannedPaths
+        Array of hashtables with "path" and "action" keys.
+
+    .PARAMETER FailureKind
+        One of the lifecycle failureKind values; null on success.
+
+    .PARAMETER PinName
+        Pin name for pin/unpin responses; null otherwise.
+
+    .PARAMETER PinnedRunIndex
+        Array of pin records for list responses; null otherwise.
+
+    .PARAMETER Diagnostics
+        Zero or more diagnostic strings.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('ok', 'refused', 'failed')][string]$Status,
+        [Parameter(Mandatory)][ValidateSet('cleanup', 'pin', 'unpin', 'list')][string]$Operation,
+        [bool]$DryRun = $false,
+        [array]$PlannedPaths = @(),
+        [string]$FailureKind,
+        [string]$PinName,
+        [array]$PinnedRunIndex,
+        [string[]]$Diagnostics = @()
+    )
+
+    $envelope = [ordered]@{
+        status        = $Status
+        failureKind   = if ($PSBoundParameters.ContainsKey('FailureKind')) { $FailureKind } else { $null }
+        operation     = $Operation
+        dryRun        = $DryRun
+        plannedPaths  = @($PlannedPaths | Where-Object { $null -ne $_ })
+        pinName       = if ($PSBoundParameters.ContainsKey('PinName')) { $PinName } else { $null }
+        pinnedRunIndex = if ($PSBoundParameters.ContainsKey('PinnedRunIndex') -and $null -ne $PinnedRunIndex) { $PinnedRunIndex } else { $null }
+        diagnostics   = @($Diagnostics | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        completedAt   = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        manifestPath  = $null
+    }
+
+    $envelope | ConvertTo-Json -Depth 20 -Compress:$false
+}
+
+# ---------------------------------------------------------------------------
+# Evidence Lifecycle — Pin / Unpin / List helpers (T031)
+# ---------------------------------------------------------------------------
+
+$script:PinNamePattern = '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'
+
+function Copy-RunToPinnedZone {
+    <#
+    .SYNOPSIS
+        Copies the current transient run to harness/automation/pinned/<PinName>/.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .PARAMETER PinName
+        Agent-chosen pin identifier (validated against pin-name regex).
+
+    .PARAMETER Force
+        Overwrite an existing pin with the same name.
+
+    .PARAMETER DryRun
+        If true, compute plannedPaths without copying anything.
+
+    .OUTPUTS
+        PSCustomObject: { Ok, FailureKind, Diagnostics, PlannedPaths }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string]$PinName,
+        [switch]$Force,
+        [switch]$DryRun
+    )
+
+    if ($PinName -notmatch $script:PinNamePattern) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-name-invalid'
+            Diagnostics = @("Pin name '$PinName' is invalid. Must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$.")
+            PlannedPaths = @()
+        }
+    }
+
+    $pinRoot = Join-Path $ProjectRoot "harness/automation/pinned/$PinName"
+    if ((Test-Path -LiteralPath $pinRoot) -and -not $Force) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-name-collision'
+            Diagnostics = @("A pin named '$PinName' already exists. Use -Force to overwrite.")
+            PlannedPaths = @()
+        }
+    }
+
+    # Locate manifest in transient zone
+    $evidenceRoot   = Join-Path $ProjectRoot 'evidence/automation'
+    $resultsRoot    = Join-Path $ProjectRoot 'harness/automation/results'
+
+    $manifestPath = $null
+    if (Test-Path -LiteralPath $evidenceRoot) {
+        $manifests = Get-ChildItem -LiteralPath $evidenceRoot -Recurse -Filter 'evidence-manifest.json' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+        if ($null -ne $manifests -and @($manifests).Count -gt 0) {
+            $manifestPath = @($manifests)[0].FullName
+        }
+    }
+
+    if ($null -eq $manifestPath) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-source-missing'
+            Diagnostics = @("No evidence-manifest.json found in transient zone. Run a workflow before pinning.")
+            PlannedPaths = @()
+        }
+    }
+
+    # Parse manifest to find referenced artifacts + runId
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 20
+    }
+    catch {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-source-missing'
+            Diagnostics = @("Could not parse evidence-manifest.json: $($_.Exception.Message)")
+            PlannedPaths = @()
+        }
+    }
+
+    $runId = if ($manifest.PSObject.Properties['runId']) { $manifest.runId } else { [System.IO.Path]::GetFileName([System.IO.Path]::GetDirectoryName($manifestPath)) }
+    $scenarioId = if ($manifest.PSObject.Properties['scenarioId']) { $manifest.scenarioId } else { 'unknown' }
+
+    # Build list of source files to copy
+    $sourceFiles = [System.Collections.Generic.List[hashtable]]::new()
+
+    # evidence-manifest.json itself
+    $sourceFiles.Add(@{
+        Source = $manifestPath
+        Dest   = Join-Path $pinRoot "evidence/$runId/evidence-manifest.json"
+    })
+
+    # artifact refs from manifest
+    if ($manifest.PSObject.Properties['artifactRefs']) {
+        foreach ($ref in $manifest.artifactRefs) {
+            if ($null -ne $ref.path) {
+                $absArtifact = if ([System.IO.Path]::IsPathRooted($ref.path)) { $ref.path } else { Join-Path $ProjectRoot $ref.path }
+                if (Test-Path -LiteralPath $absArtifact) {
+                    $artifactName = [System.IO.Path]::GetFileName($absArtifact)
+                    $sourceFiles.Add(@{
+                        Source = $absArtifact
+                        Dest   = Join-Path $pinRoot "evidence/$runId/$artifactName"
+                    })
+                }
+            }
+        }
+    }
+
+    # run-result.json and lifecycle-status.json from results/
+    foreach ($resultFile in @('run-result.json', 'lifecycle-status.json')) {
+        $src = Join-Path $resultsRoot $resultFile
+        if (Test-Path -LiteralPath $src) {
+            $sourceFiles.Add(@{
+                Source = $src
+                Dest   = Join-Path $pinRoot "results/$resultFile"
+            })
+        }
+    }
+
+    # Compute planned paths (project-root-relative)
+    $plannedPaths = @($sourceFiles | ForEach-Object {
+        @{ path = $_.Dest.Replace($ProjectRoot, '').TrimStart('\', '/'); action = 'copy' }
+    })
+    $metaRelPath = "harness/automation/pinned/$PinName/pin-metadata.json"
+    $plannedPaths += @{ path = $metaRelPath; action = 'create' }
+
+    if ($DryRun) {
+        return [pscustomobject]@{
+            Ok           = $true
+            FailureKind  = $null
+            Diagnostics  = @()
+            PlannedPaths = $plannedPaths
+        }
+    }
+
+    # Get status from run-result.json
+    $runStatus = 'unknown'
+    $runResultPath = Join-Path $resultsRoot 'run-result.json'
+    if (Test-Path -LiteralPath $runResultPath) {
+        try {
+            $rr = Get-Content -LiteralPath $runResultPath -Raw | ConvertFrom-Json -Depth 10
+            if ($rr.PSObject.Properties['finalStatus']) {
+                $raw = [string]$rr.finalStatus
+                $runStatus = switch ($raw) {
+                    'completed' { 'pass' }
+                    'failed'    { 'fail' }
+                    default     { 'unknown' }
+                }
+            }
+        }
+        catch { }
+    }
+
+    # Perform the copy (overwrite if -Force)
+    if ((Test-Path -LiteralPath $pinRoot) -and $Force) {
+        Remove-Item -LiteralPath $pinRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    foreach ($entry in $sourceFiles) {
+        $destDir = [System.IO.Path]::GetDirectoryName($entry.Dest)
+        if (-not (Test-Path -LiteralPath $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $entry.Source -Destination $entry.Dest -Force
+    }
+
+    # Write pin-metadata.json
+    $invokeScript = $null
+    $markerPath = Join-Path $resultsRoot '.in-flight.json'
+    # marker is already cleared by now; check run-result instead
+    $invokeScript = $null
+
+    $pinMeta = [ordered]@{
+        schemaVersion   = '1.0.0'
+        pinName         = $PinName
+        pinnedAt        = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        sourceRunId     = $runId
+        sourceScenarioId = $scenarioId
+        status          = $runStatus
+    }
+    $metaPath = Join-Path $pinRoot 'pin-metadata.json'
+    $pinMeta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $metaPath -Encoding utf8
+
+    return [pscustomobject]@{
+        Ok           = $true
+        FailureKind  = $null
+        Diagnostics  = @()
+        PlannedPaths = $plannedPaths
+    }
+}
+
+function Remove-PinnedRun {
+    <#
+    .SYNOPSIS
+        Removes a named pin from the pinned zone.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .PARAMETER PinName
+        Name of the pin to remove.
+
+    .PARAMETER DryRun
+        If true, compute plannedPaths without deleting anything.
+
+    .OUTPUTS
+        PSCustomObject: { Ok, FailureKind, Diagnostics, PlannedPaths }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string]$PinName,
+        [switch]$DryRun
+    )
+
+    if ($PinName -notmatch $script:PinNamePattern) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-name-invalid'
+            Diagnostics = @("Pin name '$PinName' is invalid.")
+            PlannedPaths = @()
+        }
+    }
+
+    $pinRoot = Join-Path $ProjectRoot "harness/automation/pinned/$PinName"
+    if (-not (Test-Path -LiteralPath $pinRoot)) {
+        return [pscustomobject]@{
+            Ok          = $false
+            FailureKind = 'pin-target-not-found'
+            Diagnostics = @("No pin named '$PinName' found at '$pinRoot'.")
+            PlannedPaths = @()
+        }
+    }
+
+    $files = Get-ChildItem -LiteralPath $pinRoot -Recurse -File -ErrorAction SilentlyContinue
+    $plannedPaths = @($files | ForEach-Object {
+        @{ path = $_.FullName.Replace($ProjectRoot, '').TrimStart('\', '/'); action = 'delete' }
+    })
+
+    if ($DryRun) {
+        return [pscustomobject]@{
+            Ok           = $true
+            FailureKind  = $null
+            Diagnostics  = @()
+            PlannedPaths = $plannedPaths
+        }
+    }
+
+    Remove-Item -LiteralPath $pinRoot -Recurse -Force
+    return [pscustomobject]@{
+        Ok           = $true
+        FailureKind  = $null
+        Diagnostics  = @()
+        PlannedPaths = $plannedPaths
+    }
+}
+
+function Get-PinnedRunIndex {
+    <#
+    .SYNOPSIS
+        Returns a pinned-run index array by walking harness/automation/pinned/*/pin-metadata.json.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the target project.
+
+    .OUTPUTS
+        Array of pin-record hashtables sorted alphabetically by pinName.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot
+    )
+
+    $pinnedRoot = Join-Path $ProjectRoot 'harness/automation/pinned'
+    $records    = [System.Collections.Generic.List[object]]::new()
+
+    if (-not (Test-Path -LiteralPath $pinnedRoot)) {
+        return @()
+    }
+
+    $pinDirs = Get-ChildItem -LiteralPath $pinnedRoot -Directory -ErrorAction SilentlyContinue
+    foreach ($pinDir in $pinDirs) {
+        $metaPath = Join-Path $pinDir.FullName 'pin-metadata.json'
+        if (-not (Test-Path -LiteralPath $metaPath)) {
+            $records.Add([ordered]@{
+                pinName           = $pinDir.Name
+                manifestPath      = $null
+                scenarioId        = 'unknown'
+                runId             = 'unknown'
+                pinnedAt          = $null
+                status            = 'unknown'
+                sourceInvokeScript = $null
+            })
+            continue
+        }
+
+        try {
+            $meta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json -Depth 10
+        }
+        catch {
+            $records.Add([ordered]@{
+                pinName           = $pinDir.Name
+                manifestPath      = $null
+                scenarioId        = 'unknown'
+                runId             = 'unknown'
+                pinnedAt          = $null
+                status            = 'unknown'
+                sourceInvokeScript = $null
+            })
+            continue
+        }
+
+        $runId    = if ($meta.PSObject.Properties['sourceRunId']) { $meta.sourceRunId } else { 'unknown' }
+        $scenario = if ($meta.PSObject.Properties['sourceScenarioId']) { $meta.sourceScenarioId } else { 'unknown' }
+        $pinnedAt = if ($meta.PSObject.Properties['pinnedAt']) { $meta.pinnedAt } else { $null }
+        $status   = if ($meta.PSObject.Properties['status']) { $meta.status } else { 'unknown' }
+        $invokeScript = if ($meta.PSObject.Properties['sourceInvokeScript']) { $meta.sourceInvokeScript } else { $null }
+
+        $manifestRelPath = "harness/automation/pinned/$($pinDir.Name)/evidence/$runId/evidence-manifest.json"
+        $manifestAbsPath = Join-Path $ProjectRoot $manifestRelPath
+        $resolvedManifest = if (Test-Path -LiteralPath $manifestAbsPath) { $manifestRelPath } else { $null }
+
+        $records.Add([ordered]@{
+            pinName           = $pinDir.Name
+            manifestPath      = $resolvedManifest
+            scenarioId        = $scenario
+            runId             = $runId
+            pinnedAt          = $pinnedAt
+            status            = $status
+            sourceInvokeScript = $invokeScript
+        })
+    }
+
+    return @($records | Sort-Object { $_['pinName'] })
+}
+
 Export-ModuleMember -Function @(
     'New-RunbookRequestId',
     'Test-RunbookCapability',
     'Resolve-RunbookPayload',
     'Invoke-RunbookRequest',
     'Write-RunbookEnvelope',
+    'Write-LifecycleEnvelope',
     'Test-RunbookManifest',
     'Write-RunbookStderrSummary',
     'Invoke-Helper',
     'Get-RunbookRepoRoot',
-    'Resolve-RunbookRepoPath'
+    'Resolve-RunbookRepoPath',
+    'Get-RunZoneClassification',
+    'New-RunbookInFlightMarker',
+    'Clear-RunbookInFlightMarker',
+    'Test-InFlightMarkerStaleness',
+    'Assert-NoInFlightRun',
+    'Initialize-RunbookTransientZone',
+    'Copy-RunToPinnedZone',
+    'Remove-PinnedRun',
+    'Get-PinnedRunIndex'
 )

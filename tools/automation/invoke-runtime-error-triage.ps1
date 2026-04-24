@@ -84,10 +84,13 @@ $workflowSlug = 'runtime-error-triage'
 $requestId    = New-RunbookRequestId -Workflow $workflowSlug
 $runId        = $requestId
 
+$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
+    $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
-        -Diagnostics @($Message) -Outcome @{
+        -Diagnostics $diags -Outcome @{
             runtimeErrorRecordsPath = $null
             latestErrorSummary      = $null
             terminationReason       = 'unknown'
@@ -106,6 +109,22 @@ if ($hasFixture -and $hasInline) {
 if (-not $hasFixture -and -not $hasInline) {
     Exit-Failure 'request-invalid' 'Exactly one of -RequestFixturePath or -RequestJson must be supplied.'
 }
+
+# Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
+$_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot
+if (-not $_assertResult.Ok) {
+    Exit-Failure $_assertResult.FailureKind $_assertResult.Diagnostics[0]
+}
+if ($null -ne $_assertResult.StaleDiagnostic) { $_lifecycleDiags.Add($_assertResult.StaleDiagnostic) }
+$null = New-RunbookInFlightMarker -ProjectRoot $resolvedRoot -RequestId $requestId -InvokeScript (Split-Path $PSCommandPath -Leaf)
+
+try {
+
+$_cleanup = Initialize-RunbookTransientZone -ProjectRoot $resolvedRoot
+if (-not $_cleanup.Ok) {
+    Exit-Failure $_cleanup.FailureKind ($_cleanup.Diagnostics | Select-Object -First 1)
+}
+foreach ($_d in $_cleanup.Diagnostics) { $_lifecycleDiags.Add($_d) }
 
 # Step 4: Capability check
 $cap = Test-RunbookCapability -ProjectRoot $resolvedRoot -MaxAgeSeconds $MaxCapabilityAgeSeconds
@@ -206,8 +225,9 @@ if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]
     $fk = [string]$rr.failureKind
     if ($fk -eq 'runtime') {
         $msg = if ($null -ne $latestErrorSummary) { "Runtime error at $($latestErrorSummary.file):$($latestErrorSummary.line): $($latestErrorSummary.message)" } else { 'Runtime error. Check the manifest for details.' }
+        $diags = @($_lifecycleDiags) + @($msg)
         Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' -ManifestPath $absManifest `
-            -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
                 runtimeErrorRecordsPath = $runtimeErrorRecordsPath
                 latestErrorSummary      = $latestErrorSummary
                 terminationReason       = $terminationReason
@@ -216,8 +236,9 @@ if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]
         exit 1
     }
     $msg = "Run failed with failureKind='$fk' (runtime-error triage handles diagnostics for failureKind=runtime only)."
+    $diags = @($_lifecycleDiags) + @($msg)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $fk -ManifestPath $absManifest `
-        -RunId $runId -RequestId $requestId -Diagnostics @($msg) -Outcome @{
+        -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
             runtimeErrorRecordsPath = $runtimeErrorRecordsPath
             latestErrorSummary      = $latestErrorSummary
             terminationReason       = $terminationReason
@@ -233,7 +254,7 @@ if ([string]::IsNullOrWhiteSpace($absManifest)) {
 
 # Steps 10-12
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
-    -RunId $runId -RequestId $requestId -Diagnostics @() -Outcome @{
+    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
         runtimeErrorRecordsPath = $runtimeErrorRecordsPath
         latestErrorSummary      = $null
         terminationReason       = $terminationReason
@@ -241,3 +262,8 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
 $envelope
 Write-RunbookStderrSummary "OK: no runtime errors; manifest at $absManifest"
 exit 0
+
+}
+finally {
+    Clear-RunbookInFlightMarker -ProjectRoot $resolvedRoot
+}

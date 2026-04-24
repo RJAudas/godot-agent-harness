@@ -50,5 +50,50 @@
       ],
       "logOutputPath": "tools/automation/run-records/"
     }
+    ,
+    {
+      "id": "pinned-zone-create",
+      "artifactId": "invoke-pin-run.helper",
+      "description": "Boundary for the pin operation: copies a completed run into the project's pinned zone.",
+      "allowedPaths": [
+        "*/harness/automation/pinned/**"
+      ],
+      "allowedEditTypes": [
+        "create"
+      ],
+      "stopConditions": [
+        "Requested write falls outside the harness/automation/pinned/** path pattern.",
+        "Requested edit type is not 'create'.",
+        "Source transient zone has no evidence-manifest.json to pin."
+      ],
+      "escalationConditions": [
+        "User asks to pin directly to a path outside the declared pinned zone.",
+        "Pin operation requires modifying tracked source files instead of copying to pinned zone."
+      ],
+      "logOutputPath": "tools/automation/run-records/"
+    },
+    {
+      "id": "pinned-zone-force-overwrite",
+      "artifactId": "invoke-pin-run.helper",
+      "description": "Boundary for -Force pin overwrite: deletes and re-creates an existing named pin. 'delete' is scoped to the named pin directory only.",
+      "allowedPaths": [
+        "*/harness/automation/pinned/<pin-name>/**"
+      ],
+      "allowedEditTypes": [
+        "create",
+        "update",
+        "delete"
+      ],
+      "stopConditions": [
+        "Requested write falls outside the named pin directory.",
+        "Delete targets a path that is not the root of the named pin directory.",
+        "Pin name does not exist when -Force expects an overwrite target."
+      ],
+      "escalationConditions": [
+        "User asks to unpin via this boundary instead of invoke-unpin-run.ps1.",
+        "Overwrite would affect a path outside the named pin directory."
+      ],
+      "logOutputPath": "tools/automation/run-records/"
+    }
   ]
 }

@@ -81,10 +81,13 @@ $workflowSlug    = 'input-dispatch'
 $requestId       = New-RunbookRequestId -Workflow $workflowSlug
 $runId           = $requestId
 
+$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
+    $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
-        -Diagnostics @($Message) -Outcome @{
+        -Diagnostics $diags -Outcome @{
             outcomesPath        = $null
             dispatchedEventCount = 0
             firstFailureSummary = $null
@@ -105,6 +108,22 @@ if (-not $hasFixture -and -not $hasInline) {
 }
 
 # Step 2-3: Resolve project root (already done above)
+
+# Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
+$_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot
+if (-not $_assertResult.Ok) {
+    Exit-Failure $_assertResult.FailureKind $_assertResult.Diagnostics[0]
+}
+if ($null -ne $_assertResult.StaleDiagnostic) { $_lifecycleDiags.Add($_assertResult.StaleDiagnostic) }
+$null = New-RunbookInFlightMarker -ProjectRoot $resolvedRoot -RequestId $requestId -InvokeScript (Split-Path $PSCommandPath -Leaf)
+
+try {
+
+$_cleanup = Initialize-RunbookTransientZone -ProjectRoot $resolvedRoot
+if (-not $_cleanup.Ok) {
+    Exit-Failure $_cleanup.FailureKind ($_cleanup.Diagnostics | Select-Object -First 1)
+}
+foreach ($_d in $_cleanup.Diagnostics) { $_lifecycleDiags.Add($_d) }
 
 # Step 4: Capability check
 $cap = Test-RunbookCapability -ProjectRoot $resolvedRoot -MaxAgeSeconds $MaxCapabilityAgeSeconds
@@ -186,7 +205,7 @@ catch {
 
 # Steps 10-12: Emit envelope and exit
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
-    -RunId $runId -RequestId $requestId -Diagnostics @() -Outcome @{
+    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
         outcomesPath        = $outcomesPath
         dispatchedEventCount = $dispatchedCount
         firstFailureSummary = $firstFailureSummary
@@ -194,3 +213,8 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
 $envelope
 Write-RunbookStderrSummary "OK: dispatched $dispatchedCount events; manifest at $absManifest"
 exit 0
+
+}
+finally {
+    Clear-RunbookInFlightMarker -ProjectRoot $resolvedRoot
+}

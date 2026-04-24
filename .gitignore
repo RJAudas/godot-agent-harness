@@ -40,3 +40,14 @@ credentials/
 integration-testing/*
 !integration-testing/.gitkeep
 !integration-testing/README.md
+
+# Harness runtime output (see specs/009-evidence-lifecycle/)
+# Transient zone — cleared between runs (use * so git can still traverse the dir for re-includes)
+**/harness/automation/results/*
+# Pinned zone — preserved deliberately; ignored by default, pin explicitly to share
+**/harness/automation/pinned/
+# Per-run evidence trees
+**/evidence/automation/
+
+# Re-include committed test oracles (*.expected.json) so the Pester suite still sees them
+!**/harness/automation/results/*.expected.json

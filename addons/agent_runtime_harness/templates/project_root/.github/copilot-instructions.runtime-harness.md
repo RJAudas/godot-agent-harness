@@ -7,21 +7,30 @@
 
 ## Runtime Evidence Workflow — fast path
 
-For every "run the game", "press Enter past the menu", "verify at runtime", "inspect the scene", or "watch for errors" request:
+For every "run the game", "press Enter past the menu", "verify at runtime", "inspect the scene", or "watch for errors" request, call one invoke script:
 
-1. Check `harness/automation/results/capability.json` — missing or stale (>5 min) means `editor-not-running`.
-2. Write **one** file, `harness/automation/requests/run-request.json`, using the canonical payload template in [`.github/prompts/godot-runtime-verification.prompt.md`](prompts/godot-runtime-verification.prompt.md). Fill only the `<CHANGE>` fields.
-3. Poll `harness/automation/results/run-result.json` up to 60s for a matching `requestId` + non-empty `completedAt`.
-4. Read `manifestPath` from the fresh run-result, then the manifest, then the one summary artifact the manifest references. That is your evidence.
+```powershell
+# Scene inspection (no input)
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 `
+  -ProjectRoot "<absolute path to this project>"
+
+# Input dispatch (keypresses / InputMap actions)
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
+  -ProjectRoot "<absolute path to this project>" `
+  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/input-dispatch/press-enter.json"
+```
+
+Each script handles capability check, request authoring, polling, and manifest lookup automatically and emits a single JSON envelope to stdout. Parse the envelope: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`. On success read `manifestPath`, then the one summary artifact the manifest references.
 
 Key identifiers in `inputDispatchScript` are bare Godot logical names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — **not** `KEY_ENTER`. Actions use `{ "kind": "action", "identifier": "ui_accept", ... }`.
 
 ## Don'ts
 
-- **Do not read prior-run artifacts** (`run-result.json` from earlier requests, `lifecycle-status.json`, previous `run-request*.json`, or files under `evidence/` not produced by *your* request). They describe the past, not what you need to do now.
+- **Do not hand-author `run-request.json` or poll `run-result.json` manually.** The invoke scripts own that loop.
+- **Do not manually delete files** under `harness/automation/results/` or `evidence/automation/`. The scripts clear the transient zone automatically before every run.
+- **Do not read prior-run artifacts** (`lifecycle-status.json`, previous run artifacts, or files under `evidence/` not produced by the current run). They describe the past, not what you need to do now.
 - **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the protocol. The prompt file has everything.
-- **Do not vary capture or stop policies speculatively.** Template defaults are correct for the common case.
-- **Do not hand-author multiple requests, shell-generate IDs, or search for sample payloads.** Use the template verbatim.
+- **Do not vary capture or stop policies speculatively.** Fixture defaults are correct for the common case.
 
 ## Routing
 
@@ -31,14 +40,17 @@ Key identifiers in `inputDispatchScript` are bare Godot logical names (`ENTER`, 
 
 ## Read order after a successful run
 
-- `evidence-manifest.json` (from the fresh run-result's `manifestPath`)
+- `evidence-manifest.json` (from the envelope's `manifestPath`)
 - The one summary artifact named in the manifest's `artifactRefs` for your workflow (`scenegraph-summary.json`, `input-dispatch-outcomes.jsonl`, `behavior-watch-sample.jsonl`, etc.)
 - Diagnostics or raw snapshots only if the summary points to a problem
 
-## Build and runtime failure handling
+## Failure handling
 
-- `run-result.json` reports `failureKind = build`: report `buildFailurePhase`, each `buildDiagnostics` entry with `resourcePath`/`message`/`line`/`column`, and the relevant `rawBuildOutput` lines **verbatim**. Do not paraphrase. No manifest will exist.
-- `failureKind = runtime`: read the manifest and `runtime-error-records.jsonl` for the first failure.
-- `failureKind = timeout`: the broker did not pick up the request. The plugin only processes requests while the game is in play mode — the user may need to press Play.
+| `failureKind` | Meaning | Next step |
+|---|---|---|
+| `editor-not-running` | Capability artifact missing or stale | Launch: `godot --editor --path "<this-project>"` |
+| `build` | GDScript compile error | Report `diagnostics[0]` verbatim; no manifest |
+| `runtime` | Runtime error captured | Read `outcome.latestErrorSummary` or `outcome.firstFailureSummary` |
+| `timeout` | Run did not complete | Broker only runs while game is in play mode |
 
 Report harness bugs or automation-contract defects at <https://github.com/RJAudas/godot-agent-harness/issues>.

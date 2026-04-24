@@ -1,8 +1,0 @@
-{
-  "schema_version": "1.0.0",
-  "snapshot_id": "pong-behavior-watch-wall-bounce-every-frame-snapshot-01",
-  "session_id": "pong-request-watch-every-frame-001",
-  "run_id": "pong-behavior-watch-wall-bounce-every-frame-run-01",
-  "scenario_id": "pong-behavior-watch-wall-bounce-every-frame",
-  "diagnostics": []
-}

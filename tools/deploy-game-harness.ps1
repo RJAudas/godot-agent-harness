@@ -30,6 +30,8 @@ function Get-TemplateRoot {
     return Join-Path (Get-RepoRoot) 'addons/agent_runtime_harness/templates/project_root'
 }
 
+$script:ResolvedHarnessRoot = ''
+
 function Get-TemplateContent {
     param(
         [Parameter(Mandatory = $true)]
@@ -41,7 +43,11 @@ function Get-TemplateContent {
         throw "Template '$RelativePath' was not found at '$templatePath'."
     }
 
-    return Get-Content -LiteralPath $templatePath -Raw
+    $content = Get-Content -LiteralPath $templatePath -Raw
+    if ($script:ResolvedHarnessRoot) {
+        $content = $content.Replace('{{HARNESS_REPO_ROOT}}', $script:ResolvedHarnessRoot)
+    }
+    return $content
 }
 
 function Resolve-AbsolutePath {
@@ -349,6 +355,7 @@ function Set-InspectionConfigTargetScene {
 }
 
 $repoRoot = Get-RepoRoot
+$script:ResolvedHarnessRoot = $repoRoot.Replace('\', '/')
 $resolvedGameRoot = Resolve-AbsolutePath -Path $GameRoot
 $projectFilePath = Join-Path $resolvedGameRoot 'project.godot'
 
@@ -380,6 +387,17 @@ $configPath = Join-Path $resolvedGameRoot 'harness/inspection-run-config.json'
 if (-not $AddonOnly) {
     Ensure-Directory -Path (Join-Path $resolvedGameRoot 'harness')
     Ensure-Directory -Path (Join-Path $resolvedGameRoot 'evidence/scenegraph/latest')
+
+    $harnessSourcePath = Join-Path $resolvedGameRoot 'harness/harness-source.json'
+    $harnessSourceContent = [ordered]@{ harnessRepoRoot = $script:ResolvedHarnessRoot } | ConvertTo-Json
+    if ($PSCmdlet.ShouldProcess($harnessSourcePath, 'Write harness source config')) {
+        Set-FileContent -Path $harnessSourcePath -Content $harnessSourceContent
+        $harnessSourceAction = 'wrote-harness-source'
+    }
+    else {
+        $harnessSourceAction = 'skipped-harness-source'
+    }
+    Add-Operation -Operations $operations -Path $harnessSourcePath -Action $harnessSourceAction
 
     if (-not (Test-Path -LiteralPath $configPath)) {
         if ($PSCmdlet.ShouldProcess($configPath, 'Create harness inspection config')) {

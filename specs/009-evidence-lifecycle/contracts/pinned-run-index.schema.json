@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness/specs/009-evidence-lifecycle/pinned-run-index.schema.json",
+  "title": "Pinned-Run Index",
+  "description": "Machine-readable listing returned by invoke-list-pinned-runs.ps1. Maps pin names to the manifest paths agents need to read to inspect the pinned run's evidence.",
+  "type": "object",
+  "required": ["schemaVersion", "pins"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "pins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PinRecord" }
+    }
+  },
+  "$defs": {
+    "PinRecord": {
+      "type": "object",
+      "required": ["pinName", "manifestPath", "scenarioId", "runId", "pinnedAt", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "pinName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$",
+          "description": "Stable agent-chosen pin identifier. Validated against the same regex enforced by the pin operation."
+        },
+        "manifestPath": {
+          "type": "string",
+          "description": "Project-root-relative path to the pinned evidence-manifest.json, ready to pass to downstream tools."
+        },
+        "scenarioId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Scenario identifier copied from the source evidence-manifest."
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Run identifier copied from the source evidence-manifest."
+        },
+        "pinnedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp the pin operation wrote this record."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "mixed", "unknown"],
+          "description": "Outcome taken from the pinned run-result.json; 'unknown' if the pinned directory predates this spec or lacks pin-metadata.json."
+        },
+        "sourceInvokeScript": {
+          "type": ["string", "null"],
+          "pattern": "^invoke-[a-z0-9-]+\\.ps1$",
+          "description": "Orchestration script that produced the source run, copied from pin-metadata.json when available. Null for legacy/hand-created pins."
+        }
+      }
+    }
+  }
+}

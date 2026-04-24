@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness/specs/009-evidence-lifecycle/in-flight-marker.schema.json",
+  "title": "In-Flight Run Marker",
+  "description": "Marker file written by an orchestration script before transient-zone cleanup and cleared in a try/finally on exit. Its presence causes a concurrent orchestration invocation to fail fast; its staleness (dead PID or stale timestamp) causes the next invocation to auto-recover.",
+  "type": "object",
+  "required": ["schemaVersion", "requestId", "invokeScript", "pid", "hostname", "startedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version of this marker file."
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Run-request GUID. Matches the requestId in the corresponding run-request.json."
+    },
+    "invokeScript": {
+      "type": "string",
+      "pattern": "^invoke-[a-z0-9-]+\\.ps1$",
+      "description": "Basename of the orchestration script that created this marker (e.g., invoke-input-dispatch.ps1)."
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Process ID of the pwsh host running the orchestration script."
+    },
+    "hostname": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Host machine name — used together with pid to disambiguate PID reuse across machines sharing a network-mounted project."
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the marker was written. Consumers compute staleness as (now - startedAt) vs 2× orchestration timeout."
+    },
+    "toolVersion": {
+      "type": "string",
+      "description": "Optional semver of the harness tooling that wrote the marker. Useful for post-mortems when a stale marker is recovered."
+    }
+  }
+}

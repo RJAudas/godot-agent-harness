@@ -73,4 +73,5 @@ These are the behaviors that waste runs.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
+at [specs/009-evidence-lifecycle/plan.md](specs/009-evidence-lifecycle/plan.md).
 <!-- SPECKIT END -->

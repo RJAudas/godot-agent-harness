@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-agent-harness/specs/009-evidence-lifecycle/lifecycle-envelope.schema.json",
+  "title": "Lifecycle Operation Stdout Envelope",
+  "description": "Stdout envelope emitted by the cleanup, pin, unpin, and list orchestration scripts. Shares its core fields with specs/008-agent-runbook/contracts/orchestration-stdout.schema.json so agents can parse it with the same reader they use for run envelopes.",
+  "type": "object",
+  "required": ["status", "completedAt", "operation", "dryRun", "plannedPaths"],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "refused", "failed"],
+      "description": "ok = operation succeeded (mutation performed or dry-run computed). refused = precondition failed (e.g., name collision, pin of a run with no manifest, concurrent run in progress). failed = an unexpected error occurred; diagnostics[] explains."
+    },
+    "failureKind": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "pin-name-collision",
+        "pin-name-invalid",
+        "pin-source-missing",
+        "pin-target-not-found",
+        "run-in-progress",
+        "cleanup-blocked",
+        "cleanup-partial",
+        "io-error"
+      ],
+      "description": "Populated when status is 'refused' or 'failed'; null on success."
+    },
+    "operation": {
+      "type": "string",
+      "enum": ["cleanup", "pin", "unpin", "list"],
+      "description": "Which lifecycle operation emitted this envelope."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "description": "True when the caller passed -DryRun / -WhatIf. When true, plannedPaths[] describes what would happen; no filesystem mutation has occurred."
+    },
+    "plannedPaths": {
+      "type": "array",
+      "description": "Audit trail of every filesystem path the operation touched (or would touch in dry-run mode). Project-root-relative.",
+      "items": {
+        "type": "object",
+        "required": ["path", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Project-root-relative path."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["delete", "copy", "create", "skip"],
+            "description": "What the operation did to (or would do to) this path. 'skip' means the path was considered but not touched (e.g., already absent during cleanup)."
+          }
+        }
+      }
+    },
+    "pinName": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$",
+      "description": "Populated for pin and unpin responses; null for cleanup; null for list (the index itself names the pins)."
+    },
+    "pinnedRunIndex": {
+      "type": ["array", "null"],
+      "description": "Populated only by the list operation; null for cleanup/pin/unpin. When present, shape matches pinned-run-index.schema.json #/$defs/PinRecord items.",
+      "items": { "$ref": "./pinned-run-index.schema.json#/$defs/PinRecord" }
+    },
+    "diagnostics": {
+      "type": "array",
+      "description": "Zero-or-more human-readable diagnostic strings. Used to surface stale-marker recovery, partial-cleanup warnings, and refusal reasons.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the operation emitted its envelope."
+    },
+    "manifestPath": {
+      "type": ["string", "null"],
+      "description": "Present-and-null for lifecycle operations so shared envelope readers do not need a special code path. Real run envelopes populate this field; lifecycle envelopes always leave it null."
+    }
+  }
+}

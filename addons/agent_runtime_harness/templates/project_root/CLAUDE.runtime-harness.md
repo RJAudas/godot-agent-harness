@@ -2,22 +2,35 @@
 
 This project has the `agent_runtime_harness` addon installed. When the user asks to run the game, press keys, verify at runtime, inspect the scene, or watch for errors, delegate to the `godot-runtime-verification` subagent (`.claude/agents/godot-runtime-verification.md`) or follow the fast path below directly.
 
-## Fast path (4 steps — do not read any other files first)
+## Fast path — one invoke script, one envelope
 
-1. Check `harness/automation/results/capability.json` exists and mtime < 5 min. Otherwise report `editor-not-running` — ask the user to launch the editor against this project.
-2. Write **one** file at `harness/automation/requests/run-request.json` using the canonical payload template in [`.github/prompts/godot-runtime-verification.prompt.md`](.github/prompts/godot-runtime-verification.prompt.md). Fill only `<CHANGE>` fields.
-3. Poll `harness/automation/results/run-result.json` for up to 60s, waiting for a matching `requestId` + non-empty `completedAt`.
-4. Read `manifestPath` from that run-result, then the manifest, then the summary artifact the manifest references.
+```powershell
+# Scene inspection (no input)
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 `
+  -ProjectRoot "<absolute path to this project>"
 
-Key identifiers in `inputDispatchScript` are bare Godot logical names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — **not** `KEY_ENTER`. Actions use `{ "kind": "action", "identifier": "ui_accept", ... }`.
+# Input dispatch (keypresses / InputMap actions)
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
+  -ProjectRoot "<absolute path to this project>" `
+  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/input-dispatch/press-enter.json"
+
+# Runtime error triage
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-runtime-error-triage.ps1 `
+  -ProjectRoot "<absolute path to this project>" `
+  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json"
+```
+
+Parse stdout JSON: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`. On success read `manifestPath`, then the one artifact the manifest references.
+
+Key identifiers: bare Godot names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — not `KEY_ENTER`. InputMap actions: `{ "kind": "action", "identifier": "ui_accept", ... }`.
 
 ## Do not
 
-- **Do not read prior-run artifacts** (`run-result.json` from earlier requests, `lifecycle-status.json`, previous `run-request*.json`, or `evidence/` files not produced by *your* request).
+- **Do not hand-author `run-request.json`** — the invoke scripts own the broker loop.
+- **Do not manually delete files** under `harness/automation/results/` or `evidence/automation/` — scripts clear the transient zone automatically before every run.
+- **Do not read prior-run artifacts** to plan a new run — the transient zone is wiped before every invocation.
 - **Do not read addon source** (`addons/agent_runtime_harness/`).
-- **Do not hand-author multiple requests, shell-generate request IDs, or search for sample payloads.** Use the template verbatim.
-- **Do not vary capture or stop policies speculatively.** Template defaults are correct for the common case.
-- **Do not invent new broker entrypoints.** One file in, one file out, one manifest.
+- **Do not vary capture or stop policies speculatively** — fixture defaults are correct.
 
 ## Subagents
 

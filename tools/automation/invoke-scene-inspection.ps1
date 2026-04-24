@@ -19,6 +19,11 @@
     Repo-relative or absolute path to the integration-testing sandbox that the
     Godot editor is running against.
 
+.PARAMETER TargetScene
+    The res:// path to the scene to launch and inspect. Defaults to
+    "res://scenes/main.tscn". Override when the project's main scene lives
+    elsewhere (e.g. "res://main.tscn").
+
 .PARAMETER TimeoutSeconds
     End-to-end wall-clock budget in seconds. Default: 60.
 
@@ -36,11 +41,20 @@
 
     Captures the startup scene tree and emits a JSON envelope with
     outcome.sceneTreePath and outcome.nodeCount.
+
+.EXAMPLE
+    pwsh ./tools/automation/invoke-scene-inspection.ps1 `
+        -ProjectRoot D:/gameDev/pong `
+        -TargetScene res://main.tscn
+
+    Same as above, but for a project whose main scene is at the repo root.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [string]$ProjectRoot,
+
+    [string]$TargetScene = 'res://scenes/main.tscn',
 
     [int]$TimeoutSeconds = 60,
 
@@ -92,30 +106,35 @@ if (-not $cap.Ok) {
 }
 
 # Step 5: Synthesize payload internally
+# NOTE: expectationFiles is required by the schema even when empty.
+# NOTE: the broker watches the canonical run-request.json path, not a per-request filename.
 $internalPayload = @{
-    requestId      = $requestId
-    scenarioId     = "runbook-scene-inspection-$requestId"
-    runId          = $requestId
-    targetScene    = 'res://scenes/main.tscn'
-    outputDirectory = "res://evidence/automation/$requestId"
-    artifactRoot   = "tools/tests/fixtures/runbook/inspect-scene-tree/evidence/$requestId"
-    capturePolicy  = @{ startup = $true; manual = $false; failure = $false }
-    stopPolicy     = @{ stopAfterValidation = $true }
-    requestedBy    = 'runbook-scene-inspection'
-    createdAt      = (Get-Date -Format 'o')
+    requestId        = $requestId
+    scenarioId       = "runbook-scene-inspection-$requestId"
+    runId            = $requestId
+    targetScene      = $TargetScene
+    outputDirectory  = "res://evidence/automation/$requestId"
+    artifactRoot     = "tools/tests/fixtures/runbook/inspect-scene-tree/evidence/$requestId"
+    expectationFiles = @()
+    capturePolicy    = @{ startup = $true; manual = $false; failure = $false }
+    stopPolicy       = @{ stopAfterValidation = $true }
+    requestedBy      = 'runbook-scene-inspection'
+    createdAt        = (Get-Date -Format 'o')
 }
 
 $requestsDir = Join-Path $resolvedRoot 'harness/automation/requests'
 if (-not (Test-Path -LiteralPath $requestsDir)) {
     New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
 }
-$tempPath = Join-Path $requestsDir "$requestId.json"
-$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tempPath -Encoding utf8
+# Write to the canonical path the editor broker watches (run-request.json),
+# not a per-request filename that the broker would never pick up.
+$canonicalPath = Join-Path $requestsDir 'run-request.json'
+$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
 
 # Step 6-7: Request + poll
 $runResult = Invoke-RunbookRequest `
     -ProjectRoot $resolvedRoot `
-    -RequestPath $tempPath `
+    -RequestPath $canonicalPath `
     -ExpectedRequestId $requestId `
     -TimeoutSeconds $TimeoutSeconds `
     -PollIntervalMilliseconds $PollIntervalMilliseconds
@@ -130,6 +149,11 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
     Exit-Failure $fk "Run failed with failureKind='$fk'."
+}
+
+if ($rr.finalStatus -eq 'blocked') {
+    $reasons = if ($null -ne $rr.blockedReasons) { ($rr.blockedReasons | ForEach-Object { [string]$_ }) -join ', ' } else { 'unknown' }
+    Exit-Failure 'runtime' "Run was blocked before evidence was captured. blockedReasons: $reasons. Check that targetScene '$TargetScene' exists in the project."
 }
 
 # Step 8: Read manifest

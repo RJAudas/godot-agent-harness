@@ -9,6 +9,8 @@ const AGENTS_FILE := "res://AGENTS.md"
 const PROMPT_FILE := "res://.github/prompts/godot-evidence-triage.prompt.md"
 const AGENT_FILE := "res://.github/agents/godot-evidence-triage.agent.md"
 const HARNESS_CONFIG_FILE := "res://harness/inspection-run-config.json"
+const HARNESS_SOURCE_FILE := "res://harness/harness-source.json"
+const HARNESS_REPO_ROOT_TOKEN := "{{HARNESS_REPO_ROOT}}"
 
 
 func deploy_into_project() -> Dictionary:
@@ -161,8 +163,30 @@ func _build_write_operation(path: String, write_result: int, action: String) -> 
 	}
 
 
+func _get_harness_repo_root() -> String:
+	if not FileAccess.file_exists(HARNESS_SOURCE_FILE):
+		return ""
+	var content := _read_text(HARNESS_SOURCE_FILE)
+	if content == "":
+		return ""
+	var json := JSON.new()
+	if json.parse(content) != OK:
+		return ""
+	var data = json.get_data()
+	if data is Dictionary and data.has("harnessRepoRoot"):
+		return str(data["harnessRepoRoot"])
+	return ""
+
+
+func _resolve_harness_tokens(content: String) -> String:
+	var harness_root := _get_harness_repo_root()
+	if harness_root.is_empty():
+		return content
+	return content.replace(HARNESS_REPO_ROOT_TOKEN, harness_root.replace("\\", "/"))
+
+
 func _read_template(path: String) -> String:
-	return _read_text(path)
+	return _resolve_harness_tokens(_read_text(path))
 
 
 func _read_text(path: String) -> String:

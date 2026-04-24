@@ -81,10 +81,13 @@ $workflowSlug    = 'input-dispatch'
 $requestId       = New-RunbookRequestId -Workflow $workflowSlug
 $runId           = $requestId
 
+$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
+    $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
-        -Diagnostics @($Message) -Outcome @{
+        -Diagnostics $diags -Outcome @{
             outcomesPath        = $null
             dispatchedEventCount = 0
             firstFailureSummary = $null
@@ -107,7 +110,6 @@ if (-not $hasFixture -and -not $hasInline) {
 # Step 2-3: Resolve project root (already done above)
 
 # Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
-$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
 $_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot
 if (-not $_assertResult.Ok) {
     Exit-Failure $_assertResult.FailureKind $_assertResult.Diagnostics[0]
@@ -203,7 +205,7 @@ catch {
 
 # Steps 10-12: Emit envelope and exit
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
-    -RunId $runId -RequestId $requestId -Diagnostics @() -Outcome @{
+    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
         outcomesPath        = $outcomesPath
         dispatchedEventCount = $dispatchedCount
         firstFailureSummary = $firstFailureSummary

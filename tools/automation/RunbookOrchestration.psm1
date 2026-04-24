@@ -476,8 +476,10 @@ function Get-RunZoneClassification {
         'scenegraph-diagnostics.json' = 'transient'
         'scenegraph-summary.json'    = 'transient'
         'input-dispatch-outcomes.jsonl' = 'transient'
-        'runtime-error-record.json'  = 'transient'
-        'build-errors.json'          = 'transient'
+        'runtime-error-records.jsonl' = 'transient'
+        'pause-decision-log.jsonl'   = 'transient'
+        'last-error-anchor.json'     = 'transient'
+        'build-errors.jsonl'         = 'transient'
         '*.expected.json'            = 'oracle'
     }
 }

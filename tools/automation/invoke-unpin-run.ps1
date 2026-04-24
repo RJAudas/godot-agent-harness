@@ -10,10 +10,12 @@
     Emits a lifecycle envelope (specs/009-evidence-lifecycle/contracts/
     lifecycle-envelope.schema.json) on stdout with operation = "unpin".
 
-    On success:    status = "success", plannedPaths[] lists every file removed.
-    On not found:  status = "failure", failureKind = "pin-target-not-found".
-    On -DryRun:    status = "success", plannedPaths[] lists what would be removed;
-                   no files are deleted.
+    On success:   status = "ok", plannedPaths[] lists every file removed.
+    On precondition refusal (pin not found, invalid pin name): status = "refused"
+    with failureKind = "pin-target-not-found" / "pin-name-invalid".
+    On -DryRun:   status = "ok", plannedPaths[] lists what would be removed;
+                  no files are deleted.
+    On unexpected I/O error: status = "failed" with failureKind = "io-error".
 
 .PARAMETER ProjectRoot
     Repo-relative or absolute path to the project whose pinned zone to modify.
@@ -58,11 +60,15 @@ Import-Module $modulePath -Force
 
 $resolvedRoot = Resolve-RunbookRepoPath -Path $ProjectRoot
 
+$script:RefusalFailureKinds = @('pin-name-collision', 'pin-name-invalid', 'pin-source-missing', 'pin-target-not-found', 'run-in-progress')
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
-    Write-LifecycleEnvelope -Status 'failed' -FailureKind $Kind -Operation 'unpin' `
+    $status = if ($script:RefusalFailureKinds -contains $Kind) { 'refused' } else { 'failed' }
+    Write-LifecycleEnvelope -Status $status -FailureKind $Kind -Operation 'unpin' `
         -DryRun $DryRun.IsPresent -Diagnostics @($Message) -PlannedPaths @() -PinName $PinName
-    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
+    $label = $status.ToUpperInvariant()
+    Write-RunbookStderrSummary "${label}: $Kind; $Message"
     exit 1
 }
 

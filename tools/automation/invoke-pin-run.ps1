@@ -11,10 +11,12 @@
     Emits a lifecycle envelope (specs/009-evidence-lifecycle/contracts/
     lifecycle-envelope.schema.json) on stdout with operation = "pin".
 
-    On success:  status = "success", plannedPaths[] lists every file copied.
-    On collision: status = "failure", failureKind = "pin-name-collision"
-                  unless -Force is supplied.
-    On no manifest: status = "failure", failureKind = "pin-source-missing".
+    On success:    status = "ok", plannedPaths[] lists every file copied.
+    On precondition refusal (name collision without -Force, invalid pin name,
+    or no manifest to pin): status = "refused" with failureKind set to
+    "pin-name-collision" / "pin-name-invalid" / "pin-source-missing".
+    On unexpected I/O error: status = "failed" with failureKind = "io-error"
+    (or the underlying refusal kind when the helper surfaces one late).
 
 .PARAMETER ProjectRoot
     Repo-relative or absolute path to the project whose transient zone to pin.
@@ -65,11 +67,15 @@ Import-Module $modulePath -Force
 
 $resolvedRoot = Resolve-RunbookRepoPath -Path $ProjectRoot
 
+$script:RefusalFailureKinds = @('pin-name-collision', 'pin-name-invalid', 'pin-source-missing', 'pin-target-not-found', 'run-in-progress')
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
-    Write-LifecycleEnvelope -Status 'failed' -FailureKind $Kind -Operation 'pin' `
+    $status = if ($script:RefusalFailureKinds -contains $Kind) { 'refused' } else { 'failed' }
+    Write-LifecycleEnvelope -Status $status -FailureKind $Kind -Operation 'pin' `
         -DryRun $DryRun.IsPresent -Diagnostics @($Message) -PlannedPaths @() -PinName $PinName
-    Write-RunbookStderrSummary "FAIL: $Kind; $Message"
+    $label = $status.ToUpperInvariant()
+    Write-RunbookStderrSummary "${label}: $Kind; $Message"
     exit 1
 }
 

@@ -75,17 +75,18 @@
     {
       "id": "pinned-zone-force-overwrite",
       "artifactId": "invoke-pin-run.helper",
-      "description": "Boundary for -Force pin overwrite: deletes and re-creates an existing named pin.",
+      "description": "Boundary for -Force pin overwrite: deletes and re-creates an existing named pin. 'delete' is scoped to the named pin directory only.",
       "allowedPaths": [
         "*/harness/automation/pinned/<pin-name>/**"
       ],
       "allowedEditTypes": [
         "create",
-        "update"
+        "update",
+        "delete"
       ],
       "stopConditions": [
         "Requested write falls outside the named pin directory.",
-        "Edit type is 'delete' without a subsequent create (partial overwrite not allowed).",
+        "Delete targets a path that is not the root of the named pin directory.",
         "Pin name does not exist when -Force expects an overwrite target."
       ],
       "escalationConditions": [

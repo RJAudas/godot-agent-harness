@@ -74,10 +74,13 @@ $workflowSlug = 'behavior-watch'
 $requestId    = New-RunbookRequestId -Workflow $workflowSlug
 $runId        = $requestId
 
+$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
+
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
+    $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
-        -Diagnostics @($Message) -Outcome @{
+        -Diagnostics $diags -Outcome @{
             samplesPath      = $null
             sampleCount      = 0
             frameRangeCovered = $null
@@ -98,7 +101,6 @@ if (-not $hasFixture -and -not $hasInline) {
 }
 
 # Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
-$_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
 $_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot
 if (-not $_assertResult.Ok) {
     Exit-Failure $_assertResult.FailureKind $_assertResult.Diagnostics[0]
@@ -194,7 +196,7 @@ catch {
 
 # Steps 10-12
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
-    -RunId $runId -RequestId $requestId -Diagnostics @() -Outcome @{
+    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
         samplesPath       = $samplesPath
         sampleCount       = $sampleCount
         frameRangeCovered = $frameRangeCovered

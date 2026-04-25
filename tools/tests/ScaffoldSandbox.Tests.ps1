@@ -38,6 +38,14 @@ Describe 'tools/scaffold-sandbox.ps1' {
         # Project settings were updated by deploy
         $projectContent | Should -Match 'ScenegraphHarness="\*res://addons/agent_runtime_harness/runtime/scenegraph_autoload.gd"'
         $projectContent | Should -Match 'enabled=PackedStringArray\("res://addons/agent_runtime_harness/plugin.cfg"\)'
+
+        # C3 regression guard: Get-ClaudeFileContent / Get-AgentsFileContent previously
+        # leaked a literal `.TrimEnd()` line into freshly-deployed CLAUDE.md / AGENTS.md
+        # because the .TrimEnd() call sat outside the $() interpolation in the here-string.
+        $claudeContent = Get-Content -LiteralPath (Join-Path $sandboxPath 'CLAUDE.md') -Raw
+        $agentsContent = Get-Content -LiteralPath (Join-Path $sandboxPath 'AGENTS.md') -Raw
+        $claudeContent | Should -Not -Match '\.TrimEnd\(\)'
+        $agentsContent | Should -Not -Match '\.TrimEnd\(\)'
     }
 
     It 'refuses to overwrite an existing sandbox without -Force' {

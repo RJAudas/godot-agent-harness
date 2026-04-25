@@ -284,10 +284,11 @@ function Get-CopilotInstructionsBlock {
 }
 
 function Get-AgentsFileContent {
+    $block = (Get-AgentsBlockContent).TrimEnd()
     return @"
 # AGENTS.md
 
-$(Get-AgentsBlockContent).TrimEnd()
+$block
 "@
 }
 
@@ -316,10 +317,11 @@ function Get-ClaudeInstructionsBlock {
 }
 
 function Get-ClaudeFileContent {
+    $block = (Get-ClaudeInstructionsBlock).TrimEnd()
     return @"
 # CLAUDE.md
 
-$(Get-ClaudeInstructionsBlock).TrimEnd()
+$block
 "@
 }
 

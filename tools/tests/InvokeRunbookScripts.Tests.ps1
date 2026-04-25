@@ -167,18 +167,24 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
 
     It 'C2 follow-up: Resolve-RunbookEvidencePath joins relative paths against ProjectRoot' {
         # Evidence paths from run-result/manifest are project-relative, not repo-relative.
+        # Use TestDrive so the assertion holds on any OS (Windows / macOS / Linux),
+        # since [System.IO.Path]::IsPathRooted has different semantics across them.
+        $projectRoot = Join-Path $TestDrive ('sandbox-' + [guid]::NewGuid().Guid)
+        New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
+        $expected = Join-Path $projectRoot 'evidence/automation/runbook-x/evidence-manifest.json'
         $abs = Resolve-RunbookEvidencePath `
             -Path 'evidence/automation/runbook-x/evidence-manifest.json' `
-            -ProjectRoot 'D:\some\sandbox'
-        # Path-separator-agnostic compare (PowerShell's Join-Path uses native separator).
-        ($abs -replace '/', '\') | Should -Be 'D:\some\sandbox\evidence\automation\runbook-x\evidence-manifest.json'
+            -ProjectRoot $projectRoot
+        $abs | Should -Be $expected
     }
 
     It 'C2 follow-up: Resolve-RunbookEvidencePath returns absolute paths unchanged' {
+        $projectRoot = Join-Path $TestDrive ('sandbox-' + [guid]::NewGuid().Guid)
+        $absoluteManifestPath = Join-Path $TestDrive 'already/absolute/manifest.json'
         $abs = Resolve-RunbookEvidencePath `
-            -Path 'D:\already\absolute\manifest.json' `
-            -ProjectRoot 'D:\some\sandbox'
-        $abs | Should -Be 'D:\already\absolute\manifest.json'
+            -Path $absoluteManifestPath `
+            -ProjectRoot $projectRoot
+        $abs | Should -Be $absoluteManifestPath
     }
 
     It 'C2: forces artifactRoot to empty string regardless of fixture content' {

@@ -52,6 +52,16 @@ Describe 'Get-RunZoneClassification' {
         $map = Get-RunZoneClassification
         $map['capability.json'] | Should -Be 'editor-state'
     }
+
+    It 'classifies .gitkeep as preserve' {
+        $map = Get-RunZoneClassification
+        $map['.gitkeep'] | Should -Be 'preserve'
+    }
+
+    It 'classifies .gitignore as preserve' {
+        $map = Get-RunZoneClassification
+        $map['.gitignore'] | Should -Be 'preserve'
+    }
 }
 
 Describe 'Initialize-RunbookTransientZone preserves editor-state files' {
@@ -71,6 +81,192 @@ Describe 'Initialize-RunbookTransientZone preserves editor-state files' {
 
         Test-Path -LiteralPath $capabilityPath | Should -BeTrue -Because "capability.json is editor-state and must survive cleanup"
         Test-Path -LiteralPath $staleResult | Should -BeFalse -Because "run-result.json is transient and must be wiped"
+    }
+}
+
+Describe 'Get-ProjectMainScene (F1)' {
+    It 'reads run/main_scene under [application]' {
+        $sandbox = New-RepoSandboxDirectory
+        try {
+            @(
+                '; Engine configuration file.'
+                '[application]'
+                ''
+                'config/name="Sample"'
+                'run/main_scene="res://scenes/main.tscn"'
+                ''
+                '[input]'
+                ''
+                'ui_accept={ "deadzone": 0.5 }'
+            ) | Set-Content -LiteralPath (Join-Path $sandbox 'project.godot') -Encoding utf8
+
+            $result = Get-ProjectMainScene -ProjectRoot $sandbox
+            $result | Should -Be 'res://scenes/main.tscn'
+        }
+        finally {
+            Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns empty string when project.godot is missing' {
+        $sandbox = New-RepoSandboxDirectory
+        try {
+            $result = Get-ProjectMainScene -ProjectRoot $sandbox
+            $result | Should -Be ''
+        }
+        finally {
+            Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns empty string when run/main_scene is not set' {
+        $sandbox = New-RepoSandboxDirectory
+        try {
+            @(
+                '[application]'
+                'config/name="No Main Scene"'
+            ) | Set-Content -LiteralPath (Join-Path $sandbox 'project.godot') -Encoding utf8
+
+            $result = Get-ProjectMainScene -ProjectRoot $sandbox
+            $result | Should -Be ''
+        }
+        finally {
+            Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'ignores run/main_scene outside the [application] section' {
+        $sandbox = New-RepoSandboxDirectory
+        try {
+            @(
+                '[other]'
+                'run/main_scene="res://wrong.tscn"'
+                '[application]'
+                'config/name="X"'
+            ) | Set-Content -LiteralPath (Join-Path $sandbox 'project.godot') -Encoding utf8
+
+            $result = Get-ProjectMainScene -ProjectRoot $sandbox
+            $result | Should -Be ''
+        }
+        finally {
+            Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'ConvertTo-FirstBuildDiagnostic (B4)' {
+    It 'returns null on null input' {
+        ConvertTo-FirstBuildDiagnostic -Diagnostic $null | Should -BeNullOrEmpty
+    }
+
+    It 'projects file/line/column/message from a full record' {
+        $d = [pscustomobject]@{
+            resourcePath = 'res://scripts/broken.gd'
+            line         = 4
+            column       = 1
+            message      = 'Unexpected "Indent" in class body.'
+            severity     = 'error'
+            sourceKind   = 'script'
+        }
+        $proj = ConvertTo-FirstBuildDiagnostic -Diagnostic $d
+        $proj.file    | Should -Be 'res://scripts/broken.gd'
+        $proj.line    | Should -Be 4
+        $proj.column  | Should -Be 1
+        $proj.message | Should -Be 'Unexpected "Indent" in class body.'
+    }
+
+    It 'tolerates missing column' {
+        $d = [pscustomobject]@{
+            resourcePath = 'res://scripts/x.gd'
+            line         = 12
+            message      = 'oops'
+        }
+        $proj = ConvertTo-FirstBuildDiagnostic -Diagnostic $d
+        $proj.file    | Should -Be 'res://scripts/x.gd'
+        $proj.line    | Should -Be 12
+        $proj.column  | Should -BeNullOrEmpty
+        $proj.message | Should -Be 'oops'
+    }
+
+    It 'tolerates null line' {
+        $d = [pscustomobject]@{
+            resourcePath = 'res://scripts/x.gd'
+            line         = $null
+            message      = 'oops'
+        }
+        $proj = ConvertTo-FirstBuildDiagnostic -Diagnostic $d
+        $proj.line | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'ConvertTo-EnvelopeFailureKind (B7/B9)' {
+    It 'maps validation -> runtime' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' | Should -Be 'runtime'
+    }
+    It 'maps gameplay -> runtime' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'gameplay' | Should -Be 'runtime'
+    }
+    It 'maps capture -> runtime' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'capture' | Should -Be 'runtime'
+    }
+    It 'maps build -> build' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'build' | Should -Be 'build'
+    }
+    It 'maps launch -> editor-not-running' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'launch' | Should -Be 'editor-not-running'
+    }
+    It 'maps attachment -> editor-not-running' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'attachment' | Should -Be 'editor-not-running'
+    }
+    It 'returns FallbackKind on null input' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind $null -FallbackKind 'internal' | Should -Be 'internal'
+    }
+    It 'returns FallbackKind on empty input' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind '' -FallbackKind 'internal' | Should -Be 'internal'
+    }
+    It 'returns FallbackKind on unrecognized value' {
+        ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'something-new' -FallbackKind 'internal' | Should -Be 'internal'
+    }
+}
+
+Describe 'Initialize-RunbookTransientZone preserves repo-management files (B6)' {
+    It 'does not delete .gitkeep and emits no cleanup-unclassified diagnostic' {
+        $sandbox = New-RepoSandboxDirectory
+        $resultsDir = Join-Path $sandbox 'harness/automation/results'
+        $evidenceDir = Join-Path $sandbox 'evidence/automation'
+        New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+        New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
+
+        $resultsGitkeep  = Join-Path $resultsDir '.gitkeep'
+        $evidenceGitkeep = Join-Path $evidenceDir '.gitkeep'
+        '' | Set-Content -LiteralPath $resultsGitkeep  -Encoding utf8 -NoNewline
+        '' | Set-Content -LiteralPath $evidenceGitkeep -Encoding utf8 -NoNewline
+
+        # Seed a transient file so the walker actually has work to do
+        '{}' | Set-Content -LiteralPath (Join-Path $resultsDir 'run-result.json') -Encoding utf8
+
+        $cleanup = Initialize-RunbookTransientZone -ProjectRoot $sandbox
+        $cleanup.Ok | Should -BeTrue
+
+        Test-Path -LiteralPath $resultsGitkeep  | Should -BeTrue -Because '.gitkeep must survive cleanup so the directory stays tracked in git'
+        Test-Path -LiteralPath $evidenceGitkeep | Should -BeTrue
+
+        $unclassified = @($cleanup.Diagnostics | Where-Object { $_ -match 'cleanup-unclassified' -and $_ -match '\.gitkeep' })
+        $unclassified.Count | Should -Be 0 -Because '.gitkeep should be classified as preserve, not unclassified'
+    }
+
+    It 'does not delete .gitignore' {
+        $sandbox = New-RepoSandboxDirectory
+        $resultsDir = Join-Path $sandbox 'harness/automation/results'
+        New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+
+        $gitignorePath = Join-Path $resultsDir '.gitignore'
+        '*.log' | Set-Content -LiteralPath $gitignorePath -Encoding utf8
+
+        $cleanup = Initialize-RunbookTransientZone -ProjectRoot $sandbox
+        $cleanup.Ok | Should -BeTrue
+
+        Test-Path -LiteralPath $gitignorePath | Should -BeTrue
     }
 }
 

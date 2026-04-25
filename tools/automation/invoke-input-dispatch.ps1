@@ -96,9 +96,11 @@ function Exit-Failure {
     $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
         -Diagnostics $diags -Outcome @{
-            outcomesPath        = $null
-            dispatchedEventCount = 0
-            firstFailureSummary = $null
+            outcomesPath          = $null
+            declaredEventCount    = 0
+            actualDispatchedCount = 0
+            dispatchedEventCount  = 0
+            firstFailureSummary   = $null
         }
     Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
@@ -190,25 +192,37 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 # Check for harness-reported failures
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
-    Exit-Failure $fk "Run failed with failureKind='$fk'. Check the manifest for details."
+    $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
+    Exit-Failure $envelopeKind "Run failed with failureKind='$fk'. Check the manifest for details."
 }
 
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
-    Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind "run-result.json did not contain a manifestPath."
 }
 $absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
 $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
-    Exit-Failure 'internal' $manifestCheck.Diagnostic
+    # B7/B9: when run-result already reported a non-internal failure, propagate
+    # that classification rather than collapsing to 'internal' on a downstream
+    # manifest check.
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind $manifestCheck.Diagnostic
 }
 
 # Step 9: Build outcome
-$outcomesPath        = $null
-$dispatchedCount     = 0
-$firstFailureSummary = $null
+# B2: status='dispatched' rows are events that actually fired. Anything else
+# (skipped_frame_unreached, skipped_run_ended, failed) means the event was
+# DECLARED but not delivered. Track both counts so the agent can tell the
+# difference, and surface failure when they diverge.
+$outcomesPath          = $null
+$declaredEventCount    = 0
+$actualDispatchedCount = 0
+$firstFailureSummary   = $null
+$firstFailedStatus     = $null
 
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
@@ -217,17 +231,19 @@ try {
         $outcomesPath = Resolve-RunbookEvidencePath -Path $outcomeRef.path -ProjectRoot $resolvedRoot
         if (Test-Path -LiteralPath $outcomesPath) {
             $lines = Get-Content -LiteralPath $outcomesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-            $dispatchedCount = @($lines).Count
+            $declaredEventCount = @($lines).Count
             foreach ($line in $lines) {
                 $row = $line | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue
                 if ($null -eq $row) { continue }
-                # Runtime emits: status (success | skipped_* | failed_*) and reasonMessage.
-                # Treat anything other than 'success' as a failure surface for the agent.
                 $hasStatus = $null -ne ($row | Get-Member -Name 'status' -ErrorAction SilentlyContinue)
-                if ($hasStatus -and [string]$row.status -ne 'success') {
+                if (-not $hasStatus) { continue }
+                $rowStatus = [string]$row.status
+                if ($rowStatus -eq 'dispatched') {
+                    $actualDispatchedCount += 1
+                } elseif ($null -eq $firstFailureSummary) {
                     $hasReason = $null -ne ($row | Get-Member -Name 'reasonMessage' -ErrorAction SilentlyContinue)
-                    $firstFailureSummary = if ($hasReason) { [string]$row.reasonMessage } else { [string]$row.status }
-                    break
+                    $firstFailureSummary = if ($hasReason) { [string]$row.reasonMessage } else { $rowStatus }
+                    $firstFailedStatus   = $rowStatus
                 }
             }
         }
@@ -238,14 +254,30 @@ catch {
 }
 
 # Steps 10-12: Emit envelope and exit
+$outcome = @{
+    outcomesPath          = $outcomesPath
+    declaredEventCount    = $declaredEventCount
+    actualDispatchedCount = $actualDispatchedCount
+    # Kept for backwards compatibility — equals declaredEventCount. Prefer the
+    # explicit declared/actual fields above.
+    dispatchedEventCount  = $declaredEventCount
+    firstFailureSummary   = $firstFailureSummary
+}
+
+if ($declaredEventCount -gt 0 -and $actualDispatchedCount -lt $declaredEventCount) {
+    # B2: not every declared event actually fired. Don't claim success.
+    $msg = "Only $actualDispatchedCount of $declaredEventCount declared events were dispatched (firstFailedStatus=$firstFailedStatus, firstFailureSummary='$firstFailureSummary'). The run may have ended before the requested frames were reached."
+    $diags = @($_lifecycleDiags) + @($msg)
+    Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' -ManifestPath $absManifest `
+        -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome $outcome
+    Write-RunbookStderrSummary "FAIL: runtime; $msg"
+    exit 1
+}
+
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
-    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
-        outcomesPath        = $outcomesPath
-        dispatchedEventCount = $dispatchedCount
-        firstFailureSummary = $firstFailureSummary
-    }
+    -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome $outcome
 $envelope
-Write-RunbookStderrSummary "OK: dispatched $dispatchedCount events; manifest at $absManifest"
+Write-RunbookStderrSummary "OK: dispatched $actualDispatchedCount of $declaredEventCount events; manifest at $absManifest"
 exit 0
 
 }

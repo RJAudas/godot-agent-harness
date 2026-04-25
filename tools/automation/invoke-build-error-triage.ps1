@@ -97,10 +97,12 @@ $_lifecycleDiags = [System.Collections.Generic.List[string]]::new()
 function Exit-Failure {
     param([string]$Kind, [string]$Message)
     $diags = @($_lifecycleDiags) + @($Message)
+    $rrPath = Join-Path $resolvedRoot 'harness/automation/results/run-result.json'
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
         -Diagnostics $diags -Outcome @{
             rawBuildOutputPath = $null
-            firstDiagnostic   = $null
+            firstDiagnostic    = $null
+            runResultPath      = $rrPath
         }
     Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
@@ -198,13 +200,16 @@ if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
 if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
     $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
     if (-not $manifestCheck.Ok) {
-        Exit-Failure 'internal' $manifestCheck.Diagnostic
+        # B7/B9: propagate run-result.failureKind instead of collapsing to internal.
+        $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+        Exit-Failure $kind $manifestCheck.Diagnostic
     }
 }
 
 # Step 9: Build outcome
 $rawBuildOutputPath = $null
 $firstDiagnostic    = $null
+$runResultPath      = Join-Path $resolvedRoot 'harness/automation/results/run-result.json'
 
 if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath $absManifest)) {
     try {
@@ -222,13 +227,7 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
                 $firstLine = Get-Content -LiteralPath $errPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
                 if (-not [string]::IsNullOrWhiteSpace($firstLine)) {
                     $d = $firstLine | ConvertFrom-Json -Depth 5 -ErrorAction SilentlyContinue
-                    if ($null -ne $d) {
-                        $firstDiagnostic = @{
-                            file    = [string]$d.resourcePath
-                            line    = [int]$d.line
-                            message = [string]$d.message
-                        }
-                    }
+                    $firstDiagnostic = ConvertTo-FirstBuildDiagnostic -Diagnostic $d
                 }
             }
         }
@@ -238,43 +237,64 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
     }
 }
 
+# B4: when the manifest didn't yield a firstDiagnostic (e.g., the runtime
+# wrote buildDiagnostics to run-result.json but no build-error-records
+# artifact reached the manifest), fall back to run-result.buildDiagnostics[0].
+if ($null -eq $firstDiagnostic -and `
+    $null -ne ($rr | Get-Member -Name 'buildDiagnostics' -ErrorAction SilentlyContinue) -and `
+    $null -ne $rr.buildDiagnostics -and @($rr.buildDiagnostics).Count -gt 0)
+{
+    $firstDiagnostic = ConvertTo-FirstBuildDiagnostic -Diagnostic @($rr.buildDiagnostics)[0]
+}
+
 # Pass through any harness-reported failure (build, runtime, timeout, internal, ...).
 # Only the build case carries enriched outcome.firstDiagnostic; all other kinds
 # still surface failureKind on the envelope so callers can route accordingly.
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]$rr.failureKind)) {
     $fk = [string]$rr.failureKind
     if ($fk -eq 'build') {
-        $msg = if ($null -ne $firstDiagnostic) { "Build error at $($firstDiagnostic.file):$($firstDiagnostic.line): $($firstDiagnostic.message)" } else { 'Build failed. Check the run-result for details.' }
+        # B5: surface the run-result.json path on every build failure so an
+        # agent that needs raw diagnostics can read it without filesystem search.
+        $msg = if ($null -ne $firstDiagnostic) {
+            "Build error at $($firstDiagnostic.file):$($firstDiagnostic.line): $($firstDiagnostic.message)"
+        } else {
+            "Build failed. See run-result at $runResultPath."
+        }
         $diags = @($_lifecycleDiags) + @($msg)
         Write-RunbookEnvelope -Status 'failure' -FailureKind 'build' -ManifestPath $absManifest `
             -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
                 rawBuildOutputPath = $rawBuildOutputPath
-                firstDiagnostic   = $firstDiagnostic
+                firstDiagnostic    = $firstDiagnostic
+                runResultPath      = $runResultPath
             }
         Write-RunbookStderrSummary "FAIL: build; $msg"
         exit 1
     }
-    $msg = "Run failed with failureKind='$fk' (build-error triage handles diagnostics for failureKind=build only)."
+    $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
+    $msg = "Run failed with failureKind='$fk' (build-error triage handles diagnostics for failureKind=build only). See $runResultPath."
     $diags = @($_lifecycleDiags) + @($msg)
-    Write-RunbookEnvelope -Status 'failure' -FailureKind $fk -ManifestPath $absManifest `
+    Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind -ManifestPath $absManifest `
         -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
             rawBuildOutputPath = $rawBuildOutputPath
-            firstDiagnostic   = $firstDiagnostic
+            firstDiagnostic    = $firstDiagnostic
+            runResultPath      = $runResultPath
         }
-    Write-RunbookStderrSummary "FAIL: $fk; $msg"
+    Write-RunbookStderrSummary "FAIL: $envelopeKind; $msg"
     exit 1
 }
 
 # Success path requires non-null manifestPath per envelope schema.
 if ([string]::IsNullOrWhiteSpace($absManifest)) {
-    Exit-Failure 'internal' "run-result.json did not contain a manifestPath on a successful run."
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind "run-result.json did not contain a manifestPath on a successful run."
 }
 
 # Steps 10-12
 $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
     -RunId $runId -RequestId $requestId -Diagnostics @($_lifecycleDiags) -Outcome @{
         rawBuildOutputPath = $rawBuildOutputPath
-        firstDiagnostic   = $null
+        firstDiagnostic    = $null
+        runResultPath      = $runResultPath
     }
 $envelope
 Write-RunbookStderrSummary "OK: build clean; manifest at $absManifest"

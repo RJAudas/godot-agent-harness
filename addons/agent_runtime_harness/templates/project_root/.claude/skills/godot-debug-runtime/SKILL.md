@@ -16,7 +16,7 @@ disable-model-invocation: false
 $ARGUMENTS
 ```
 
-Treat `$ARGUMENTS` as an optional fixture path. Default: `{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json`. Default project root is the current project (`.`).
+Treat `$ARGUMENTS` as an optional fixture path. **Default: `{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json`** — this fixture sets `stopAfterValidation=false` and `frameLimit=600` so the playtest actually runs long enough for `_ready` errors and early-frame failures to surface. Default project root is the current project (`.`).
 
 ## Execution
 

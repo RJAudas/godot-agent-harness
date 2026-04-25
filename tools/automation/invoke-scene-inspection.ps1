@@ -171,7 +171,11 @@ if (-not $cap.Ok) {
 # the fixed payload as inline JSON.
 $inlinePayload = [ordered]@{
     requestId        = $requestId   # Resolve-RunbookPayload re-stamps this; harmless duplicate.
-    scenarioId       = "runbook-scene-inspection-$requestId"
+    # Stable scenarioId (B12). The previous value embedded $requestId, which
+    # already starts with "runbook-scene-inspection-", producing a doubled
+    # prefix in pin metadata. scenarioId identifies the workflow class, not
+    # the run; the run is identified by requestId/runId.
+    scenarioId       = 'runbook-scene-inspection-scenario'
     runId            = $requestId
     targetScene      = $TargetScene
     outputDirectory  = "res://evidence/automation/$requestId"
@@ -207,7 +211,8 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
-    Exit-Failure $fk "Run failed with failureKind='$fk'."
+    $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
+    Exit-Failure $envelopeKind "Run failed with failureKind='$fk'."
 }
 
 if ($rr.finalStatus -eq 'blocked') {
@@ -218,13 +223,16 @@ if ($rr.finalStatus -eq 'blocked') {
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
-    Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind "run-result.json did not contain a manifestPath."
 }
 $absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
 $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
-    Exit-Failure 'internal' $manifestCheck.Diagnostic
+    # B7/B9: propagate run-result.failureKind instead of collapsing to internal.
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind $manifestCheck.Diagnostic
 }
 
 # Step 9: Build outcome

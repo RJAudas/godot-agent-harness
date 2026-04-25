@@ -30,7 +30,7 @@ across future cleanups, pin it first — see the lifecycle workflows below and
 | Scene inspection | Capture the running game's scene tree with no payload authoring. | `tools/automation/invoke-scene-inspection.ps1` | no payload | [Skill](.claude/skills/godot-inspect/SKILL.md) |
 | Behavior watch | Sample a node property over a frame window. | `tools/automation/invoke-behavior-watch.ps1` | `tools/tests/fixtures/runbook/behavior-watch/single-property-window.json` | [Skill](.claude/skills/godot-watch/SKILL.md) |
 | Build-error triage | Run the project and surface any build / compile errors. | `tools/automation/invoke-build-error-triage.ps1` | `tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json` | [Skill](.claude/skills/godot-debug-build/SKILL.md) |
-| Runtime-error triage | Run the project and surface any GDScript runtime errors. | `tools/automation/invoke-runtime-error-triage.ps1` | `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json` | [Skill](.claude/skills/godot-debug-runtime/SKILL.md) |
+| Runtime-error triage | Run the project and surface any GDScript runtime errors. | `tools/automation/invoke-runtime-error-triage.ps1` | `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json` | [Skill](.claude/skills/godot-debug-runtime/SKILL.md) |
 
 ### Evidence lifecycle
 
@@ -103,16 +103,18 @@ Two sibling helpers manage the editor process so agents don't have to:
 
 Every runtime-verification invoker also accepts a `-EnsureEditor` switch that delegates to `invoke-launch-editor.ps1` before running the workflow. Auto-launch failures surface as the workflow's own `editor-not-running` envelope.
 
-```powershell
-# One-step convenience: spawn editor (if needed) + run workflow
-pwsh ./tools/automation/invoke-scene-inspection.ps1 `
-    -ProjectRoot ./integration-testing/probe -EnsureEditor
+> **⚠️ Known issue (B13):** `-EnsureEditor` has been observed to hang on cold starts (no prior editor running, no shader cache). The launcher itself now emits stderr heartbeats and bounded timeouts, but the chained workflow can still wedge in some configurations. **Until B13 lands fully, prefer the explicit two-step pattern** — launch the editor first, then run the workflow as a separate `pwsh` invocation.
 
-# Two-step explicit (idempotent reuse, then run)
+```powershell
+# Two-step explicit (recommended): launch editor first, then run workflow
 pwsh ./tools/automation/invoke-launch-editor.ps1 -ProjectRoot ./integration-testing/probe
 pwsh ./tools/automation/invoke-input-dispatch.ps1 `
     -ProjectRoot ./integration-testing/probe `
     -RequestFixturePath ./tools/tests/fixtures/runbook/input-dispatch/press-enter.json
+
+# One-step convenience (use only when an editor is already warm):
+pwsh ./tools/automation/invoke-scene-inspection.ps1 `
+    -ProjectRoot ./integration-testing/probe -EnsureEditor
 
 # Cleanup
 pwsh ./tools/automation/invoke-stop-editor.ps1 -ProjectRoot ./integration-testing/probe

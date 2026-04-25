@@ -423,6 +423,129 @@ function Invoke-RunbookRequest {
     }
 }
 
+function Get-ProjectMainScene {
+    <#
+    .SYNOPSIS
+        Read [application] run/main_scene from a project's project.godot (F1).
+
+    .DESCRIPTION
+        Returns the value of the run/main_scene setting (typically a
+        res:// path) so workflows can default targetScene to the project's
+        actual main scene when a request payload omits it.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the Godot project directory containing project.godot.
+
+    .OUTPUTS
+        String. The res:// path of the main scene, or empty string if
+        project.godot is missing or the setting is absent.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$ProjectRoot)
+
+    $projectFile = Join-Path $ProjectRoot 'project.godot'
+    if (-not (Test-Path -LiteralPath $projectFile)) { return '' }
+
+    $inApplication = $false
+    $lines = Get-Content -LiteralPath $projectFile
+    foreach ($line in $lines) {
+        $trimmed = $line.Trim()
+        if ($trimmed -eq '[application]') { $inApplication = $true; continue }
+        if ($trimmed -match '^\[.+\]$') { $inApplication = $false; continue }
+        if ($inApplication -and $trimmed -match '^run/main_scene\s*=\s*"(.+)"$') {
+            return $Matches[1]
+        }
+    }
+    return ''
+}
+
+function ConvertTo-FirstBuildDiagnostic {
+    <#
+    .SYNOPSIS
+        Project a buildDiagnostic into the envelope's firstDiagnostic shape (B4).
+
+    .DESCRIPTION
+        Used by invoke-build-error-triage.ps1 to fall back to
+        run-result.buildDiagnostics[0] when the manifest's
+        build-error-records artifact is missing. Produces the same
+        { file, line, column, message } shape the skill doc promises.
+
+    .PARAMETER Diagnostic
+        A single buildDiagnostic record (PSCustomObject from ConvertFrom-Json
+        of run-result.buildDiagnostics[i] or build-error-records.jsonl line).
+
+    .OUTPUTS
+        Hashtable with file/line/column/message keys, or $null if Diagnostic is $null.
+    #>
+    [CmdletBinding()]
+    param([Parameter()][object]$Diagnostic)
+
+    if ($null -eq $Diagnostic) { return $null }
+
+    $hasColumn = $null -ne ($Diagnostic | Get-Member -Name 'column' -ErrorAction SilentlyContinue)
+    $hasLine   = $null -ne ($Diagnostic | Get-Member -Name 'line' -ErrorAction SilentlyContinue)
+    $hasFile   = $null -ne ($Diagnostic | Get-Member -Name 'resourcePath' -ErrorAction SilentlyContinue)
+    $hasMsg    = $null -ne ($Diagnostic | Get-Member -Name 'message' -ErrorAction SilentlyContinue)
+
+    return @{
+        file    = if ($hasFile) { [string]$Diagnostic.resourcePath } else { $null }
+        line    = if ($hasLine -and $null -ne $Diagnostic.line) { [int]$Diagnostic.line } else { $null }
+        column  = if ($hasColumn -and $null -ne $Diagnostic.column) { [int]$Diagnostic.column } else { $null }
+        message = if ($hasMsg) { [string]$Diagnostic.message } else { $null }
+    }
+}
+
+function ConvertTo-EnvelopeFailureKind {
+    <#
+    .SYNOPSIS
+        Map a run-result.json failureKind to an envelope failureKind (B7/B9).
+
+    .DESCRIPTION
+        run-result.json uses a finer-grained failureKind enum than the
+        agent-facing envelope. Without this mapping, scripts default to
+        'internal' whenever the manifest check fails downstream of a
+        non-internal run-result failure (e.g. validation, gameplay), which
+        hides the real cause from agents.
+
+        Mapping:
+          launch / attachment       -> editor-not-running
+          build                     -> build
+          capture / persistence /
+            validation / shutdown /
+            gameplay                -> runtime
+          (anything else / null)    -> $FallbackKind (default 'internal')
+
+    .PARAMETER RunResultFailureKind
+        The failureKind value read from run-result.json.
+
+    .PARAMETER FallbackKind
+        Envelope failureKind to use when RunResultFailureKind is null/empty
+        or unrecognized. Defaults to 'internal'.
+
+    .OUTPUTS
+        String. One of: editor-not-running, build, runtime, internal.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$RunResultFailureKind,
+        [string]$FallbackKind = 'internal'
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RunResultFailureKind)) { return $FallbackKind }
+
+    switch ($RunResultFailureKind) {
+        'launch'      { return 'editor-not-running' }
+        'attachment'  { return 'editor-not-running' }
+        'build'       { return 'build' }
+        'capture'     { return 'runtime' }
+        'persistence' { return 'runtime' }
+        'validation'  { return 'runtime' }
+        'shutdown'    { return 'runtime' }
+        'gameplay'    { return 'runtime' }
+        default       { return $FallbackKind }
+    }
+}
+
 function Write-RunbookEnvelope {
     <#
     .SYNOPSIS
@@ -609,7 +732,8 @@ function Get-RunZoneClassification {
 
     .DESCRIPTION
         Keys are filename globs (matched case-insensitively). Values are one of:
-        "transient", "editor-state", "pinned", "oracle", "input", or "marker".
+        "transient", "editor-state", "pinned", "oracle", "input", "marker",
+        or "preserve".
 
         "transient"    files are cleared by Initialize-RunbookTransientZone.
         "editor-state" files (capability.json) are owned by the editor's
@@ -618,6 +742,9 @@ function Get-RunZoneClassification {
                        editor-not-running.
         "marker"       (.in-flight.json) is transient but explicitly SKIPPED
                        by cleanup and cleared on orchestration exit.
+        "preserve"     files (.gitkeep, .gitignore) are repo-management
+                       artefacts that must survive cleanup so the directory
+                       stays tracked in git after every run.
 
     .OUTPUTS
         Hashtable of glob -> zone-enum string.
@@ -627,6 +754,8 @@ function Get-RunZoneClassification {
 
     return [ordered]@{
         '.in-flight.json'            = 'marker'
+        '.gitkeep'                   = 'preserve'
+        '.gitignore'                 = 'preserve'
         'capability.json'            = 'editor-state'
         'lifecycle-status.json'      = 'transient'
         'run-result.json'            = 'transient'
@@ -903,6 +1032,10 @@ function Initialize-RunbookTransientZone {
             # Skip editor-owned state (heartbeated by the editor on its own cadence).
             # Wiping these creates a window where invoke scripts mis-report editor-not-running.
             if ($zone -eq 'editor-state') { continue }
+            # Skip repo-management artefacts (.gitkeep, .gitignore). Deleting these
+            # would force the user to recreate them after every run to keep the
+            # directory tracked in git.
+            if ($zone -eq 'preserve') { continue }
             # Unclassified files in the requests dir are PRESERVED (no diagnostic,
             # no delete). Fixture project roots commit non-canonical request
             # filenames there (run-request.healthy.json, behavior-watch-valid.json,
@@ -1027,7 +1160,10 @@ function Write-LifecycleEnvelope {
         dryRun        = $DryRun
         plannedPaths  = @($PlannedPaths | Where-Object { $null -ne $_ })
         pinName       = if ($PSBoundParameters.ContainsKey('PinName')) { $PinName } else { $null }
-        pinnedRunIndex = if ($PSBoundParameters.ContainsKey('PinnedRunIndex') -and $null -ne $PinnedRunIndex) { $PinnedRunIndex } else { $null }
+        # Leading-comma wrap forces the array to survive the if-expression's
+        # auto-unrolling — without it, a single-pin index serializes as a
+        # bare object instead of a 1-element array (B11).
+        pinnedRunIndex = if ($PSBoundParameters.ContainsKey('PinnedRunIndex') -and $null -ne $PinnedRunIndex) { ,@($PinnedRunIndex) } else { $null }
         diagnostics   = @($Diagnostics | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         completedAt   = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
         manifestPath  = $null
@@ -1387,6 +1523,9 @@ Export-ModuleMember -Function @(
     'Invoke-RunbookRequest',
     'Write-RunbookEnvelope',
     'Write-LifecycleEnvelope',
+    'ConvertTo-EnvelopeFailureKind',
+    'ConvertTo-FirstBuildDiagnostic',
+    'Get-ProjectMainScene',
     'Test-RunbookManifest',
     'Write-RunbookStderrSummary',
     'Invoke-Helper',

@@ -191,6 +191,58 @@ Describe 'US3 list: emits pinned-run-index (T028)' {
 }
 
 # ---------------------------------------------------------------------------
+# B11 — Write-LifecycleEnvelope must emit pinnedRunIndex as JSON array
+# even when only one pin exists. Without the leading-comma wrap the
+# if-expression auto-unrolls a single-element array into a bare object.
+# ---------------------------------------------------------------------------
+
+Describe 'Write-LifecycleEnvelope: pinnedRunIndex array shape (B11)' {
+    It 'serializes pinnedRunIndex as a JSON array when one pin exists' {
+        $root = New-RepoSandboxDirectory
+        try {
+            New-SandboxTransientZone -Root $root | Out-Null
+            Copy-RunToPinnedZone -ProjectRoot $root -PinName 'solo' | Out-Null
+
+            $index = Get-PinnedRunIndex -ProjectRoot $root
+            @($index).Count | Should -Be 1
+
+            $json = Write-LifecycleEnvelope -Status 'ok' -Operation 'list' `
+                -DryRun $false -Diagnostics @() -PlannedPaths @() -PinnedRunIndex $index
+            $parsed = $json | ConvertFrom-Json
+
+            # PowerShell ConvertFrom-Json yields object[] for JSON arrays. A bare
+            # object would yield a single PSCustomObject with no array semantics.
+            $parsed.pinnedRunIndex.GetType().IsArray | Should -BeTrue -Because 'pinnedRunIndex must be an array even with a single pin'
+            @($parsed.pinnedRunIndex).Count | Should -Be 1
+            $parsed.pinnedRunIndex[0].pinName | Should -Be 'solo'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'serializes pinnedRunIndex as a JSON array when two pins exist' {
+        $root = New-RepoSandboxDirectory
+        try {
+            New-SandboxTransientZone -Root $root | Out-Null
+            Copy-RunToPinnedZone -ProjectRoot $root -PinName 'one' | Out-Null
+            Copy-RunToPinnedZone -ProjectRoot $root -PinName 'two' | Out-Null
+
+            $index = Get-PinnedRunIndex -ProjectRoot $root
+            $json = Write-LifecycleEnvelope -Status 'ok' -Operation 'list' `
+                -DryRun $false -Diagnostics @() -PlannedPaths @() -PinnedRunIndex $index
+            $parsed = $json | ConvertFrom-Json
+
+            $parsed.pinnedRunIndex.GetType().IsArray | Should -BeTrue
+            @($parsed.pinnedRunIndex).Count | Should -Be 2
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
 # T029 — US3: unpin -DryRun mutates nothing; real unpin removes pin
 # ---------------------------------------------------------------------------
 

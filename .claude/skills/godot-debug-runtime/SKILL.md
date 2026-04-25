@@ -1,7 +1,7 @@
 ---
 name: "godot-debug-runtime"
 description: "Run the Godot game with pause-on-error enabled and capture any GDScript runtime errors (null dereferences, invalid calls, missing nodes). Use when the user asks why the game crashes, why something throws at runtime, or to reproduce a runtime error."
-argument-hint: "(optional) fixture path; defaults to tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json"
+argument-hint: "(optional) fixture path; defaults to tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json"
 compatibility: "Requires a Godot editor running against the target project and access to the godot-agent-harness invoke-*.ps1 scripts."
 metadata:
   author: "godot-agent-harness"
@@ -16,7 +16,7 @@ disable-model-invocation: false
 $ARGUMENTS
 ```
 
-Treat `$ARGUMENTS` as an optional fixture path. Default: `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json`. Ask the user which project root to target; do not guess.
+Treat `$ARGUMENTS` as an optional fixture path. **Default: `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json`** — this fixture sets `stopAfterValidation=false` and `frameLimit=600` so the playtest actually runs long enough for `_ready` errors and early-frame failures to surface. The older `run-and-watch-for-errors.json` is a fast smoke-test (`stopAfterValidation=true`); use it only when you don't expect errors. Ask the user which project root to target; do not guess.
 
 ## Execution
 

@@ -4,7 +4,7 @@
   "scenarioId": "runbook-inspect-scene-tree-scenario",
   "runId": "runbook-inspect-scene-tree-run",
   "targetScene": "res://scenes/main.tscn",
-  "outputDirectory": "res://evidence/automation/runbook-inspect-scene-tree-$REQUEST_ID",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
   "artifactRoot": "tools/tests/fixtures/runbook/inspect-scene-tree/evidence",
   "capturePolicy": {
     "startup": true,

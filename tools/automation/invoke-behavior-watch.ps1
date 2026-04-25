@@ -89,9 +89,10 @@ function Exit-Failure {
     $diags = @($_lifecycleDiags) + @($Message)
     Write-RunbookEnvelope -Status 'failure' -FailureKind $Kind -RunId $runId -RequestId $requestId `
         -Diagnostics $diags -Outcome @{
-            samplesPath      = $null
-            sampleCount      = 0
+            samplesPath       = $null
+            sampleCount       = 0
             frameRangeCovered = $null
+            warnings          = @()
         }
     Write-RunbookStderrSummary "FAIL: $Kind; $Message"
     exit 1
@@ -180,25 +181,30 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
-    Exit-Failure $fk "Run failed with failureKind='$fk'."
+    $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
+    Exit-Failure $envelopeKind "Run failed with failureKind='$fk'."
 }
 
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
-    Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind "run-result.json did not contain a manifestPath."
 }
 $absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
 $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
-    Exit-Failure 'internal' $manifestCheck.Diagnostic
+    # B7/B9: propagate run-result.failureKind instead of collapsing to internal.
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind $manifestCheck.Diagnostic
 }
 
 # Step 9: Build outcome
 $samplesPath       = $null
 $sampleCount       = 0
 $frameRangeCovered = $null
+$warnings          = [System.Collections.Generic.List[string]]::new()
 
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
@@ -217,13 +223,37 @@ try {
             $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
         }
     }
-    # No behavior-samples/behavior-trace artifact is a clean "no samples" outcome
-    # (e.g. the watched node didn't exist in the running scene). The run mechanically
-    # completed; report success with sampleCount=0 so the agent can decide whether
-    # zero samples is a failure for its use case.
 }
 catch {
     Exit-Failure 'internal' "Failed to assemble behavior-watch outcome from manifest: $($_.Exception.Message)"
+}
+
+# B3: zero samples almost always means the target node was not present in the
+# scene at sample time. Read the request payload to surface which node(s) the
+# agent asked for so the user has something actionable to investigate.
+if ($sampleCount -eq 0) {
+    try {
+        $requestText = if ($hasFixture) {
+            Get-Content -LiteralPath $RequestFixturePath -Raw
+        } else {
+            $RequestJson
+        }
+        $req = $requestText | ConvertFrom-Json -Depth 20 -ErrorAction SilentlyContinue
+        $hasBwr = $null -ne $req -and $null -ne ($req | Get-Member -Name 'behaviorWatchRequest' -ErrorAction SilentlyContinue)
+        if ($hasBwr -and $null -ne $req.behaviorWatchRequest -and $null -ne $req.behaviorWatchRequest.targets) {
+            foreach ($t in @($req.behaviorWatchRequest.targets)) {
+                if ($null -ne $t -and -not [string]::IsNullOrWhiteSpace([string]$t.nodePath)) {
+                    $warnings.Add("target node not found or never sampled: $([string]$t.nodePath)")
+                }
+            }
+        }
+        if ($warnings.Count -eq 0) {
+            $warnings.Add("zero samples captured; check that the watched node exists in the running scene at sample time")
+        }
+    }
+    catch {
+        $warnings.Add("zero samples captured; could not parse request payload to identify target node ($($_.Exception.Message))")
+    }
 }
 
 # Steps 10-12
@@ -232,9 +262,11 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         samplesPath       = $samplesPath
         sampleCount       = $sampleCount
         frameRangeCovered = $frameRangeCovered
+        warnings          = ,@($warnings)
     }
 $envelope
-Write-RunbookStderrSummary "OK: $sampleCount samples captured; manifest at $absManifest"
+$warnSuffix = if ($warnings.Count -gt 0) { "; warnings: $($warnings -join ' | ')" } else { '' }
+Write-RunbookStderrSummary "OK: $sampleCount samples captured; manifest at $absManifest$warnSuffix"
 exit 0
 
 }

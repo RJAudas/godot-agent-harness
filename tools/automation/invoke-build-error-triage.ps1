@@ -162,12 +162,12 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null
 if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
-    $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+    $absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 }
 
 # Validate the manifest when present (run-result-failed runs may not produce one).
 if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
-    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
     if (-not $manifestCheck.Ok) {
         Exit-Failure 'internal' $manifestCheck.Diagnostic
     }
@@ -183,12 +183,12 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
         if ($IncludeRawBuildOutput) {
             $buildRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'build-output' } | Select-Object -First 1
             if ($null -ne $buildRef) {
-                $rawBuildOutputPath = Resolve-RunbookRepoPath -Path $buildRef.path
+                $rawBuildOutputPath = Resolve-RunbookEvidencePath -Path $buildRef.path -ProjectRoot $resolvedRoot
             }
         }
         $errRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'build-error-records' } | Select-Object -First 1
         if ($null -ne $errRef) {
-            $errPath = Resolve-RunbookRepoPath -Path $errRef.path
+            $errPath = Resolve-RunbookEvidencePath -Path $errRef.path -ProjectRoot $resolvedRoot
             if (Test-Path -LiteralPath $errPath) {
                 $firstLine = Get-Content -LiteralPath $errPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
                 if (-not [string]::IsNullOrWhiteSpace($firstLine)) {

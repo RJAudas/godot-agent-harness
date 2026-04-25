@@ -163,12 +163,12 @@ $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { 
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null
 if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
-    $absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+    $absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 }
 
 # Validate manifest when present.
 if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
-    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+    $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
     if (-not $manifestCheck.Ok) {
         Exit-Failure 'internal' $manifestCheck.Diagnostic
     }
@@ -191,7 +191,7 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath
         # Runtime error records
         $errRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'runtime-error-records' } | Select-Object -First 1
         if ($null -ne $errRef) {
-            $runtimeErrorRecordsPath = Resolve-RunbookRepoPath -Path $errRef.path
+            $runtimeErrorRecordsPath = Resolve-RunbookEvidencePath -Path $errRef.path -ProjectRoot $resolvedRoot
             if (Test-Path -LiteralPath $runtimeErrorRecordsPath) {
                 # Get last (most recent) error record
                 $lines = Get-Content -LiteralPath $runtimeErrorRecordsPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }

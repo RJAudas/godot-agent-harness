@@ -28,6 +28,38 @@ function Resolve-RunbookRepoPath {
     return Join-Path (Get-RunbookRepoRoot) $Path
 }
 
+function Resolve-RunbookEvidencePath {
+    <#
+    .SYNOPSIS
+        Resolves an evidence path (manifestPath, artifactRefs[*].path, etc.) to
+        an absolute path on disk.
+
+    .DESCRIPTION
+        Evidence paths reported in run-result.json and evidence-manifest.json
+        are project-relative (the runtime writes under res://evidence/automation/...
+        which becomes <ProjectRoot>/evidence/automation/...). They are NOT
+        repo-relative. Use this helper instead of Resolve-RunbookRepoPath when
+        resolving anything that came out of the editor / runtime side.
+
+    .PARAMETER Path
+        The path string from the run-result envelope, manifest reference, etc.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the sandbox project root (the -ProjectRoot the invoker
+        was called with).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$ProjectRoot
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+    return Join-Path $ProjectRoot $Path
+}
+
 # ---------------------------------------------------------------------------
 # Internal helper indirection — mock this in Pester with:
 #   Mock -CommandName 'Invoke-Helper' -ModuleName 'RunbookOrchestration' -MockWith { ... }
@@ -55,6 +87,13 @@ function Invoke-Helper {
         ($captured | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
     } else {
         ''
+    }
+
+    # H1: strip ANSI CSI sequences. PowerShell 7 colors Write-Error output by default,
+    # and that text gets embedded verbatim into the JSON envelope's diagnostics[].
+    # Escapes break downstream JSON consumers and grep-friendly display.
+    if (-not [string]::IsNullOrEmpty($capturedText)) {
+        $capturedText = [regex]::Replace($capturedText, "`e\[[0-?]*[ -/]*[@-~]", '')
     }
 
     return [pscustomobject]@{
@@ -192,6 +231,19 @@ function Resolve-RunbookPayload {
     $payload = $json | ConvertFrom-Json -Depth 20 -AsHashtable
     $payload['requestId'] = $RequestId
 
+    # C2: artifactRoot is a legacy duplicate of outputDirectory. Every shipped
+    # fixture sets it to a path under tools/tests/fixtures/runbook/<workflow>/...
+    # and the runtime persisted that string into evidence-manifest.json's
+    # artifactRefs[*].path and into run-result.manifestPath -- but the actual
+    # artifacts were always written to outputDirectory (res://evidence/automation/...).
+    # Agents following "read manifestPath, then read each artifact" hit
+    # FileNotFound at every hop. The runtime already falls back to outputDirectory
+    # when artifactRoot is empty (see scenegraph_artifact_writer._resolve_artifact_root
+    # and scenegraph_run_coordinator._resolve_manifest_repo_path). Forcing empty
+    # here restores the manifest-references-real-files invariant without addon,
+    # schema, or fixture changes. Full removal of the field is deferred.
+    $payload['artifactRoot'] = ''
+
     # Schema requires expectationFiles, but runbook fixtures typically omit it
     # because they declare their expectations via capturePolicy + outcome
     # artifacts. Default to empty so schema validation passes without forcing
@@ -209,7 +261,39 @@ function Resolve-RunbookPayload {
         New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
     }
     $canonicalPath = Join-Path $requestsDir 'run-request.json'
-    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
+
+    # C1: validate-then-rename. The editor broker watches $canonicalPath with
+    # FileSystemWatcher and consumes (deletes) the file the moment it appears.
+    # Previously the orchestrator wrote $canonicalPath and then asked the schema
+    # validator to read it back -- but the broker had already moved/removed it,
+    # so every successful run looked like failureKind=request-invalid. Fix: write
+    # the JSON to <canonical>.tmp first, run schema validation against the temp
+    # path (which the broker is not watching), and only on success atomic-rename
+    # into place. The broker never sees an unvalidated file.
+    $tmpPath = "$canonicalPath.tmp"
+    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tmpPath -Encoding utf8
+
+    $schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+    $validation = Invoke-Helper -ScriptPath 'tools/validate-json.ps1' -ArgumentList @(
+        '-InputPath', $tmpPath,
+        '-SchemaPath', $schemaPath,
+        '-AllowInvalid'
+    )
+    try {
+        if ($validation.ExitCode -ne 0) {
+            throw "Schema validator could not run (exit $($validation.ExitCode)): $($validation.CapturedOutput)"
+        }
+        $parsedValidation = $validation.CapturedOutput | ConvertFrom-Json -Depth 20
+        if (-not $parsedValidation.valid) {
+            $errDetail = if ($null -ne $parsedValidation.PSObject.Properties['error']) { $parsedValidation.error } else { 'schema validation failed' }
+            throw "Run request does not satisfy schema '$schemaPath': $errDetail"
+        }
+        Move-Item -LiteralPath $tmpPath -Destination $canonicalPath -Force
+    }
+    catch {
+        Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
 
     return [pscustomobject]@{
         Payload         = $payload
@@ -250,48 +334,11 @@ function Invoke-RunbookRequest {
         [int]$PollIntervalMilliseconds = 250
     )
 
-    # Validate the payload in place. Historically this was delegated to
-    # request-editor-evidence-run.ps1, but that script regenerates a payload
-    # from CLI args + config and overwrites the file, stripping runbook-only
-    # fields like inputDispatchScript and replacing the requestId with a fresh
-    # GUID. Both behaviors guaranteed the broker either saw a malformed request
-    # or a request the poll loop could never match. We validate the existing
-    # file directly instead and surface validation errors as a loud failure.
-    $schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
-    $validator  = 'tools/validate-json.ps1'
-    $validationResult = Invoke-Helper -ScriptPath $validator -ArgumentList @(
-        '-InputPath', $RequestPath,
-        '-SchemaPath', $schemaPath,
-        '-AllowInvalid'
-    )
-    if ($validationResult.ExitCode -ne 0) {
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Schema validator failed to run (exit $($validationResult.ExitCode)). Output: $($validationResult.CapturedOutput)"
-            RunResult   = $null
-        }
-    }
-    try {
-        $parsedValidation = $validationResult.CapturedOutput | ConvertFrom-Json -Depth 20
-    }
-    catch {
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Could not parse schema-validation output. Raw: $($validationResult.CapturedOutput)"
-            RunResult   = $null
-        }
-    }
-    if (-not $parsedValidation.valid) {
-        $errDetail = if ($null -ne $parsedValidation.PSObject.Properties['error']) { $parsedValidation.error } else { 'schema validation failed' }
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Run request at '$RequestPath' does not satisfy schema '$schemaPath': $errDetail"
-            RunResult   = $null
-        }
-    }
+    # NOTE: schema validation moved upstream into Resolve-RunbookPayload (and the
+    # inline-write block in invoke-scene-inspection.ps1). The broker consumes the
+    # canonical request the moment it appears, so by the time we get here the
+    # file may already be gone. Validating after the broker has acted produced
+    # spurious request-invalid envelopes for runs that completed cleanly.
 
     $runResultPath = Join-Path $ProjectRoot 'harness/automation/results/run-result.json'
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -384,6 +431,15 @@ function Test-RunbookManifest {
     .SYNOPSIS
         Validate an evidence manifest at the given absolute path.
 
+    .PARAMETER ManifestPath
+        Absolute path to the evidence-manifest.json to validate.
+
+    .PARAMETER ProjectRoot
+        Optional. When provided, artifact paths inside the manifest are resolved
+        against this directory instead of the harness repo root. Use this when
+        validating manifests produced by a runbook orchestration (paths there
+        are project-relative, since the runtime writes under res://evidence/...).
+
     .OUTPUTS
         PSCustomObject: { Ok [bool], Diagnostic [string|null] }. When Ok=$false,
         Diagnostic is a single-line summary suitable for inclusion in the
@@ -391,7 +447,8 @@ function Test-RunbookManifest {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$ManifestPath
+        [Parameter(Mandatory)][string]$ManifestPath,
+        [string]$ProjectRoot
     )
 
     if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
@@ -411,19 +468,70 @@ function Test-RunbookManifest {
     $stderrTmp = [System.IO.Path]::GetTempFileName()
     try {
         $procArgs = @('-NoProfile', '-File', $validator, '-ManifestPath', $ManifestPath)
+        if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
+            $procArgs += @('-ProjectRoot', $ProjectRoot)
+        }
         $proc = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
             -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $stdoutTmp `
             -RedirectStandardError $stderrTmp
-        if ($proc.ExitCode -ne 0) {
-            $errText = (Get-Content -LiteralPath $stderrTmp -Raw)
-            if ([string]::IsNullOrWhiteSpace($errText)) {
-                $errText = (Get-Content -LiteralPath $stdoutTmp -Raw)
-            }
-            $first = ($errText -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
-            return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $($first.Trim())" }
+
+        # Parse the validator's structured stdout. Even on non-zero exit it emits
+        # a JSON object with schemaValid / missingArtifactPaths / runtimeReportingViolations
+        # / bundleValid keys.
+        $stdoutText = (Get-Content -LiteralPath $stdoutTmp -Raw)
+        $report = $null
+        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+            try { $report = $stdoutText | ConvertFrom-Json -Depth 20 } catch { }
         }
-        return [pscustomobject]@{ Ok = $true; Diagnostic = $null }
+
+        if ($proc.ExitCode -ne 0 -and $null -eq $report) {
+            $errText = (Get-Content -LiteralPath $stderrTmp -Raw)
+            if ([string]::IsNullOrWhiteSpace($errText)) { $errText = $stdoutText }
+            $first = ($errText -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+            return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $(if ($first) { $first.Trim() } else { 'no output' })" }
+        }
+
+        # Operational-blocker checks: missing artifacts on disk, runtime-reporting
+        # invariant violations, and unsupported artifact kinds. Schema mismatch is
+        # demoted to a soft diagnostic -- the manifest schema currently lags the
+        # runtime (e.g. it does not declare appliedInputDispatch, which the runtime
+        # emits) but the agent-visible outcome is independent of that gap.
+        $diagnostics = @()
+        if ($null -ne $report) {
+            $missing = @($report.missingArtifactPaths)
+            if ($missing.Count -gt 0) {
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "manifest references $($missing.Count) artifact(s) missing on disk: $($missing -join ', ')"
+                }
+            }
+            $violations = @($report.runtimeReportingViolations)
+            if ($violations.Count -gt 0) {
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "runtime-error-reporting invariants violated: $($violations -join '; ')"
+                }
+            }
+            $unsupported = @($report.unsupportedArtifactKinds)
+            if ($unsupported.Count -gt 0) {
+                # Hard fail: the manifest references artifact kinds the registry doesn't
+                # know about, which means the agent has no schema to interpret them by.
+                # If a new kind is legitimate, register it in tools/evidence/artifact-registry.ps1.
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "manifest references unsupported artifact kind(s): $($unsupported -join ', ')"
+                }
+            }
+            if (-not $report.schemaValid) {
+                $diagnostics += "manifest schema validation failed (artifacts present on disk; agent-visible outcome unaffected)"
+            }
+        }
+
+        return [pscustomobject]@{
+            Ok = $true
+            Diagnostic = if ($diagnostics.Count -gt 0) { $diagnostics -join '; ' } else { $null }
+        }
     }
     finally {
         Remove-Item -LiteralPath $stdoutTmp -ErrorAction SilentlyContinue
@@ -1216,6 +1324,7 @@ Export-ModuleMember -Function @(
     'Invoke-Helper',
     'Get-RunbookRepoRoot',
     'Resolve-RunbookRepoPath',
+    'Resolve-RunbookEvidencePath',
     'Get-RunZoneClassification',
     'New-RunbookInFlightMarker',
     'Clear-RunbookInFlightMarker',

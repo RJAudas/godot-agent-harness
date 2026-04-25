@@ -169,9 +169,9 @@ $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
     Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
 }
-$absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+$absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
-$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
     Exit-Failure 'internal' $manifestCheck.Diagnostic
 }
@@ -185,14 +185,19 @@ try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
     $outcomeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'input-dispatch-outcomes' } | Select-Object -First 1
     if ($null -ne $outcomeRef) {
-        $outcomesPath = Resolve-RunbookRepoPath -Path $outcomeRef.path
+        $outcomesPath = Resolve-RunbookEvidencePath -Path $outcomeRef.path -ProjectRoot $resolvedRoot
         if (Test-Path -LiteralPath $outcomesPath) {
             $lines = Get-Content -LiteralPath $outcomesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
             $dispatchedCount = @($lines).Count
             foreach ($line in $lines) {
                 $row = $line | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue
-                if ($null -ne $row -and $row.outcome -ne 'success') {
-                    $firstFailureSummary = [string]$row.message
+                if ($null -eq $row) { continue }
+                # Runtime emits: status (success | skipped_* | failed_*) and reasonMessage.
+                # Treat anything other than 'success' as a failure surface for the agent.
+                $hasStatus = $null -ne ($row | Get-Member -Name 'status' -ErrorAction SilentlyContinue)
+                if ($hasStatus -and [string]$row.status -ne 'success') {
+                    $hasReason = $null -ne ($row | Get-Member -Name 'reasonMessage' -ErrorAction SilentlyContinue)
+                    $firstFailureSummary = if ($hasReason) { [string]$row.reasonMessage } else { [string]$row.status }
                     break
                 }
             }

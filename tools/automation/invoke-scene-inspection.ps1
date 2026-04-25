@@ -149,7 +149,10 @@ $internalPayload = @{
     runId            = $requestId
     targetScene      = $TargetScene
     outputDirectory  = "res://evidence/automation/$requestId"
-    artifactRoot     = "tools/tests/fixtures/runbook/inspect-scene-tree/evidence/$requestId"
+    # C2: legacy field. Empty string lets the runtime fall back to outputDirectory
+    # for manifest references (see scenegraph_artifact_writer._resolve_artifact_root).
+    # Schema still satisfied (string, present, no minLength).
+    artifactRoot     = ''
     expectationFiles = @()
     capturePolicy    = @{ startup = $true; manual = $false; failure = $false }
     stopPolicy       = @{ stopAfterValidation = $true }
@@ -164,7 +167,46 @@ if (-not (Test-Path -LiteralPath $requestsDir)) {
 # Write to the canonical path the editor broker watches (run-request.json),
 # not a per-request filename that the broker would never pick up.
 $canonicalPath = Join-Path $requestsDir 'run-request.json'
-$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
+
+# C1: validate-then-rename. The editor broker consumes $canonicalPath the
+# instant FileSystemWatcher fires; validating after the write means the
+# validator's Resolve-Path crashes when the broker has already moved the
+# file. Write to <canonical>.tmp first, validate the temp path (which the
+# broker is not watching), then atomic-rename into place. Mirrors the
+# pattern in Resolve-RunbookPayload. (Pass 2 H3 will fold this script's
+# inline write into Resolve-RunbookPayload via -InlineJson.)
+$tmpPath = "$canonicalPath.tmp"
+$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tmpPath -Encoding utf8
+
+$schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+$schemaResolved = Resolve-RunbookRepoPath -Path $schemaPath
+$validation = & pwsh -NoProfile -File (Resolve-RunbookRepoPath -Path 'tools/validate-json.ps1') `
+    -InputPath $tmpPath -SchemaPath $schemaResolved -AllowInvalid 2>&1
+$validationExit = $LASTEXITCODE
+
+try {
+    if ($validationExit -ne 0) {
+        $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+        $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
+        Exit-Failure 'request-invalid' "Schema validator could not run (exit $validationExit): $captured"
+    }
+    $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+    $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
+    $parsed = $captured | ConvertFrom-Json -Depth 20
+    if (-not $parsed.valid) {
+        $errDetail = if ($null -ne $parsed.PSObject.Properties['error']) { $parsed.error } else { 'schema validation failed' }
+        Exit-Failure 'request-invalid' "Run request does not satisfy schema '$schemaPath': $errDetail"
+    }
+    Move-Item -LiteralPath $tmpPath -Destination $canonicalPath -Force
+}
+catch {
+    Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+    if ($_.Exception.Message -match '^Run request does not satisfy|^Schema validator could not run') {
+        # Already routed through Exit-Failure; the catch is just for cleanup.
+        throw
+    }
+    Exit-Failure 'request-invalid' "Failed to validate run-request.json: $($_.Exception.Message)"
+}
 
 # Step 6-7: Request + poll
 $runResult = Invoke-RunbookRequest `
@@ -196,9 +238,9 @@ $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
     Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
 }
-$absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+$absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
-$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
     Exit-Failure 'internal' $manifestCheck.Diagnostic
 }
@@ -209,17 +251,24 @@ $nodeCount     = 0
 
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
-    $treeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'scene-tree' } | Select-Object -First 1
+    # The runtime emits scenegraph-snapshot (flat nodes array with node_count
+    # field), not a tree-shaped 'scene-tree' artifact. Earlier code expected
+    # the latter and recursed over $tree.root.children.
+    $treeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'scenegraph-snapshot' } | Select-Object -First 1
     if ($null -eq $treeRef) {
-        Exit-Failure 'internal' "manifest did not contain a 'scene-tree' artifact reference"
+        Exit-Failure 'internal' "manifest did not contain a 'scenegraph-snapshot' artifact reference"
     }
-    $sceneTreePath = Resolve-RunbookRepoPath -Path $treeRef.path
+    $sceneTreePath = Resolve-RunbookEvidencePath -Path $treeRef.path -ProjectRoot $resolvedRoot
     if (-not (Test-Path -LiteralPath $sceneTreePath)) {
-        Exit-Failure 'internal' "scene-tree artifact missing on disk at '$sceneTreePath'"
+        Exit-Failure 'internal' "scenegraph-snapshot artifact missing on disk at '$sceneTreePath'"
     }
-    $tree = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
-    function Count-Nodes { param($n); $c = 1; foreach ($child in @($n.children)) { $c += Count-Nodes $child }; $c }
-    $nodeCount = Count-Nodes $tree.root
+    $snapshot = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
+    if ($null -ne ($snapshot | Get-Member -Name 'node_count' -ErrorAction SilentlyContinue)) {
+        $nodeCount = [int]$snapshot.node_count
+    }
+    elseif ($null -ne ($snapshot | Get-Member -Name 'nodes' -ErrorAction SilentlyContinue)) {
+        $nodeCount = @($snapshot.nodes).Count
+    }
 }
 catch {
     Exit-Failure 'internal' "Failed to assemble scene-tree outcome: $($_.Exception.Message)"

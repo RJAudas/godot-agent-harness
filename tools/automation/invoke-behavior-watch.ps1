@@ -159,9 +159,9 @@ $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
     Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
 }
-$absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+$absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
-$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
     Exit-Failure 'internal' $manifestCheck.Diagnostic
 }
@@ -174,21 +174,24 @@ $frameRangeCovered = $null
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
     $samplesRef = $manifest.artifactRefs | Where-Object { $_.kind -in @('behavior-samples', 'behavior-trace') } | Select-Object -First 1
-    if ($null -eq $samplesRef) {
-        Exit-Failure 'internal' "manifest did not contain a 'behavior-samples' or 'behavior-trace' artifact reference"
+    if ($null -ne $samplesRef) {
+        $samplesPath = Resolve-RunbookEvidencePath -Path $samplesRef.path -ProjectRoot $resolvedRoot
+        if (-not (Test-Path -LiteralPath $samplesPath)) {
+            Exit-Failure 'internal' "behavior samples artifact missing on disk at '$samplesPath'"
+        }
+        $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
+                Where-Object { $null -ne $_ }
+        $sampleCount = @($rows).Count
+        if ($sampleCount -gt 0) {
+            $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
+            $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
+        }
     }
-    $samplesPath = Resolve-RunbookRepoPath -Path $samplesRef.path
-    if (-not (Test-Path -LiteralPath $samplesPath)) {
-        Exit-Failure 'internal' "behavior samples artifact missing on disk at '$samplesPath'"
-    }
-    $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-            ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
-            Where-Object { $null -ne $_ }
-    $sampleCount = @($rows).Count
-    if ($sampleCount -gt 0) {
-        $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
-        $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
-    }
+    # No behavior-samples/behavior-trace artifact is a clean "no samples" outcome
+    # (e.g. the watched node didn't exist in the running scene). The run mechanically
+    # completed; report success with sampleCount=0 so the agent can decide whether
+    # zero samples is a failure for its use case.
 }
 catch {
     Exit-Failure 'internal' "Failed to assemble behavior-watch outcome from manifest: $($_.Exception.Message)"

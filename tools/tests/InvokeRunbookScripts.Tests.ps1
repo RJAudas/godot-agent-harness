@@ -101,6 +101,107 @@ Describe 'RunbookOrchestration module' {
     It 'Resolve-RunbookPayload throws when neither is supplied' {
         { Resolve-RunbookPayload -RequestId 'req' -ProjectRoot $TestDrive } | Should -Throw
     }
+
+    It 'H1: Invoke-Helper strips ANSI CSI sequences from CapturedOutput' {
+        # Build a child script that emits ANSI-coloured text via Write-Error.
+        # PowerShell 7's default ErrorView (ConciseView) emits CSI sequences for
+        # colour, which is exactly what H1 strips out.
+        $ansiScript = Join-Path $TestDrive 'emit-ansi.ps1'
+        @'
+param([string]$Tag = 'default')
+Write-Error "boom: this should be coloured ($Tag)" -ErrorAction Continue
+exit 0
+'@ | Set-Content -LiteralPath $ansiScript -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Path = $ansiScript } {
+            param($Path)
+            $result = Invoke-Helper -ScriptPath $Path -ArgumentList @('-Tag', 'h1-test')
+            $result.CapturedOutput | Should -Not -Match "`e\["
+            $result.CapturedOutput | Should -Match 'boom'
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# C1 — Resolve-RunbookPayload validates before writing canonical path
+# ---------------------------------------------------------------------------
+
+Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
+    BeforeEach {
+        $script:C1Root = Join-Path $TestDrive ('c1-root-' + [guid]::NewGuid().Guid)
+        New-Item -ItemType Directory -Path $script:C1Root -Force | Out-Null
+        $script:C1RequestsDir = Join-Path $script:C1Root 'harness/automation/requests'
+        $script:C1Canonical   = Join-Path $script:C1RequestsDir 'run-request.json'
+        $script:C1Tmp         = "$script:C1Canonical.tmp"
+    }
+
+    It 'C1: writes canonical path on a valid fixture and leaves no .tmp behind' {
+        # Use a real shipped fixture which the schema accepts.
+        $result = Resolve-RunbookPayload `
+            -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
+            -RequestId 'runbook-input-dispatch-c1-success' `
+            -ProjectRoot $script:C1Root
+
+        $result.TempRequestPath | Should -Be $script:C1Canonical
+        Test-Path -LiteralPath $script:C1Canonical | Should -BeTrue
+        Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
+
+        # Canonical content should be the merged payload with our new requestId.
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.requestId | Should -Be 'runbook-input-dispatch-c1-success'
+    }
+
+    It 'C1: throws and leaves no canonical / no .tmp when payload fails schema validation' {
+        # Construct an inline payload that is missing several required fields.
+        $bad = @{ requestId = 'will-be-overwritten'; runId = 'r' } | ConvertTo-Json -Depth 5
+
+        { Resolve-RunbookPayload `
+            -InlineJson $bad `
+            -RequestId 'runbook-c1-schema-fail' `
+            -ProjectRoot $script:C1Root
+        } | Should -Throw -ExpectedMessage '*does not satisfy schema*'
+
+        Test-Path -LiteralPath $script:C1Canonical | Should -BeFalse
+        Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
+    }
+
+    It 'C2 follow-up: Resolve-RunbookEvidencePath joins relative paths against ProjectRoot' {
+        # Evidence paths from run-result/manifest are project-relative, not repo-relative.
+        # Use TestDrive so the assertion holds on any OS (Windows / macOS / Linux),
+        # since [System.IO.Path]::IsPathRooted has different semantics across them.
+        $projectRoot = Join-Path $TestDrive ('sandbox-' + [guid]::NewGuid().Guid)
+        New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
+        $expected = Join-Path $projectRoot 'evidence/automation/runbook-x/evidence-manifest.json'
+        $abs = Resolve-RunbookEvidencePath `
+            -Path 'evidence/automation/runbook-x/evidence-manifest.json' `
+            -ProjectRoot $projectRoot
+        $abs | Should -Be $expected
+    }
+
+    It 'C2 follow-up: Resolve-RunbookEvidencePath returns absolute paths unchanged' {
+        $projectRoot = Join-Path $TestDrive ('sandbox-' + [guid]::NewGuid().Guid)
+        $absoluteManifestPath = Join-Path $TestDrive 'already/absolute/manifest.json'
+        $abs = Resolve-RunbookEvidencePath `
+            -Path $absoluteManifestPath `
+            -ProjectRoot $projectRoot
+        $abs | Should -Be $absoluteManifestPath
+    }
+
+    It 'C2: forces artifactRoot to empty string regardless of fixture content' {
+        # press-enter.json sets artifactRoot to a fixture path under tools/tests/fixtures.
+        # The runtime persists that string into manifest references and ignores it for
+        # writes, breaking "manifestPath -> artifactRefs[*].path" navigation. We
+        # overwrite to '' so the runtime's fallback uses outputDirectory instead.
+        $result = Resolve-RunbookPayload `
+            -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
+            -RequestId 'runbook-input-dispatch-c2-test' `
+            -ProjectRoot $script:C1Root
+
+        $result.Payload['artifactRoot'] | Should -Be ''
+
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.artifactRoot | Should -Be ''
+    }
 }
 
 # ---------------------------------------------------------------------------

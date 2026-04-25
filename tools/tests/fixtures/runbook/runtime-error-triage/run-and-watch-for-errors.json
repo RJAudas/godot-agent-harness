@@ -1,5 +1,4 @@
 {
-  "_note": "Fast smoke-test fixture: stopAfterValidation=true. The playtest exits as soon as the harness validates the scene, so runtime errors that occur during _ready or after will NOT be captured. Use run-and-watch-for-errors-no-early-stop.json (the default in the godot-debug-runtime skill) when you actually want to triage runtime errors.",
   "requestId": "runbook-runtime-error-triage-FIXTURE",
   "scenarioId": "runbook-runtime-error-triage-scenario",
   "runId": "runbook-runtime-error-triage-run",

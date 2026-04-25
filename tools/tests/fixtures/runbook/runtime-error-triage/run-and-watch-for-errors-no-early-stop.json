@@ -1,5 +1,4 @@
 {
-  "_note": "Default fixture for runtime-error triage. Does NOT stopAfterValidation, so the playtest is allowed to run far enough to surface errors that occur during _ready or in early gameplay frames. Use the smoke-test fixture (run-and-watch-for-errors.json) only for fast capability checks where you don't expect errors.",
   "requestId": "runbook-runtime-error-triage-FIXTURE",
   "scenarioId": "runbook-runtime-error-triage-scenario",
   "runId": "runbook-runtime-error-triage-run",
@@ -12,8 +11,7 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": false,
-    "frameLimit": 600
+    "stopAfterValidation": false
   },
   "requestedBy": "runbook-fixture",
   "createdAt": "2026-04-25T00:00:00Z"

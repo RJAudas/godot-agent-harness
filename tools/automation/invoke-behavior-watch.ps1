@@ -229,21 +229,25 @@ catch {
 }
 
 # B3: zero samples almost always means the target node was not present in the
-# scene at sample time. Read the request payload to surface which node(s) the
-# agent asked for so the user has something actionable to investigate.
+# scene at sample time. Surface the watched nodePath(s) from the already-parsed
+# request payload so the user has something actionable to investigate.
+# Reuse $materialized.Payload (a hashtable produced by Resolve-RunbookPayload)
+# instead of re-reading the fixture file -- the file may already have been
+# consumed by the broker, and re-reading via $RequestFixturePath also skips
+# the repo-relative-to-absolute resolution that Resolve-RunbookPayload does.
 if ($sampleCount -eq 0) {
     try {
-        $requestText = if ($hasFixture) {
-            Get-Content -LiteralPath $RequestFixturePath -Raw
-        } else {
-            $RequestJson
-        }
-        $req = $requestText | ConvertFrom-Json -Depth 20 -ErrorAction SilentlyContinue
-        $hasBwr = $null -ne $req -and $null -ne ($req | Get-Member -Name 'behaviorWatchRequest' -ErrorAction SilentlyContinue)
-        if ($hasBwr -and $null -ne $req.behaviorWatchRequest -and $null -ne $req.behaviorWatchRequest.targets) {
-            foreach ($t in @($req.behaviorWatchRequest.targets)) {
-                if ($null -ne $t -and -not [string]::IsNullOrWhiteSpace([string]$t.nodePath)) {
-                    $warnings.Add("target node not found or never sampled: $([string]$t.nodePath)")
+        $payload = $materialized.Payload
+        if ($null -ne $payload -and $payload.ContainsKey('behaviorWatchRequest')) {
+            $bwr = $payload['behaviorWatchRequest']
+            if ($null -ne $bwr -and $bwr -is [hashtable] -and $bwr.ContainsKey('targets')) {
+                foreach ($t in @($bwr['targets'])) {
+                    if ($null -ne $t -and $t -is [hashtable] -and $t.ContainsKey('nodePath')) {
+                        $np = [string]$t['nodePath']
+                        if (-not [string]::IsNullOrWhiteSpace($np)) {
+                            $warnings.Add("target node not found or never sampled: $np")
+                        }
+                    }
                 }
             }
         }
@@ -252,7 +256,7 @@ if ($sampleCount -eq 0) {
         }
     }
     catch {
-        $warnings.Add("zero samples captured; could not parse request payload to identify target node ($($_.Exception.Message))")
+        $warnings.Add("zero samples captured; could not inspect request payload to identify target node ($($_.Exception.Message))")
     }
 }
 

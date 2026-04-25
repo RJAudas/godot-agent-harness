@@ -16,7 +16,7 @@ disable-model-invocation: false
 $ARGUMENTS
 ```
 
-Treat `$ARGUMENTS` as an optional fixture path. **Default: `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json`** — this fixture sets `stopAfterValidation=false` and `frameLimit=600` so the playtest actually runs long enough for `_ready` errors and early-frame failures to surface. The older `run-and-watch-for-errors.json` is a fast smoke-test (`stopAfterValidation=true`); use it only when you don't expect errors. Ask the user which project root to target; do not guess.
+Treat `$ARGUMENTS` as an optional fixture path. **Default: `tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json`** — this fixture sets `stopAfterValidation=false` so the playtest runs past the harness's startup validation pass and `_ready` errors / early-frame failures actually surface. (For a clean game this means the run ends at the orchestration's `-TimeoutSeconds` budget — that's the expected "no errors caught" signal.) The older `run-and-watch-for-errors.json` is a fast smoke-test (`stopAfterValidation=true`); use it only when you don't expect errors. Ask the user which project root to target; do not guess.
 
 ## Execution
 

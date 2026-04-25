@@ -75,6 +75,12 @@ if (-not $DisplayName) {
     $DisplayName = $Name
 }
 
+# Minimal project.godot — only the [application] section. The harness-required
+# [autoload] and [editor_plugins] blocks are intentionally absent here; they reference
+# addon paths and class names that scaffold-sandbox does not own. The chained
+# tools/deploy-game-harness.ps1 call below appends both blocks. Consequence: this
+# script is not a standalone tool — the deploy step is required to produce a
+# functional harness project.
 $projectGodot = @"
 ; Engine configuration file.
 
@@ -112,6 +118,9 @@ if ($PSCmdlet.ShouldProcess($mainScenePath, 'Write scenes/main.tscn')) {
     Write-Utf8NoBomFile -Path $mainScenePath -Content ($mainScene + [Environment]::NewLine)
 }
 
+# Deploy step completes project.godot with the [autoload] and [editor_plugins] blocks
+# (and installs the addon, agent docs, etc.). Without this, the scaffolded project opens
+# in Godot but has no harness wiring.
 $deployScript = Join-Path $repoRoot 'tools/deploy-game-harness.ps1'
 $deployResult = & $deployScript -GameRoot $sandboxPath -TargetScene $TargetScene -PassThru
 

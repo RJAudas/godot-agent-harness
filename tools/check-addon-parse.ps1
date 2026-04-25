@@ -69,6 +69,12 @@ if (-not (Test-Path -LiteralPath $projectAddonLink)) {
     if (-not (Test-Path -LiteralPath $projectAddons)) {
         New-Item -ItemType Directory -Path $projectAddons | Out-Null
     }
+    # Windows uses a directory junction (`mklink /J`) instead of `New-Item -SymbolicLink`.
+    # Junctions don't require Developer Mode or admin elevation; symlinks do, so a casual
+    # "simplification" to New-Item would break parse-checks on every contributor machine
+    # without those privileges enabled. Junctions are restricted to same-volume directories,
+    # which is fine here — addon source and project both live in this repo. POSIX uses real
+    # symlinks (no elevation issue).
     if ($IsWindows -or $env:OS -eq 'Windows_NT') {
         cmd /c mklink /J "`"$projectAddonLink`"" "`"$addonSource`"" | Out-Null
     } else {
@@ -136,7 +142,9 @@ finally {
     Remove-Item -LiteralPath $stdoutPath -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $stderrPath -ErrorAction SilentlyContinue
     if ($createdLink -and (Test-Path -LiteralPath $projectAddonLink)) {
-        # Junctions on Windows must be removed with rmdir, not Remove-Item -Recurse.
+        # Junctions on Windows must be removed with `rmdir`, which removes the link entry
+        # only. Remove-Item -Recurse -Force would follow the junction and delete the actual
+        # addon source under addons/agent_runtime_harness/ — never use that here.
         if ($IsWindows -or $env:OS -eq 'Windows_NT') {
             cmd /c rmdir "`"$projectAddonLink`"" | Out-Null
         } else {

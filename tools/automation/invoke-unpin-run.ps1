@@ -28,14 +28,14 @@
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-unpin-run.ps1 `
-        -ProjectRoot integration-testing/pong `
+        -ProjectRoot ./integration-testing/probe `
         -PinName bug-repro-jumpscare
 
     Removes the named pin and emits a lifecycle envelope.
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-unpin-run.ps1 `
-        -ProjectRoot integration-testing/pong `
+        -ProjectRoot ./integration-testing/probe `
         -PinName bug-repro-jumpscare `
         -DryRun
 

@@ -40,17 +40,21 @@
     Polling interval for run-result.json. Default: 250.
 
 .EXAMPLE
+    # First, scaffold a sandbox to triage (idempotent; -Force re-creates):
+    pwsh ./tools/scaffold-sandbox.ps1 -Name probe
+
+    # Then triage:
     pwsh ./tools/automation/invoke-build-error-triage.ps1 `
-        -ProjectRoot integration-testing/pong `
-        -RequestFixturePath tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json
+        -ProjectRoot ./integration-testing/probe `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json
 
     Runs the project and emits a JSON envelope. On build failure:
     outcome.firstDiagnostic contains the first error's file, line, and message.
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-build-error-triage.ps1 `
-        -ProjectRoot integration-testing/pong `
-        -RequestFixturePath tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json `
+        -ProjectRoot ./integration-testing/probe `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/build-error-triage/build-then-capture.json `
         -IncludeRawBuildOutput
 
     Same as above, also setting outcome.rawBuildOutputPath.

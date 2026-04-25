@@ -38,16 +38,20 @@
     Default: 250.
 
 .EXAMPLE
+    # First, scaffold a sandbox to dispatch into (idempotent; -Force re-creates):
+    pwsh ./tools/scaffold-sandbox.ps1 -Name probe
+
+    # Then dispatch:
     pwsh ./tools/automation/invoke-input-dispatch.ps1 `
-        -ProjectRoot integration-testing/pong `
-        -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json
+        -ProjectRoot ./integration-testing/probe `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/input-dispatch/press-enter.json
 
     Dispatches the Enter key once and emits a JSON envelope with
     outcome.dispatchedEventCount and outcome.outcomesPath.
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-input-dispatch.ps1 `
-        -ProjectRoot integration-testing/pong `
+        -ProjectRoot ./integration-testing/probe `
         -RequestJson '{"requestId":"x","scenarioId":"s","runId":"r","targetScene":"res://scenes/main.tscn","outputDirectory":"res://evidence/r","artifactRoot":"tools/tests/fixtures","capturePolicy":{"startup":true},"stopPolicy":{"stopAfterValidation":true},"requestedBy":"agent","createdAt":"2026-01-01T00:00:00Z","inputDispatchScript":{"events":[{"kind":"key","identifier":"ENTER","phase":"press","frame":30},{"kind":"key","identifier":"ENTER","phase":"release","frame":32}]}}'
 
     Same as above, using an inline JSON payload instead of a fixture file.

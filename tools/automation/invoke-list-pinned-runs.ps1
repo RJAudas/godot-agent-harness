@@ -21,7 +21,7 @@
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-list-pinned-runs.ps1 `
-        -ProjectRoot integration-testing/pong
+        -ProjectRoot ./integration-testing/probe
 
     Emits a lifecycle envelope with pinnedRunIndex[] listing every named pin.
 #>

@@ -37,18 +37,23 @@
     Default: 250.
 
 .EXAMPLE
+    # First, scaffold a sandbox to inspect (idempotent; -Force re-creates):
+    pwsh ./tools/scaffold-sandbox.ps1 -Name probe
+
+    # Then capture:
     pwsh ./tools/automation/invoke-scene-inspection.ps1 `
-        -ProjectRoot integration-testing/pong
+        -ProjectRoot ./integration-testing/probe
 
     Captures the startup scene tree and emits a JSON envelope with
     outcome.sceneTreePath and outcome.nodeCount.
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-scene-inspection.ps1 `
-        -ProjectRoot D:/gameDev/pong `
+        -ProjectRoot ./integration-testing/probe `
         -TargetScene res://main.tscn
 
-    Same as above, but for a project whose main scene is at the repo root.
+    Same as above, but for a project whose main scene lives at the repo root
+    (i.e., a non-default scene path passed via -TargetScene).
 #>
 [CmdletBinding()]
 param(

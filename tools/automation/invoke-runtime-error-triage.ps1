@@ -39,9 +39,13 @@
     Polling interval for run-result.json. Default: 250.
 
 .EXAMPLE
+    # First, scaffold a sandbox to run (idempotent; -Force re-creates):
+    pwsh ./tools/scaffold-sandbox.ps1 -Name probe
+
+    # Then triage:
     pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
-        -ProjectRoot integration-testing/pong `
-        -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
+        -ProjectRoot ./integration-testing/probe `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
 
     Runs the project with pauseOnError enabled and emits a JSON envelope.
     On runtime error: outcome.latestErrorSummary contains the offending file, line,
@@ -49,8 +53,8 @@
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
-        -ProjectRoot integration-testing/pong `
-        -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json `
+        -ProjectRoot ./integration-testing/probe `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json `
         -IncludeFullStack
 
     Same as above, with full stack trace in outcome.latestErrorSummary.message.

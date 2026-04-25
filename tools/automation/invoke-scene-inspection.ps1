@@ -164,7 +164,46 @@ if (-not (Test-Path -LiteralPath $requestsDir)) {
 # Write to the canonical path the editor broker watches (run-request.json),
 # not a per-request filename that the broker would never pick up.
 $canonicalPath = Join-Path $requestsDir 'run-request.json'
-$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
+
+# C1: validate-then-rename. The editor broker consumes $canonicalPath the
+# instant FileSystemWatcher fires; validating after the write means the
+# validator's Resolve-Path crashes when the broker has already moved the
+# file. Write to <canonical>.tmp first, validate the temp path (which the
+# broker is not watching), then atomic-rename into place. Mirrors the
+# pattern in Resolve-RunbookPayload. (Pass 2 H3 will fold this script's
+# inline write into Resolve-RunbookPayload via -InlineJson.)
+$tmpPath = "$canonicalPath.tmp"
+$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tmpPath -Encoding utf8
+
+$schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+$schemaResolved = Resolve-RunbookRepoPath -Path $schemaPath
+$validation = & pwsh -NoProfile -File (Resolve-RunbookRepoPath -Path 'tools/validate-json.ps1') `
+    -InputPath $tmpPath -SchemaPath $schemaResolved -AllowInvalid 2>&1
+$validationExit = $LASTEXITCODE
+
+try {
+    if ($validationExit -ne 0) {
+        $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+        $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
+        Exit-Failure 'request-invalid' "Schema validator could not run (exit $validationExit): $captured"
+    }
+    $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+    $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
+    $parsed = $captured | ConvertFrom-Json -Depth 20
+    if (-not $parsed.valid) {
+        $errDetail = if ($null -ne $parsed.PSObject.Properties['error']) { $parsed.error } else { 'schema validation failed' }
+        Exit-Failure 'request-invalid' "Run request does not satisfy schema '$schemaPath': $errDetail"
+    }
+    Move-Item -LiteralPath $tmpPath -Destination $canonicalPath -Force
+}
+catch {
+    Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+    if ($_.Exception.Message -match '^Run request does not satisfy|^Schema validator could not run') {
+        # Already routed through Exit-Failure; the catch is just for cleanup.
+        throw
+    }
+    Exit-Failure 'request-invalid' "Failed to validate run-request.json: $($_.Exception.Message)"
+}
 
 # Step 6-7: Request + poll
 $runResult = Invoke-RunbookRequest `

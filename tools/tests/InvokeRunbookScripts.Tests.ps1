@@ -123,6 +123,50 @@ exit 0
 }
 
 # ---------------------------------------------------------------------------
+# C1 — Resolve-RunbookPayload validates before writing canonical path
+# ---------------------------------------------------------------------------
+
+Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
+    BeforeEach {
+        $script:C1Root = Join-Path $TestDrive ('c1-root-' + [guid]::NewGuid().Guid)
+        New-Item -ItemType Directory -Path $script:C1Root -Force | Out-Null
+        $script:C1RequestsDir = Join-Path $script:C1Root 'harness/automation/requests'
+        $script:C1Canonical   = Join-Path $script:C1RequestsDir 'run-request.json'
+        $script:C1Tmp         = "$script:C1Canonical.tmp"
+    }
+
+    It 'C1: writes canonical path on a valid fixture and leaves no .tmp behind' {
+        # Use a real shipped fixture which the schema accepts.
+        $result = Resolve-RunbookPayload `
+            -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
+            -RequestId 'runbook-input-dispatch-c1-success' `
+            -ProjectRoot $script:C1Root
+
+        $result.TempRequestPath | Should -Be $script:C1Canonical
+        Test-Path -LiteralPath $script:C1Canonical | Should -BeTrue
+        Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
+
+        # Canonical content should be the merged payload with our new requestId.
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.requestId | Should -Be 'runbook-input-dispatch-c1-success'
+    }
+
+    It 'C1: throws and leaves no canonical / no .tmp when payload fails schema validation' {
+        # Construct an inline payload that is missing several required fields.
+        $bad = @{ requestId = 'will-be-overwritten'; runId = 'r' } | ConvertTo-Json -Depth 5
+
+        { Resolve-RunbookPayload `
+            -InlineJson $bad `
+            -RequestId 'runbook-c1-schema-fail' `
+            -ProjectRoot $script:C1Root
+        } | Should -Throw -ExpectedMessage '*does not satisfy schema*'
+
+        Test-Path -LiteralPath $script:C1Canonical | Should -BeFalse
+        Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
+    }
+}
+
+# ---------------------------------------------------------------------------
 # RUNBOOK static checks (T007)
 # ---------------------------------------------------------------------------
 

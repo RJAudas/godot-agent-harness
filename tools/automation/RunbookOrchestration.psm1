@@ -216,7 +216,39 @@ function Resolve-RunbookPayload {
         New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
     }
     $canonicalPath = Join-Path $requestsDir 'run-request.json'
-    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $canonicalPath -Encoding utf8
+
+    # C1: validate-then-rename. The editor broker watches $canonicalPath with
+    # FileSystemWatcher and consumes (deletes) the file the moment it appears.
+    # Previously the orchestrator wrote $canonicalPath and then asked the schema
+    # validator to read it back -- but the broker had already moved/removed it,
+    # so every successful run looked like failureKind=request-invalid. Fix: write
+    # the JSON to <canonical>.tmp first, run schema validation against the temp
+    # path (which the broker is not watching), and only on success atomic-rename
+    # into place. The broker never sees an unvalidated file.
+    $tmpPath = "$canonicalPath.tmp"
+    $payload | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $tmpPath -Encoding utf8
+
+    $schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
+    $validation = Invoke-Helper -ScriptPath 'tools/validate-json.ps1' -ArgumentList @(
+        '-InputPath', $tmpPath,
+        '-SchemaPath', $schemaPath,
+        '-AllowInvalid'
+    )
+    try {
+        if ($validation.ExitCode -ne 0) {
+            throw "Schema validator could not run (exit $($validation.ExitCode)): $($validation.CapturedOutput)"
+        }
+        $parsedValidation = $validation.CapturedOutput | ConvertFrom-Json -Depth 20
+        if (-not $parsedValidation.valid) {
+            $errDetail = if ($null -ne $parsedValidation.PSObject.Properties['error']) { $parsedValidation.error } else { 'schema validation failed' }
+            throw "Run request does not satisfy schema '$schemaPath': $errDetail"
+        }
+        Move-Item -LiteralPath $tmpPath -Destination $canonicalPath -Force
+    }
+    catch {
+        Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
 
     return [pscustomobject]@{
         Payload         = $payload
@@ -257,48 +289,11 @@ function Invoke-RunbookRequest {
         [int]$PollIntervalMilliseconds = 250
     )
 
-    # Validate the payload in place. Historically this was delegated to
-    # request-editor-evidence-run.ps1, but that script regenerates a payload
-    # from CLI args + config and overwrites the file, stripping runbook-only
-    # fields like inputDispatchScript and replacing the requestId with a fresh
-    # GUID. Both behaviors guaranteed the broker either saw a malformed request
-    # or a request the poll loop could never match. We validate the existing
-    # file directly instead and surface validation errors as a loud failure.
-    $schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
-    $validator  = 'tools/validate-json.ps1'
-    $validationResult = Invoke-Helper -ScriptPath $validator -ArgumentList @(
-        '-InputPath', $RequestPath,
-        '-SchemaPath', $schemaPath,
-        '-AllowInvalid'
-    )
-    if ($validationResult.ExitCode -ne 0) {
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Schema validator failed to run (exit $($validationResult.ExitCode)). Output: $($validationResult.CapturedOutput)"
-            RunResult   = $null
-        }
-    }
-    try {
-        $parsedValidation = $validationResult.CapturedOutput | ConvertFrom-Json -Depth 20
-    }
-    catch {
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Could not parse schema-validation output. Raw: $($validationResult.CapturedOutput)"
-            RunResult   = $null
-        }
-    }
-    if (-not $parsedValidation.valid) {
-        $errDetail = if ($null -ne $parsedValidation.PSObject.Properties['error']) { $parsedValidation.error } else { 'schema validation failed' }
-        return [pscustomobject]@{
-            Ok          = $false
-            FailureKind = 'request-invalid'
-            Diagnostic  = "Run request at '$RequestPath' does not satisfy schema '$schemaPath': $errDetail"
-            RunResult   = $null
-        }
-    }
+    # NOTE: schema validation moved upstream into Resolve-RunbookPayload (and the
+    # inline-write block in invoke-scene-inspection.ps1). The broker consumes the
+    # canonical request the moment it appears, so by the time we get here the
+    # file may already be gone. Validating after the broker has acted produced
+    # spurious request-invalid envelopes for runs that completed cleanly.
 
     $runResultPath = Join-Path $ProjectRoot 'harness/automation/results/run-result.json'
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)

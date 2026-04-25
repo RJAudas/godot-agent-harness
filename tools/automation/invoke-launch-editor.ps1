@@ -104,32 +104,69 @@ function Resolve-GodotBinary {
 
 function Get-EditorProcessesForProject {
     param([Parameter(Mandatory)][string]$ProjectRoot)
-    # Match Godot processes whose CommandLine includes --path <ProjectRoot> so
-    # we never touch unrelated editor instances. CIM is Windows-only; on POSIX
-    # we fall back to a name match (good enough for the common case).
+    # Match Godot processes whose command-line carries `--path <ProjectRoot>` as a
+    # discrete argument (quoted or unquoted) so we never confuse "/proj" with
+    # "/proj2" or stop unrelated editor instances. The match enforces a token
+    # boundary after the path (whitespace, closing quote, or end-of-string) and
+    # treats forward / back slashes as interchangeable on Windows.
     $isWin = $IsWindows -or $env:OS -eq 'Windows_NT'
-    $matches = @()
+
+    $found = [System.Collections.Generic.List[object]]::new()
+
     if ($isWin) {
+        # Case-insensitive regex requiring `--path` (or `--path=`) followed by
+        # an exact, slash-normalised root token bounded by whitespace or EOL.
+        $normRoot = $ProjectRoot.TrimEnd('\', '/').Replace('/', '\')
+        $rootEsc = [regex]::Escape($normRoot)
+        $pattern = '(?i)--path(?:\s+|=)("?)' + $rootEsc + '\1(?=\s|$)'
+
         try {
             $procs = Get-CimInstance -ClassName Win32_Process -Filter "Name LIKE 'Godot%'" -ErrorAction SilentlyContinue
             foreach ($p in @($procs)) {
                 $cmd = [string]$p.CommandLine
                 if ([string]::IsNullOrEmpty($cmd)) { continue }
-                # Compare on normalised slashes since Godot may have been launched with either.
                 $normCmd = $cmd.Replace('/', '\')
-                $normRoot = $ProjectRoot.Replace('/', '\')
-                if ($normCmd -like "*--path*$normRoot*") {
-                    $matches += [pscustomobject]@{ Id = [int]$p.ProcessId; CommandLine = $cmd; Name = [string]$p.Name }
+                if ($normCmd -match $pattern) {
+                    [void]$found.Add([pscustomobject]@{ Id = [int]$p.ProcessId; CommandLine = $cmd; Name = [string]$p.Name })
                 }
             }
         }
         catch { }
+        return ,@($found)
     }
-    else {
-        $matches = @(Get-Process -Name 'Godot*' -ErrorAction SilentlyContinue |
-            Select-Object -Property @{N='Id';E={$_.Id}}, @{N='Name';E={$_.ProcessName}}, @{N='CommandLine';E={''}})
+
+    # POSIX: shell out to /usr/bin/env ps for cmdline inspection. We deliberately
+    # avoid the `ps` alias (resolves to Get-Process in PowerShell) and skip the
+    # name-only `Get-Process Godot*` fallback -- that returns every Godot
+    # editor on the box and breaks the "leave unrelated instances alone"
+    # contract that invoke-stop-editor depends on.
+    $normRoot = $ProjectRoot.TrimEnd('/')
+    $rootEsc = [regex]::Escape($normRoot)
+    $pattern = '--path(?:\s+|=)("?)' + $rootEsc + '\1(?=\s|$)'
+
+    $psBinary = (Get-Command ps -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($null -eq $psBinary) { return ,@() }
+
+    $psLines = $null
+    try {
+        $psLines = & $psBinary.Source -eo 'pid=,args=' 2>$null
     }
-    return ,$matches
+    catch { return ,@() }
+
+    foreach ($line in @($psLines)) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrEmpty($trimmed)) { continue }
+        if ($trimmed -notmatch '^\s*\d+\s+') { continue }
+        $procId = [int]([regex]::Match($trimmed, '^\s*(\d+)\s+').Groups[1].Value)
+        $cmd = $trimmed -replace '^\s*\d+\s+', ''
+        # Restrict to Godot binaries to avoid matching unrelated invocations
+        # that happen to carry `--path`.
+        if ($cmd -notmatch '(?i)\bGodot') { continue }
+        if ($cmd -match $pattern) {
+            [void]$found.Add([pscustomobject]@{ Id = $procId; CommandLine = $cmd; Name = 'Godot' })
+        }
+    }
+    return ,@($found)
 }
 
 function Test-CapabilityFresh {
@@ -207,6 +244,13 @@ if (-not (Test-Path -LiteralPath $logDir)) {
 $stdoutLog = Join-Path $logDir 'editor.stdout.log'
 $stderrLog = Join-Path $logDir 'editor.stderr.log'
 
+# Capture spawn time BEFORE Start-Process so the post-spawn poll loop can
+# require capability.json's mtime >= $spawnedAt. Otherwise a stale
+# capability.json from a prior session that's still within
+# MaxCapabilityAgeSeconds would short-circuit the cold launch path and
+# return success before the freshly spawned editor is actually ready.
+$spawnedAt = [DateTime]::UtcNow
+
 try {
     $proc = Start-Process -FilePath $godot `
         -ArgumentList @('--editor', '--path', $resolvedRoot, '--verbose') `
@@ -218,13 +262,14 @@ catch {
     Exit-Failure 'editor-not-running' "Failed to spawn Godot at '$godot': $($_.Exception.Message)"
 }
 
-# Poll capability.json until it appears + parses, OR until ReadyTimeoutSeconds.
+# Poll capability.json until the *newly spawned* editor publishes one, OR until
+# ReadyTimeoutSeconds. "Newly published" = file exists, parses cleanly, and its
+# LastWriteTimeUtc >= $spawnedAt (ignore prior-session leftovers).
 $deadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
 $age = $null
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 500
 
-    # If the editor process already died, surface that immediately.
     if ($proc.HasExited) {
         $tailErr = if (Test-Path -LiteralPath $stderrLog) {
             (Get-Content -LiteralPath $stderrLog -Tail 5 -ErrorAction SilentlyContinue) -join '; '
@@ -232,8 +277,16 @@ while ((Get-Date) -lt $deadline) {
         Exit-Failure 'editor-not-running' "Godot process exited with code $($proc.ExitCode) before capability.json appeared. stderr tail: $tailErr"
     }
 
-    $age = Test-CapabilityFresh -Path $capabilityPath -MaxAgeSeconds $MaxCapabilityAgeSeconds
-    if ($null -ne $age) { break }
+    if (Test-Path -LiteralPath $capabilityPath) {
+        $mtimeUtc = (Get-Item -LiteralPath $capabilityPath).LastWriteTimeUtc
+        if ($mtimeUtc -ge $spawnedAt) {
+            $candidateAge = Test-CapabilityFresh -Path $capabilityPath -MaxAgeSeconds $MaxCapabilityAgeSeconds
+            if ($null -ne $candidateAge) {
+                $age = $candidateAge
+                break
+            }
+        }
+    }
 }
 
 if ($null -eq $age) {
@@ -253,5 +306,17 @@ $outcome = @{
 $envelope = Write-RunbookEnvelope -Status 'success' -RunId $runId -RequestId $requestId `
     -Diagnostics @() -Outcome $outcome
 $envelope
-Write-RunbookStderrSummary "OK: spawned editor PID $($proc.Id); capability ready in $((Get-Date) - (Get-Process -Id $proc.Id).StartTime | Select-Object -ExpandProperty TotalSeconds | ForEach-Object { [int]$_ })s (or ${age}s old)."
+
+# Summary is best-effort. Get-Process can throw under StrictMode if the editor
+# has already exited (or its PID has been recycled), but the success envelope
+# is already on stdout -- never let a cosmetic stderr line turn a successful
+# invocation into a failing one.
+try {
+    $startTime = (Get-Process -Id $proc.Id -ErrorAction Stop).StartTime
+    $readySecs = [int]((Get-Date) - $startTime).TotalSeconds
+    Write-RunbookStderrSummary "OK: spawned editor PID $($proc.Id); capability ready in ${readySecs}s (mtime ${age}s ago)."
+}
+catch {
+    Write-RunbookStderrSummary "OK: spawned editor PID $($proc.Id); capability mtime ${age}s ago."
+}
 exit 0

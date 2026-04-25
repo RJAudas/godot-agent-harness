@@ -50,27 +50,61 @@ function Exit-Failure {
 
 function Get-EditorProcessesForProject {
     param([Parameter(Mandatory)][string]$ProjectRoot)
+    # Match Godot processes whose command-line carries `--path <ProjectRoot>` as a
+    # discrete argument so we never accidentally stop an unrelated editor when
+    # one project root is a prefix of another (C:\proj vs C:\proj2). Token
+    # boundary required after the path; slash differences normalised on Windows.
     $isWin = $IsWindows -or $env:OS -eq 'Windows_NT'
-    $matches = @()
+
+    $found = [System.Collections.Generic.List[int]]::new()
+
     if ($isWin) {
+        $normRoot = $ProjectRoot.TrimEnd('\', '/').Replace('/', '\')
+        $rootEsc = [regex]::Escape($normRoot)
+        $pattern = '(?i)--path(?:\s+|=)("?)' + $rootEsc + '\1(?=\s|$)'
+
         try {
             $procs = Get-CimInstance -ClassName Win32_Process -Filter "Name LIKE 'Godot%'" -ErrorAction SilentlyContinue
             foreach ($p in @($procs)) {
                 $cmd = [string]$p.CommandLine
                 if ([string]::IsNullOrEmpty($cmd)) { continue }
                 $normCmd = $cmd.Replace('/', '\')
-                $normRoot = $ProjectRoot.Replace('/', '\')
-                if ($normCmd -like "*--path*$normRoot*") {
-                    $matches += [int]$p.ProcessId
+                if ($normCmd -match $pattern) {
+                    [void]$found.Add([int]$p.ProcessId)
                 }
             }
         }
         catch { }
+        return ,@($found)
     }
-    else {
-        $matches = @(Get-Process -Name 'Godot*' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+
+    # POSIX: shell out to ps. Skip Get-Process Godot* fallback -- returning
+    # every Godot editor on the box would risk killing unrelated instances.
+    $normRoot = $ProjectRoot.TrimEnd('/')
+    $rootEsc = [regex]::Escape($normRoot)
+    $pattern = '--path(?:\s+|=)("?)' + $rootEsc + '\1(?=\s|$)'
+
+    $psBinary = (Get-Command ps -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($null -eq $psBinary) { return ,@() }
+
+    $psLines = $null
+    try {
+        $psLines = & $psBinary.Source -eo 'pid=,args=' 2>$null
     }
-    return ,$matches
+    catch { return ,@() }
+
+    foreach ($line in @($psLines)) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrEmpty($trimmed)) { continue }
+        if ($trimmed -notmatch '^\s*\d+\s+') { continue }
+        $procId = [int]([regex]::Match($trimmed, '^\s*(\d+)\s+').Groups[1].Value)
+        $cmd = $trimmed -replace '^\s*\d+\s+', ''
+        if ($cmd -notmatch '(?i)\bGodot') { continue }
+        if ($cmd -match $pattern) {
+            [void]$found.Add($procId)
+        }
+    }
+    return ,@($found)
 }
 
 if (-not (Test-Path -LiteralPath $resolvedRoot)) {

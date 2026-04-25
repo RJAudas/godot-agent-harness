@@ -69,7 +69,11 @@ function Exit-Failure {
         -DryRun $DryRun.IsPresent -Diagnostics @($Message) -PlannedPaths @() -PinName $PinName
     $label = $status.ToUpperInvariant()
     Write-RunbookStderrSummary "${label}: $Kind; $Message"
-    exit 1
+    # Exit 0 for `refused` -- the script ran successfully and correctly declined a
+    # precondition (e.g. pin-target-not-found). Exit 1 only for unexpected failures
+    # the caller should investigate. Envelope `status` field is the authoritative
+    # signal in either case.
+    if ($status -eq 'refused') { exit 0 } else { exit 1 }
 }
 
 $removeResult = Remove-PinnedRun -ProjectRoot $resolvedRoot -PinName $PinName -DryRun:$DryRun

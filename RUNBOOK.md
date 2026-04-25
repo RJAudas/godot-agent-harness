@@ -72,6 +72,17 @@ On failure: `status = "failure"`, `failureKind` is one of
 | `timeout` | Increase `-TimeoutSeconds` or check if the editor is stuck. |
 | `internal` | Read `diagnostics[0]`; file a bug against the harness. |
 
+## Exit-code convention
+
+Runtime-verification scripts exit non-zero for any `status=failure` envelope.
+
+Lifecycle scripts (pin / unpin) distinguish two non-success outcomes:
+
+- `status="refused"` → **exit 0**. The script ran successfully and correctly declined a precondition (e.g. `pin-name-collision`, `pin-target-not-found`). Read the envelope's `failureKind` and `diagnostics[0]` to learn why.
+- `status="failed"` → **exit 1**. An unexpected error the caller should investigate (e.g. `io-error`).
+
+The envelope's `status` field is authoritative in both cases; the exit code is a fast-path signal for shell pipelines.
+
 ## Prerequisites
 
 - PowerShell 7+ (`pwsh`) on `PATH`.

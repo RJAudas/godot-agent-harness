@@ -174,6 +174,25 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
         $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
         $written.artifactRoot | Should -Be ''
     }
+
+    It 'M6: substitutes $REQUEST_ID placeholder in outputDirectory with the resolved RequestId' {
+        # Fixtures declare outputDirectory as "res://evidence/automation/<workflow>-$REQUEST_ID"
+        # so each run lands in its own collision-free directory. Resolve-RunbookPayload must
+        # perform the substitution before schema validation and before writing run-request.json.
+        $requestId = 'runbook-input-dispatch-m6-test'
+        $result = Resolve-RunbookPayload `
+            -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
+            -RequestId $requestId `
+            -ProjectRoot $script:C1Root
+
+        $expected = "res://evidence/automation/runbook-input-dispatch-$requestId"
+        $result.Payload['outputDirectory'] | Should -Be $expected
+
+        # The persisted run-request.json must carry the substituted value (no literal token).
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.outputDirectory | Should -Be $expected
+        $written.outputDirectory | Should -Not -Match '\$REQUEST_ID'
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -307,6 +326,33 @@ Describe 'RUNBOOK static checks' {
             $help = Get-Help $script.FullName -Full 2>$null
             $help.Synopsis | Should -Not -BeNullOrEmpty -Because "$($script.Name) must have .SYNOPSIS"
             $help.Description | Should -Not -BeNullOrEmpty -Because "$($script.Name) must have .DESCRIPTION"
+        }
+    }
+
+    It 'L2: every invoke-*.ps1 .EXAMPLE -ProjectRoot points at the canonical probe sandbox' {
+        # Fresh agents copy-paste these examples verbatim. integration-testing/ is git-ignored,
+        # so we cannot assert "path exists on disk" in CI; instead we pin every example to
+        # ./integration-testing/probe (the scaffold-sandbox.ps1 default). Anyone running
+        # `tools/scaffold-sandbox.ps1 -Name probe` will produce a directory that satisfies
+        # every example without further setup.
+        $scripts = Get-ChildItem -LiteralPath (Join-Path $script:RepoRootPath 'tools/automation') -Filter 'invoke-*.ps1' -File
+        $allowed = @('integration-testing/probe', './integration-testing/probe')
+        foreach ($script in $scripts) {
+            $help = Get-Help $script.FullName -Full 2>$null
+            $examples = @()
+            if ($help.Examples -and $help.Examples.Example) {
+                $examples = @($help.Examples.Example)
+            }
+            foreach ($example in $examples) {
+                $code = if ($example.Code) { $example.Code } else { '' }
+                $remarks = ($example.Remarks | ForEach-Object { $_.Text }) -join "`n"
+                $exampleText = "$code`n$remarks"
+                $rootMatches = [regex]::Matches($exampleText, '-ProjectRoot\s+([^\s`]+)')
+                foreach ($m in $rootMatches) {
+                    $captured = $m.Groups[1].Value.Trim()
+                    $captured | Should -BeIn $allowed -Because "$($script.Name) example references '$captured' for -ProjectRoot; expected canonical probe sandbox"
+                }
+            }
         }
     }
 

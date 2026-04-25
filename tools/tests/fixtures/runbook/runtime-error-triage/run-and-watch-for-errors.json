@@ -3,7 +3,7 @@
   "scenarioId": "runbook-runtime-error-triage-scenario",
   "runId": "runbook-runtime-error-triage-run",
   "targetScene": "res://scenes/main.tscn",
-  "outputDirectory": "res://evidence/automation/runbook-runtime-error-triage",
+  "outputDirectory": "res://evidence/automation/runbook-runtime-error-triage-$REQUEST_ID",
   "artifactRoot": "tools/tests/fixtures/runbook/runtime-error-triage/evidence",
   "capturePolicy": {
     "startup": true,

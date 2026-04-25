@@ -270,6 +270,15 @@ function Resolve-RunbookPayload {
     $payload = $json | ConvertFrom-Json -Depth 20 -AsHashtable
     $payload['requestId'] = $RequestId
 
+    # Substitute $REQUEST_ID placeholders in outputDirectory so fixtures can declare
+    # collision-free per-run output directories without each invoke script rewriting the
+    # payload. Runs before schema validation so the substituted value is what gets
+    # validated and written to run-request.json. artifactRoot is intentionally excluded:
+    # the C2 block below force-empties it regardless of fixture content.
+    if ($payload.ContainsKey('outputDirectory') -and $payload['outputDirectory'] -is [string]) {
+        $payload['outputDirectory'] = $payload['outputDirectory'].Replace('$REQUEST_ID', $RequestId)
+    }
+
     # C2: artifactRoot is a legacy duplicate of outputDirectory. Every shipped
     # fixture sets it to a path under tools/tests/fixtures/runbook/<workflow>/...
     # and the runtime persisted that string into evidence-manifest.json's

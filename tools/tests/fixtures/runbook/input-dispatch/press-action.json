@@ -3,7 +3,7 @@
   "scenarioId": "runbook-input-dispatch-action-scenario",
   "runId": "runbook-input-dispatch-action-run",
   "targetScene": "res://scenes/main.tscn",
-  "outputDirectory": "res://evidence/automation/runbook-input-dispatch-action",
+  "outputDirectory": "res://evidence/automation/runbook-input-dispatch-action-$REQUEST_ID",
   "artifactRoot": "tools/tests/fixtures/runbook/input-dispatch/evidence",
   "capturePolicy": {
     "startup": true,

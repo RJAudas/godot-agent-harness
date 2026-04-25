@@ -33,14 +33,14 @@
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-pin-run.ps1 `
-        -ProjectRoot integration-testing/pong `
+        -ProjectRoot ./integration-testing/probe `
         -PinName bug-repro-jumpscare
 
     Pins the most recent run. Emits a lifecycle envelope with plannedPaths[].
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-pin-run.ps1 `
-        -ProjectRoot integration-testing/pong `
+        -ProjectRoot ./integration-testing/probe `
         -PinName bug-repro-jumpscare `
         -DryRun
 

@@ -3,7 +3,7 @@
   "scenarioId": "runbook-behavior-watch-scenario",
   "runId": "runbook-behavior-watch-run",
   "targetScene": "res://scenes/main.tscn",
-  "outputDirectory": "res://evidence/automation/runbook-behavior-watch",
+  "outputDirectory": "res://evidence/automation/runbook-behavior-watch-$REQUEST_ID",
   "artifactRoot": "tools/tests/fixtures/runbook/behavior-watch/evidence",
   "capturePolicy": {
     "startup": true,

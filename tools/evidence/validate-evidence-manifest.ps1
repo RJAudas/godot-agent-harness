@@ -52,7 +52,17 @@ function Convert-ToArtifactPath {
         $fullPath = [System.IO.Path]::GetFullPath((Join-Path $base $Path))
     }
 
-    if ($fullPath -ne $base -and -not $fullPath.StartsWith($baseWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+    # Containment check. Use case-insensitive comparison on Windows (NTFS is
+    # case-insensitive by default) and case-sensitive elsewhere — otherwise
+    # a path like 'EVIDENCE/...' could be classified as inside 'evidence/...'
+    # on a case-sensitive Linux/macOS volume even though the OS would treat
+    # them as distinct directories and the artifact would never be found.
+    $comparison = if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+        [System.StringComparison]::OrdinalIgnoreCase
+    } else {
+        [System.StringComparison]::Ordinal
+    }
+    if ($fullPath -ne $base -and -not $fullPath.StartsWith($baseWithSeparator, $comparison)) {
         throw "Artifact path '$Path' resolves outside the base directory '$base'."
     }
 

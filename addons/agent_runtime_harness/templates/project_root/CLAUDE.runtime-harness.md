@@ -4,20 +4,26 @@ This project has the `agent_runtime_harness` addon installed. When the user asks
 
 ## Fast path — one invoke script, one envelope
 
+The runtime invokers all assume a Godot editor is running against the project. Pass `-EnsureEditor` to have them auto-launch one (idempotent: reuses an existing editor when capability.json is fresh).
+
 ```powershell
-# Scene inspection (no input)
+# Scene inspection (no input). -EnsureEditor spawns the editor if needed.
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 `
-  -ProjectRoot "<absolute path to this project>"
+  -ProjectRoot "<absolute path to this project>" -EnsureEditor
 
 # Input dispatch (keypresses / InputMap actions)
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
-  -ProjectRoot "<absolute path to this project>" `
+  -ProjectRoot "<absolute path to this project>" -EnsureEditor `
   -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/input-dispatch/press-enter.json"
 
 # Runtime error triage
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-runtime-error-triage.ps1 `
-  -ProjectRoot "<absolute path to this project>" `
+  -ProjectRoot "<absolute path to this project>" -EnsureEditor `
   -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json"
+
+# When you're done with this project, stop the editor:
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-stop-editor.ps1 `
+  -ProjectRoot "<absolute path to this project>"
 ```
 
 Parse stdout JSON: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`. On success read `manifestPath`, then the one artifact the manifest references.

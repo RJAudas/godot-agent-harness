@@ -86,9 +86,37 @@ The envelope's `status` field is authoritative in both cases; the exit code is a
 ## Prerequisites
 
 - PowerShell 7+ (`pwsh`) on `PATH`.
-- A Godot editor running against an integration-testing sandbox (see
-  `docs/INTEGRATION_TESTING.md` for setup).
+- A Godot editor running against an integration-testing sandbox. Either launch
+  it manually, or pass `-EnsureEditor` to any runtime-verification script and
+  the harness will idempotently launch one for you. See "Editor lifecycle helpers"
+  below.
 - *(Tests only — no live editor needed)*: `pwsh ./tools/tests/run-tool-tests.ps1`.
+
+## Editor lifecycle helpers
+
+Two sibling helpers manage the editor process so agents don't have to:
+
+| Helper | What it does |
+|---|---|
+| `tools/automation/invoke-launch-editor.ps1` | Idempotently launch (or attach to) a Godot editor for `-ProjectRoot`. Returns success in <1s when an editor is already running and capability.json is fresh; otherwise spawns Godot with `--editor --path ROOT --verbose` and polls capability.json until it appears. `-ForceRestart` stops any existing editor first. Output envelope carries `outcome.editorPid`, `outcome.capabilityPath`, `outcome.capabilityAgeSeconds`, `outcome.reusedExistingEditor`. |
+| `tools/automation/invoke-stop-editor.ps1` | Stop the Godot editor for `-ProjectRoot`. Matches by `--path` command-line so it leaves unrelated editor instances alone. Output envelope carries `outcome.stoppedPids` and `outcome.remainingPids`. |
+
+Every runtime-verification invoker also accepts a `-EnsureEditor` switch that delegates to `invoke-launch-editor.ps1` before running the workflow. Auto-launch failures surface as the workflow's own `editor-not-running` envelope.
+
+```powershell
+# One-step convenience: spawn editor (if needed) + run workflow
+pwsh ./tools/automation/invoke-scene-inspection.ps1 `
+    -ProjectRoot ./integration-testing/probe -EnsureEditor
+
+# Two-step explicit (idempotent reuse, then run)
+pwsh ./tools/automation/invoke-launch-editor.ps1 -ProjectRoot ./integration-testing/probe
+pwsh ./tools/automation/invoke-input-dispatch.ps1 `
+    -ProjectRoot ./integration-testing/probe `
+    -RequestFixturePath ./tools/tests/fixtures/runbook/input-dispatch/press-enter.json
+
+# Cleanup
+pwsh ./tools/automation/invoke-stop-editor.ps1 -ProjectRoot ./integration-testing/probe
+```
 
 ## See also
 

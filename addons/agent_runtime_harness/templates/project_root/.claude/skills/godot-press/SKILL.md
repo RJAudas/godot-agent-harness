@@ -20,11 +20,13 @@ Treat `$ARGUMENTS` as either a **fixture path** or a **bare key name** (`ENTER`,
 
 ## Execution
 
+`-EnsureEditor` idempotently launches a Godot editor for the project (or reuses one if already running and capability.json is fresh). Pass it on every call.
+
 Fixture form (preferred when a fixture exists):
 
 ```powershell
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
-  -ProjectRoot "<project-root>" `
+  -ProjectRoot "<project-root>" -EnsureEditor `
   -RequestFixturePath "<fixture-path>"
 ```
 
@@ -32,7 +34,7 @@ Inline form (when no fixture fits):
 
 ```powershell
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
-  -ProjectRoot "<project-root>" `
+  -ProjectRoot "<project-root>" -EnsureEditor `
   -RequestJson '{"requestId":"placeholder","scenarioId":"runbook-input-dispatch","runId":"runbook-input-dispatch","targetScene":"<main scene res:// path>","outputDirectory":"res://evidence/automation/agent","artifactRoot":"evidence/automation/agent","expectationFiles":[],"capturePolicy":{"startup":true,"manual":true,"failure":true},"stopPolicy":{"stopAfterValidation":true},"requestedBy":"agent","createdAt":"<UTC ISO-8601>","inputDispatchScript":{"events":[{"kind":"key","identifier":"ENTER","phase":"press","frame":30},{"kind":"key","identifier":"ENTER","phase":"release","frame":32}]}}'
 ```
 
@@ -53,7 +55,7 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
 
 | `failureKind` | What it means | Next step |
 |---|---|---|
-| `editor-not-running` | Capability missing or stale | Tell the user to launch: `godot --editor --path "<project-root>"` |
+| `editor-not-running` | Auto-launch failed (e.g. missing `$env:GODOT_BIN`, project failed to import) | Read `diagnostics[0]` for the underlying reason; common fix is to ensure `$env:GODOT_BIN` points at a Godot 4 binary |
 | `request-invalid` | Payload schema violation | Read `diagnostics[0]`; fix the fixture or inline JSON |
 | `build` | GDScript compile error before dispatch | Report `diagnostics[0]` verbatim |
 | `runtime` | Editor-side blocker | Read `harness/automation/results/capability.json` for `blockedReasons` / `singleTargetReady`. If `target_scene_missing`: tell the user to open the target scene in the editor dock. **Do not blind-retry.** |

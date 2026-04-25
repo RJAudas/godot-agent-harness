@@ -20,10 +20,10 @@ Treat `$ARGUMENTS` as the absolute path to a Godot project root (the directory c
 
 ## Execution
 
-Run the `invoke-scene-inspection.ps1` script once. It owns the full capability-check → request → poll → manifest-read loop and emits a single JSON envelope to stdout.
+Run the `invoke-scene-inspection.ps1` script once. It owns the full capability-check → request → poll → manifest-read loop and emits a single JSON envelope to stdout. Pass `-EnsureEditor` so the script idempotently launches a Godot editor if one isn't already running for this project (reuses an existing one when capability.json is fresh).
 
 ```powershell
-pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 -ProjectRoot "<project-root>"
+pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-scene-inspection.ps1 -ProjectRoot "<project-root>" -EnsureEditor
 ```
 
 Parse the stdout as JSON. Report `outcome.nodeCount` to the user and, if asked, read `outcome.sceneTreePath` to summarize notable nodes.
@@ -43,7 +43,7 @@ Parse the stdout as JSON. Report `outcome.nodeCount` to the user and, if asked, 
 
 | `failureKind` | What it means | Next step |
 |---|---|---|
-| `editor-not-running` | Capability artifact missing or stale | Tell the user to launch: `godot --editor --path "<project-root>"` |
+| `editor-not-running` | Auto-launch failed (e.g. missing `$env:GODOT_BIN`, project failed to import) | Read `diagnostics[0]` for the underlying reason; common fix is to ensure `$env:GODOT_BIN` points at a Godot 4 binary |
 | `build` | GDScript compile error before the scene could load | Report `diagnostics[0]` verbatim; no manifest will exist |
 | `runtime` | Editor-side blocker (no scene staged, wrong target scene, etc.) | **Read `harness/automation/results/capability.json`** next. Check `blockedReasons` and `singleTargetReady`. If `target_scene_missing`: tell the user to open the target scene in the editor dock or set `Project Settings → Application → Run → Main Scene`. **Do not blind-retry** — this gate is editor-side, not something the script can override. |
 | `timeout` | Capture did not complete | The editor may be frozen or not in play mode |

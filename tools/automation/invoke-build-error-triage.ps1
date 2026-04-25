@@ -116,7 +116,9 @@ if (-not $hasFixture -and -not $hasInline) {
 # Optional: auto-launch the editor if the caller asked for -EnsureEditor.
 if ($EnsureEditor) {
     $launcher = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
-    $launchOut = & pwsh -NoProfile -File $launcher -ProjectRoot $resolvedRoot 2>&1
+    # Capture stdout only -- the helper writes a single-line stderr summary that
+    # would corrupt the JSON envelope if 2>&1-merged.
+    $launchOut = & pwsh -NoProfile -File $launcher -ProjectRoot $resolvedRoot
     try {
         $launchEnv = ($launchOut -join [Environment]::NewLine) | ConvertFrom-Json -Depth 20
     }

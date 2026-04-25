@@ -6,34 +6,6 @@ BeforeAll {
     $script:StdoutSchema = 'specs/008-agent-runbook/contracts/orchestration-stdout.schema.json'
 
     Import-Module $script:ModulePath -Force
-
-    # Shared fake run-result used by multiple test suites
-    $script:FakeRunResultSuccess = @{
-        requestId   = 'REPLACED-BY-TEST'
-        runId       = 'runbook-test-run-001'
-        finalStatus = 'completed'
-        failureKind = $null
-        completedAt = '2026-04-22T14:45:08.123Z'
-        manifestPath = 'tools/tests/fixtures/pong-testbed/evidence/automation/pong-autonomous-run-001/evidence-manifest.json'
-    }
-
-    $script:FakeRunResultBuildFailure = @{
-        requestId   = 'REPLACED-BY-TEST'
-        runId       = 'runbook-test-run-002'
-        finalStatus = 'failed'
-        failureKind = 'build'
-        completedAt = '2026-04-22T14:45:08.123Z'
-        manifestPath = $null
-    }
-
-    $script:FakeRunResultRuntimeFailure = @{
-        requestId   = 'REPLACED-BY-TEST'
-        runId       = 'runbook-test-run-003'
-        finalStatus = 'failed'
-        failureKind = 'runtime'
-        completedAt = '2026-04-22T14:45:08.123Z'
-        manifestPath = 'tools/tests/fixtures/pong-testbed/evidence/automation/pong-autonomous-run-001/evidence-manifest.json'
-    }
 }
 
 # ---------------------------------------------------------------------------

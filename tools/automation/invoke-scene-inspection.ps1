@@ -238,9 +238,9 @@ $manifestPath = [string]$rr.manifestPath
 if ([string]::IsNullOrWhiteSpace($manifestPath)) {
     Exit-Failure 'internal' "run-result.json did not contain a manifestPath."
 }
-$absManifest = Resolve-RunbookRepoPath -Path $manifestPath
+$absManifest = Resolve-RunbookEvidencePath -Path $manifestPath -ProjectRoot $resolvedRoot
 
-$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest
+$manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
 if (-not $manifestCheck.Ok) {
     Exit-Failure 'internal' $manifestCheck.Diagnostic
 }
@@ -251,17 +251,24 @@ $nodeCount     = 0
 
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
-    $treeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'scene-tree' } | Select-Object -First 1
+    # The runtime emits scenegraph-snapshot (flat nodes array with node_count
+    # field), not a tree-shaped 'scene-tree' artifact. Earlier code expected
+    # the latter and recursed over $tree.root.children.
+    $treeRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'scenegraph-snapshot' } | Select-Object -First 1
     if ($null -eq $treeRef) {
-        Exit-Failure 'internal' "manifest did not contain a 'scene-tree' artifact reference"
+        Exit-Failure 'internal' "manifest did not contain a 'scenegraph-snapshot' artifact reference"
     }
-    $sceneTreePath = Resolve-RunbookRepoPath -Path $treeRef.path
+    $sceneTreePath = Resolve-RunbookEvidencePath -Path $treeRef.path -ProjectRoot $resolvedRoot
     if (-not (Test-Path -LiteralPath $sceneTreePath)) {
-        Exit-Failure 'internal' "scene-tree artifact missing on disk at '$sceneTreePath'"
+        Exit-Failure 'internal' "scenegraph-snapshot artifact missing on disk at '$sceneTreePath'"
     }
-    $tree = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
-    function Count-Nodes { param($n); $c = 1; foreach ($child in @($n.children)) { $c += Count-Nodes $child }; $c }
-    $nodeCount = Count-Nodes $tree.root
+    $snapshot = Get-Content -LiteralPath $sceneTreePath -Raw | ConvertFrom-Json -Depth 30
+    if ($null -ne ($snapshot | Get-Member -Name 'node_count' -ErrorAction SilentlyContinue)) {
+        $nodeCount = [int]$snapshot.node_count
+    }
+    elseif ($null -ne ($snapshot | Get-Member -Name 'nodes' -ErrorAction SilentlyContinue)) {
+        $nodeCount = @($snapshot.nodes).Count
+    }
 }
 catch {
     Exit-Failure 'internal' "Failed to assemble scene-tree outcome: $($_.Exception.Message)"

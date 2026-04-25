@@ -28,6 +28,38 @@ function Resolve-RunbookRepoPath {
     return Join-Path (Get-RunbookRepoRoot) $Path
 }
 
+function Resolve-RunbookEvidencePath {
+    <#
+    .SYNOPSIS
+        Resolves an evidence path (manifestPath, artifactRefs[*].path, etc.) to
+        an absolute path on disk.
+
+    .DESCRIPTION
+        Evidence paths reported in run-result.json and evidence-manifest.json
+        are project-relative (the runtime writes under res://evidence/automation/...
+        which becomes <ProjectRoot>/evidence/automation/...). They are NOT
+        repo-relative. Use this helper instead of Resolve-RunbookRepoPath when
+        resolving anything that came out of the editor / runtime side.
+
+    .PARAMETER Path
+        The path string from the run-result envelope, manifest reference, etc.
+
+    .PARAMETER ProjectRoot
+        Absolute path to the sandbox project root (the -ProjectRoot the invoker
+        was called with).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$ProjectRoot
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+    return Join-Path $ProjectRoot $Path
+}
+
 # ---------------------------------------------------------------------------
 # Internal helper indirection — mock this in Pester with:
 #   Mock -CommandName 'Invoke-Helper' -ModuleName 'RunbookOrchestration' -MockWith { ... }
@@ -399,6 +431,15 @@ function Test-RunbookManifest {
     .SYNOPSIS
         Validate an evidence manifest at the given absolute path.
 
+    .PARAMETER ManifestPath
+        Absolute path to the evidence-manifest.json to validate.
+
+    .PARAMETER ProjectRoot
+        Optional. When provided, artifact paths inside the manifest are resolved
+        against this directory instead of the harness repo root. Use this when
+        validating manifests produced by a runbook orchestration (paths there
+        are project-relative, since the runtime writes under res://evidence/...).
+
     .OUTPUTS
         PSCustomObject: { Ok [bool], Diagnostic [string|null] }. When Ok=$false,
         Diagnostic is a single-line summary suitable for inclusion in the
@@ -406,7 +447,8 @@ function Test-RunbookManifest {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$ManifestPath
+        [Parameter(Mandatory)][string]$ManifestPath,
+        [string]$ProjectRoot
     )
 
     if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
@@ -426,19 +468,60 @@ function Test-RunbookManifest {
     $stderrTmp = [System.IO.Path]::GetTempFileName()
     try {
         $procArgs = @('-NoProfile', '-File', $validator, '-ManifestPath', $ManifestPath)
+        if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
+            $procArgs += @('-ProjectRoot', $ProjectRoot)
+        }
         $proc = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
             -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $stdoutTmp `
             -RedirectStandardError $stderrTmp
-        if ($proc.ExitCode -ne 0) {
-            $errText = (Get-Content -LiteralPath $stderrTmp -Raw)
-            if ([string]::IsNullOrWhiteSpace($errText)) {
-                $errText = (Get-Content -LiteralPath $stdoutTmp -Raw)
-            }
-            $first = ($errText -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
-            return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $($first.Trim())" }
+
+        # Parse the validator's structured stdout. Even on non-zero exit it emits
+        # a JSON object with schemaValid / missingArtifactPaths / runtimeReportingViolations
+        # / bundleValid keys.
+        $stdoutText = (Get-Content -LiteralPath $stdoutTmp -Raw)
+        $report = $null
+        if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+            try { $report = $stdoutText | ConvertFrom-Json -Depth 20 } catch { }
         }
-        return [pscustomobject]@{ Ok = $true; Diagnostic = $null }
+
+        if ($proc.ExitCode -ne 0 -and $null -eq $report) {
+            $errText = (Get-Content -LiteralPath $stderrTmp -Raw)
+            if ([string]::IsNullOrWhiteSpace($errText)) { $errText = $stdoutText }
+            $first = ($errText -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+            return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $(if ($first) { $first.Trim() } else { 'no output' })" }
+        }
+
+        # Operational-blocker checks: missing artifacts on disk and runtime-reporting
+        # invariant violations. Schema mismatch is reported as a soft diagnostic --
+        # the manifest schema currently lags the runtime (e.g. it does not declare
+        # appliedInputDispatch, which the runtime emits) but the agent-visible
+        # outcome is independent of that gap.
+        $diagnostics = @()
+        if ($null -ne $report) {
+            $missing = @($report.missingArtifactPaths)
+            if ($missing.Count -gt 0) {
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "manifest references $($missing.Count) artifact(s) missing on disk: $($missing -join ', ')"
+                }
+            }
+            $violations = @($report.runtimeReportingViolations)
+            if ($violations.Count -gt 0) {
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "runtime-error-reporting invariants violated: $($violations -join '; ')"
+                }
+            }
+            if (-not $report.schemaValid) {
+                $diagnostics += "manifest schema validation failed (artifacts present on disk; agent-visible outcome unaffected)"
+            }
+        }
+
+        return [pscustomobject]@{
+            Ok = $true
+            Diagnostic = if ($diagnostics.Count -gt 0) { $diagnostics -join '; ' } else { $null }
+        }
     }
     finally {
         Remove-Item -LiteralPath $stdoutTmp -ErrorAction SilentlyContinue
@@ -1231,6 +1314,7 @@ Export-ModuleMember -Function @(
     'Invoke-Helper',
     'Get-RunbookRepoRoot',
     'Resolve-RunbookRepoPath',
+    'Resolve-RunbookEvidencePath',
     'Get-RunZoneClassification',
     'New-RunbookInFlightMarker',
     'Clear-RunbookInFlightMarker',

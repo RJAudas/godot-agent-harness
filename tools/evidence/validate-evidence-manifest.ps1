@@ -1,6 +1,13 @@
 [CmdletBinding()]
 param(
     [string]$ManifestPath = 'tools/evals/fixtures/001-agent-tooling-foundation/evidence-manifest.valid.json',
+
+    # Base directory for resolving relative artifact paths in the manifest.
+    # When set (e.g. by Test-RunbookManifest from a runbook orchestrator), artifact
+    # paths are resolved against this directory; otherwise they fall back to the
+    # repo root (legacy behaviour for fixture-bundle validation).
+    [string]$ProjectRoot,
+
     [switch]$PassThru
 )
 
@@ -26,24 +33,27 @@ function Resolve-RepoPath {
     return (Resolve-Path -LiteralPath (Join-Path (Get-RepoRoot) $Path)).Path
 }
 
-function Convert-ToRepoChildPath {
+function Convert-ToArtifactPath {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BaseDirectory
     )
 
-    $repoRoot = [System.IO.Path]::GetFullPath((Get-RepoRoot))
-    $repoRootWithSeparator = $repoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $base = [System.IO.Path]::GetFullPath($BaseDirectory)
+    $baseWithSeparator = $base.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 
     if ([System.IO.Path]::IsPathRooted($Path)) {
         $fullPath = [System.IO.Path]::GetFullPath($Path)
     }
     else {
-        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $base $Path))
     }
 
-    if ($fullPath -ne $repoRoot -and -not $fullPath.StartsWith($repoRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Artifact path '$Path' resolves outside the repository root."
+    if ($fullPath -ne $base -and -not $fullPath.StartsWith($baseWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Artifact path '$Path' resolves outside the base directory '$base'."
     }
 
     return $fullPath
@@ -56,13 +66,24 @@ $missingArtifactPaths = New-Object System.Collections.Generic.List[string]
 $unsupportedArtifactKinds = New-Object System.Collections.Generic.List[string]
 $supportedArtifactKinds = Get-EvidenceArtifactKinds
 
+# Resolve artifact paths against -ProjectRoot when provided (the runbook orchestrator
+# path; manifest paths are project-relative because the runtime writes under
+# res://evidence/automation/...). Fall back to repo root for legacy callers that
+# validate fixture-bundled manifests committed under tools/evals/fixtures/.
+$artifactBase = if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    if ([System.IO.Path]::IsPathRooted($ProjectRoot)) { $ProjectRoot }
+    else { (Resolve-Path -LiteralPath (Join-Path (Get-RepoRoot) $ProjectRoot)).Path }
+} else {
+    Get-RepoRoot
+}
+
 foreach ($artifactRef in $manifest.artifactRefs) {
     if ($artifactRef.kind -notin $supportedArtifactKinds) {
         [void]$unsupportedArtifactKinds.Add([string]$artifactRef.kind)
     }
 
     try {
-        $artifactPath = Convert-ToRepoChildPath -Path $artifactRef.path
+        $artifactPath = Convert-ToArtifactPath -Path $artifactRef.path -BaseDirectory $artifactBase
     }
     catch {
         [void]$missingArtifactPaths.Add($artifactRef.path)

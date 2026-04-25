@@ -165,6 +165,22 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
         Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
     }
 
+    It 'C2 follow-up: Resolve-RunbookEvidencePath joins relative paths against ProjectRoot' {
+        # Evidence paths from run-result/manifest are project-relative, not repo-relative.
+        $abs = Resolve-RunbookEvidencePath `
+            -Path 'evidence/automation/runbook-x/evidence-manifest.json' `
+            -ProjectRoot 'D:\some\sandbox'
+        # Path-separator-agnostic compare (PowerShell's Join-Path uses native separator).
+        ($abs -replace '/', '\') | Should -Be 'D:\some\sandbox\evidence\automation\runbook-x\evidence-manifest.json'
+    }
+
+    It 'C2 follow-up: Resolve-RunbookEvidencePath returns absolute paths unchanged' {
+        $abs = Resolve-RunbookEvidencePath `
+            -Path 'D:\already\absolute\manifest.json' `
+            -ProjectRoot 'D:\some\sandbox'
+        $abs | Should -Be 'D:\already\absolute\manifest.json'
+    }
+
     It 'C2: forces artifactRoot to empty string regardless of fixture content' {
         # press-enter.json sets artifactRoot to a fixture path under tools/tests/fixtures.
         # The runtime persists that string into manifest references and ignores it for

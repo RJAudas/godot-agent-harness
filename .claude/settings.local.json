@@ -11,7 +11,9 @@
       "Bash(pwsh -NoProfile -File d:/dev/godot-agent-harness/tools/deploy-game-harness.ps1 -GameRoot \"D:\\\\gameDev\\\\pong\" -SkipProjectSettings)",
       "Bash(pwsh -NoProfile -Command 'Import-Module Pester -MinimumVersion 5.0.0 -Force; $cfg = New-PesterConfiguration; $cfg.Run.Path = '\\\\''d:/dev/godot-agent-harness/tools/tests/DeployGameHarness.Tests.ps1'\\\\''; $cfg.Run.PassThru = $true; $cfg.Output.Verbosity = '\\\\''Minimal'\\\\''; $r = Invoke-Pester -Configuration $cfg; exit $r.FailedCount')",
       "Bash(pwsh -NoProfile -Command 'Import-Module Pester -MinimumVersion 5.0.0 -Force; $cfg = New-PesterConfiguration; $cfg.Run.Path = '\\\\''d:/dev/godot-agent-harness/tools/tests/DeployGameHarness.Tests.ps1'\\\\''; $cfg.Run.PassThru = $true; $cfg.Output.Verbosity = '\\\\''Detailed'\\\\''; $r = Invoke-Pester -Configuration $cfg; exit $r.FailedCount')",
-      "Bash(pwsh -NoProfile -File d:/dev/godot-agent-harness/tools/tests/run-tool-tests.ps1)"
+      "Bash(pwsh -NoProfile -File d:/dev/godot-agent-harness/tools/tests/run-tool-tests.ps1)",
+      "Bash(pwsh -NoProfile -Command \"Invoke-Pester -Path tools/tests/ScaffoldSandbox.Tests.ps1 -Output Detailed\")",
+      "Bash(pwsh -NoProfile -File tools/tests/run-tool-tests.ps1)"
     ]
   }
 }

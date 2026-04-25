@@ -164,6 +164,22 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
         Test-Path -LiteralPath $script:C1Canonical | Should -BeFalse
         Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
     }
+
+    It 'C2: forces artifactRoot to empty string regardless of fixture content' {
+        # press-enter.json sets artifactRoot to a fixture path under tools/tests/fixtures.
+        # The runtime persists that string into manifest references and ignores it for
+        # writes, breaking "manifestPath -> artifactRefs[*].path" navigation. We
+        # overwrite to '' so the runtime's fallback uses outputDirectory instead.
+        $result = Resolve-RunbookPayload `
+            -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
+            -RequestId 'runbook-input-dispatch-c2-test' `
+            -ProjectRoot $script:C1Root
+
+        $result.Payload['artifactRoot'] | Should -Be ''
+
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.artifactRoot | Should -Be ''
+    }
 }
 
 # ---------------------------------------------------------------------------

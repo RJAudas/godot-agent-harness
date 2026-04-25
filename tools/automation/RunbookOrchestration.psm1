@@ -199,6 +199,19 @@ function Resolve-RunbookPayload {
     $payload = $json | ConvertFrom-Json -Depth 20 -AsHashtable
     $payload['requestId'] = $RequestId
 
+    # C2: artifactRoot is a legacy duplicate of outputDirectory. Every shipped
+    # fixture sets it to a path under tools/tests/fixtures/runbook/<workflow>/...
+    # and the runtime persisted that string into evidence-manifest.json's
+    # artifactRefs[*].path and into run-result.manifestPath -- but the actual
+    # artifacts were always written to outputDirectory (res://evidence/automation/...).
+    # Agents following "read manifestPath, then read each artifact" hit
+    # FileNotFound at every hop. The runtime already falls back to outputDirectory
+    # when artifactRoot is empty (see scenegraph_artifact_writer._resolve_artifact_root
+    # and scenegraph_run_coordinator._resolve_manifest_repo_path). Forcing empty
+    # here restores the manifest-references-real-files invariant without addon,
+    # schema, or fixture changes. Full removal of the field is deferred.
+    $payload['artifactRoot'] = ''
+
     # Schema requires expectationFiles, but runbook fixtures typically omit it
     # because they declare their expectations via capturePolicy + outcome
     # artifacts. Default to empty so schema validation passes without forcing

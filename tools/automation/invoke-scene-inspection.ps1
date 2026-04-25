@@ -149,7 +149,10 @@ $internalPayload = @{
     runId            = $requestId
     targetScene      = $TargetScene
     outputDirectory  = "res://evidence/automation/$requestId"
-    artifactRoot     = "tools/tests/fixtures/runbook/inspect-scene-tree/evidence/$requestId"
+    # C2: legacy field. Empty string lets the runtime fall back to outputDirectory
+    # for manifest references (see scenegraph_artifact_writer._resolve_artifact_root).
+    # Schema still satisfied (string, present, no minLength).
+    artifactRoot     = ''
     expectationFiles = @()
     capturePolicy    = @{ startup = $true; manual = $false; failure = $false }
     stopPolicy       = @{ stopAfterValidation = $true }

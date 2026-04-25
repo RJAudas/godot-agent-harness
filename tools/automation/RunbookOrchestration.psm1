@@ -492,11 +492,11 @@ function Test-RunbookManifest {
             return [pscustomobject]@{ Ok = $false; Diagnostic = "manifest validation failed: $(if ($first) { $first.Trim() } else { 'no output' })" }
         }
 
-        # Operational-blocker checks: missing artifacts on disk and runtime-reporting
-        # invariant violations. Schema mismatch is reported as a soft diagnostic --
-        # the manifest schema currently lags the runtime (e.g. it does not declare
-        # appliedInputDispatch, which the runtime emits) but the agent-visible
-        # outcome is independent of that gap.
+        # Operational-blocker checks: missing artifacts on disk, runtime-reporting
+        # invariant violations, and unsupported artifact kinds. Schema mismatch is
+        # demoted to a soft diagnostic -- the manifest schema currently lags the
+        # runtime (e.g. it does not declare appliedInputDispatch, which the runtime
+        # emits) but the agent-visible outcome is independent of that gap.
         $diagnostics = @()
         if ($null -ne $report) {
             $missing = @($report.missingArtifactPaths)
@@ -511,6 +511,16 @@ function Test-RunbookManifest {
                 return [pscustomobject]@{
                     Ok = $false
                     Diagnostic = "runtime-error-reporting invariants violated: $($violations -join '; ')"
+                }
+            }
+            $unsupported = @($report.unsupportedArtifactKinds)
+            if ($unsupported.Count -gt 0) {
+                # Hard fail: the manifest references artifact kinds the registry doesn't
+                # know about, which means the agent has no schema to interpret them by.
+                # If a new kind is legitimate, register it in tools/evidence/artifact-registry.ps1.
+                return [pscustomobject]@{
+                    Ok = $false
+                    Diagnostic = "manifest references unsupported artifact kind(s): $($unsupported -join ', ')"
                 }
             }
             if (-not $report.schemaValid) {

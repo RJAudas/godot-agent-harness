@@ -20,9 +20,11 @@ Treat `$ARGUMENTS` as an optional fixture path. Default: `{{HARNESS_REPO_ROOT}}/
 
 ## Execution
 
+`-EnsureEditor` idempotently launches a Godot editor for the project (or reuses one if already running and capability.json is fresh). Pass it on every call.
+
 ```powershell
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-build-error-triage.ps1 `
-  -ProjectRoot "<project-root>" `
+  -ProjectRoot "<project-root>" -EnsureEditor `
   -RequestFixturePath "<fixture-path-or-default>"
 ```
 
@@ -44,7 +46,7 @@ On `failureKind=build`, report `firstDiagnostic` verbatim — do not paraphrase.
 
 | `failureKind` | What it means | Next step |
 |---|---|---|
-| `editor-not-running` | Capability missing or stale | Tell the user to launch: `godot --editor --path "<project-root>"` |
+| `editor-not-running` | Auto-launch failed (e.g. missing `$env:GODOT_BIN`, project failed to import) | Read `diagnostics[0]` for the underlying reason; common fix is to ensure `$env:GODOT_BIN` points at a Godot 4 binary |
 | `build` | Compile error captured (expected outcome) | Report `outcome.firstDiagnostic` verbatim; no manifest may exist |
 | `runtime` | Build succeeded but runtime failed | Use `/godot-debug-runtime` for runtime-error details |
 | `timeout` | Build did not complete | Editor may be frozen |

@@ -101,6 +101,25 @@ Describe 'RunbookOrchestration module' {
     It 'Resolve-RunbookPayload throws when neither is supplied' {
         { Resolve-RunbookPayload -RequestId 'req' -ProjectRoot $TestDrive } | Should -Throw
     }
+
+    It 'H1: Invoke-Helper strips ANSI CSI sequences from CapturedOutput' {
+        # Build a child script that emits ANSI-coloured text via Write-Error.
+        # PowerShell 7's default ErrorView (ConciseView) emits CSI sequences for
+        # colour, which is exactly what H1 strips out.
+        $ansiScript = Join-Path $TestDrive 'emit-ansi.ps1'
+        @'
+param([string]$Tag = 'default')
+Write-Error "boom: this should be coloured ($Tag)" -ErrorAction Continue
+exit 0
+'@ | Set-Content -LiteralPath $ansiScript -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Path = $ansiScript } {
+            param($Path)
+            $result = Invoke-Helper -ScriptPath $Path -ArgumentList @('-Tag', 'h1-test')
+            $result.CapturedOutput | Should -Not -Match "`e\["
+            $result.CapturedOutput | Should -Match 'boom'
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------

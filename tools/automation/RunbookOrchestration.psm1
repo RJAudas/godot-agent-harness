@@ -57,6 +57,13 @@ function Invoke-Helper {
         ''
     }
 
+    # H1: strip ANSI CSI sequences. PowerShell 7 colors Write-Error output by default,
+    # and that text gets embedded verbatim into the JSON envelope's diagnostics[].
+    # Escapes break downstream JSON consumers and grep-friendly display.
+    if (-not [string]::IsNullOrEmpty($capturedText)) {
+        $capturedText = [regex]::Replace($capturedText, "`e\[[0-?]*[ -/]*[@-~]", '')
+    }
+
     return [pscustomobject]@{
         ExitCode       = $exitCode
         CapturedOutput = $capturedText

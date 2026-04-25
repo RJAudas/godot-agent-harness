@@ -11,6 +11,23 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Resolve the pwsh binary running this module so every child-process spawn
+# (Invoke-Helper, Test-RunbookManifest, the EnsureEditor delegations in each
+# invoke-*.ps1) reuses the same edition. Hardcoding 'pwsh' breaks on
+# locked-down Windows hosts that only ship powershell.exe (5.1) and on
+# environments where the binary isn't on PATH.
+$script:CurrentPwshPath = (Get-Process -Id $PID).Path
+
+function Get-RunbookPwshPath {
+    <#
+    .SYNOPSIS
+        Returns the absolute path of the pwsh binary running this module.
+        Use it instead of a literal 'pwsh' for any child-process spawn so
+        children inherit the parent's edition.
+    #>
+    return $script:CurrentPwshPath
+}
+
 function Get-RunbookRepoRoot {
     <#
     .SYNOPSIS Returns the repository root path. #>
@@ -80,7 +97,7 @@ function Invoke-Helper {
     )
 
     $resolvedScript = Resolve-RunbookRepoPath -Path $ScriptPath
-    $captured = & pwsh -NoProfile -File $resolvedScript @ArgumentList 2>&1
+    $captured = & $script:CurrentPwshPath -NoProfile -File $resolvedScript @ArgumentList 2>&1
     $exitCode = $LASTEXITCODE
 
     $capturedText = if ($null -ne $captured) {
@@ -471,7 +488,7 @@ function Test-RunbookManifest {
         if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
             $procArgs += @('-ProjectRoot', $ProjectRoot)
         }
-        $proc = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
+        $proc = Start-Process -FilePath $script:CurrentPwshPath -ArgumentList $procArgs `
             -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $stdoutTmp `
             -RedirectStandardError $stderrTmp
@@ -822,9 +839,13 @@ function Initialize-RunbookTransientZone {
     $blocked        = $false
     $blockedPath    = $null
 
-    # Transient files live in two locations
+    # Transient files live in three locations. The requests dir is included so
+    # that a stale run-request.json (or .tmp leftover from a crashed atomic
+    # rename) from a prior crashed orchestration cannot be re-processed by the
+    # editor on its next start-up.
     $transientDirs = @(
         (Join-Path $ProjectRoot 'harness/automation/results'),
+        (Join-Path $ProjectRoot 'harness/automation/requests'),
         (Join-Path $ProjectRoot 'evidence/automation')
     )
 
@@ -850,6 +871,13 @@ function Initialize-RunbookTransientZone {
             # Skip editor-owned state (heartbeated by the editor on its own cadence).
             # Wiping these creates a window where invoke scripts mis-report editor-not-running.
             if ($zone -eq 'editor-state') { continue }
+            # Unclassified files are still deleted (otherwise unknown junk
+            # accumulates), but emit a diagnostic so a future addon that starts
+            # writing a new artifact kind doesn't disappear silently between
+            # runs. Add the file to Get-RunZoneClassification to suppress this.
+            if ($null -eq $zone) {
+                $diagnostics.Add("cleanup-unclassified: deleting '$relPath' -- file is not in Get-RunZoneClassification. Add it to the classification table to suppress this diagnostic.")
+            }
             # Unmatched files in the transient directories are also cleared
             if ($null -eq $zone -or $zone -eq 'transient') {
                 # Attempt delete with one retry
@@ -1323,6 +1351,7 @@ Export-ModuleMember -Function @(
     'Write-RunbookStderrSummary',
     'Invoke-Helper',
     'Get-RunbookRepoRoot',
+    'Get-RunbookPwshPath',
     'Resolve-RunbookRepoPath',
     'Resolve-RunbookEvidencePath',
     'Get-RunZoneClassification',

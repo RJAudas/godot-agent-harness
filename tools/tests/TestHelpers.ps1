@@ -2,6 +2,10 @@ Set-StrictMode -Version Latest
 
 $script:RepoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 
+# Reuse the pwsh binary running this script for any child-process spawn.
+# Hardcoding 'pwsh' breaks on hosts where only powershell.exe is on PATH.
+$script:TestPwshPath = (Get-Process -Id $PID).Path
+
 function Get-RepoPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -28,7 +32,7 @@ function Invoke-RepoPowerShell {
     $stderrTmp = [System.IO.Path]::GetTempFileName()
     try {
         $procArgs = @('-NoProfile', '-File', $resolvedScriptPath) + $Arguments
-        $process = Start-Process -FilePath 'pwsh' -ArgumentList $procArgs `
+        $process = Start-Process -FilePath $script:TestPwshPath -ArgumentList $procArgs `
             -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $stdoutTmp `
             -RedirectStandardError $stderrTmp

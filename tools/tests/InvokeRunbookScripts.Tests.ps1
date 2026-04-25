@@ -176,16 +176,18 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
     }
 
     It 'M6: substitutes $REQUEST_ID placeholder in outputDirectory with the resolved RequestId' {
-        # Fixtures declare outputDirectory as "res://evidence/automation/<workflow>-$REQUEST_ID"
-        # so each run lands in its own collision-free directory. Resolve-RunbookPayload must
-        # perform the substitution before schema validation and before writing run-request.json.
+        # Fixtures declare outputDirectory as "res://evidence/automation/$REQUEST_ID" so each
+        # run lands in its own collision-free directory. Resolve-RunbookPayload must perform
+        # the substitution before schema validation and before writing run-request.json.
+        # (B1: the previous "<workflow>-$REQUEST_ID" pattern doubled the workflow prefix
+        # because requestId already starts with "runbook-<workflow>-".)
         $requestId = 'runbook-input-dispatch-m6-test'
         $result = Resolve-RunbookPayload `
             -FixturePath 'tools/tests/fixtures/runbook/input-dispatch/press-enter.json' `
             -RequestId $requestId `
             -ProjectRoot $script:C1Root
 
-        $expected = "res://evidence/automation/runbook-input-dispatch-$requestId"
+        $expected = "res://evidence/automation/$requestId"
         $result.Payload['outputDirectory'] | Should -Be $expected
 
         # The persisted run-request.json must carry the substituted value (no literal token).

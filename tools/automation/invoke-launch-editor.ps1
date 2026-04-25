@@ -262,11 +262,17 @@ catch {
     Exit-Failure 'editor-not-running' "Failed to spawn Godot at '$godot': $($_.Exception.Message)"
 }
 
+# B13: emit a heartbeat to stderr so an agent watching the orchestration can
+# tell something's happening. Cold starts can take 30-60s; without the
+# heartbeat the call looks indistinguishable from a hang.
+[Console]::Error.WriteLine("[invoke-launch-editor] spawned Godot PID $($proc.Id); waiting up to ${ReadyTimeoutSeconds}s for capability.json (mtime >= ${spawnedAt:o})")
+
 # Poll capability.json until the *newly spawned* editor publishes one, OR until
 # ReadyTimeoutSeconds. "Newly published" = file exists, parses cleanly, and its
 # LastWriteTimeUtc >= $spawnedAt (ignore prior-session leftovers).
 $deadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
 $age = $null
+$nextHeartbeatAt = (Get-Date).AddSeconds(10)
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 500
 
@@ -287,15 +293,28 @@ while ((Get-Date) -lt $deadline) {
             }
         }
     }
+
+    if ((Get-Date) -ge $nextHeartbeatAt) {
+        $elapsed = [int]((Get-Date) - $spawnedAt.ToLocalTime()).TotalSeconds
+        $remaining = [int]($deadline - (Get-Date)).TotalSeconds
+        $capState = if (Test-Path -LiteralPath $capabilityPath) {
+            $cm = (Get-Item -LiteralPath $capabilityPath).LastWriteTimeUtc
+            if ($cm -lt $spawnedAt) { "stale (mtime $($cm.ToString('o')) predates spawn)" } else { 'parse-pending' }
+        } else { 'absent' }
+        [Console]::Error.WriteLine("[invoke-launch-editor] still waiting: ${elapsed}s elapsed, ${remaining}s remaining; capability.json $capState")
+        $nextHeartbeatAt = (Get-Date).AddSeconds(10)
+    }
 }
 
 if ($null -eq $age) {
-    Exit-Failure 'timeout' "capability.json did not appear within ${ReadyTimeoutSeconds}s. Editor PID $($proc.Id) is still running; inspect '$stdoutLog' / '$stderrLog' for clues." @{
+    Exit-Failure 'editor-not-running' "capability.json did not appear within ${ReadyTimeoutSeconds}s. Editor PID $($proc.Id) is still running; inspect '$stdoutLog' / '$stderrLog' for clues." @{
         editorPid            = $proc.Id
         capabilityPath       = $capabilityPath
         capabilityAgeSeconds = $null
     }
 }
+
+[Console]::Error.WriteLine("[invoke-launch-editor] editor ready (capability.json mtime ${age}s ago); dispatching workflow")
 
 $outcome = @{
     editorPid            = $proc.Id

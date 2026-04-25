@@ -787,40 +787,39 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 
 
 func _resolve_request(config: Dictionary, request: Dictionary, capability: Dictionary = {}) -> Dictionary:
+	# Precedence (highest wins): request.overrides > request > config.defaultRequestOverrides > config.
+	# B8: an automation request that explicitly sets targetScene/outputDirectory/etc.
+	# must override any inspection-run-config.json defaults. The previous code
+	# initialized scalar fields from config and then layered request on top,
+	# which surfaced subtle bugs whenever the request supplied fields the
+	# config also pinned. Inline the precedence chain so it reads top-to-bottom.
 	var overrides: Dictionary = request.get("overrides", {})
 	var default_overrides: Dictionary = config.get("defaultRequestOverrides", {})
 	var base_capture_policy: Dictionary = config.get("capturePolicy", {}).duplicate(true)
 	var base_stop_policy := {"stopAfterValidation": true}
+
 	var resolved := {
 		"requestId": String(request.get("requestId", "request-%s" % str(Time.get_ticks_usec()))),
 		"scenarioId": String(request.get("scenarioId", config.get("scenarioId", InspectionConstants.DEFAULT_SCENARIO_ID))),
 		"runId": String(request.get("runId", config.get("runId", "run-%s" % str(Time.get_ticks_usec())))),
-		"targetScene": String(config.get("targetScene", "")),
-		"outputDirectory": String(config.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY)),
-		"artifactRoot": String(config.get("artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT)),
+		"targetScene": _pick_scalar(overrides, request, default_overrides, config, "targetScene", ""),
+		"outputDirectory": _pick_scalar(overrides, request, default_overrides, config, "outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY),
+		"artifactRoot": _pick_scalar(overrides, request, default_overrides, config, "artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT),
 		"expectationFiles": _copy_array(config.get("expectationFiles", [])),
 		"capturePolicy": base_capture_policy,
 		"stopPolicy": base_stop_policy,
 		"requestedBy": String(request.get("requestedBy", "scenegraph_automation_broker")),
 	}
 
-	_apply_scalar_override(resolved, default_overrides, "targetScene")
-	_apply_scalar_override(resolved, default_overrides, "outputDirectory")
-	_apply_scalar_override(resolved, default_overrides, "artifactRoot")
+	# Arrays and nested dicts still merge layer-by-layer (config -> default_overrides -> request -> overrides).
 	_apply_array_override(resolved, default_overrides, "expectationFiles")
 	_merge_nested_override(resolved, "capturePolicy", default_overrides.get("capturePolicy", {}))
 	_merge_nested_override(resolved, "stopPolicy", default_overrides.get("stopPolicy", {}))
 
-	_apply_scalar_override(resolved, request, "targetScene")
-	_apply_scalar_override(resolved, request, "outputDirectory")
-	_apply_scalar_override(resolved, request, "artifactRoot")
 	_apply_array_override(resolved, request, "expectationFiles")
 	_merge_nested_override(resolved, "capturePolicy", request.get("capturePolicy", {}))
 	_merge_nested_override(resolved, "stopPolicy", request.get("stopPolicy", {}))
 
-	_apply_scalar_override(resolved, overrides, "targetScene")
-	_apply_scalar_override(resolved, overrides, "outputDirectory")
-	_apply_scalar_override(resolved, overrides, "artifactRoot")
 	_apply_array_override(resolved, overrides, "expectationFiles")
 	_merge_nested_override(resolved, "capturePolicy", overrides.get("capturePolicy", {}))
 	_merge_nested_override(resolved, "stopPolicy", overrides.get("stopPolicy", {}))
@@ -946,6 +945,19 @@ func _resolve_behavior_watch_request(default_overrides: Dictionary, request: Dic
 func _apply_scalar_override(target: Dictionary, source: Dictionary, key: String) -> void:
 	if source.has(key):
 		target[key] = source.get(key)
+
+
+# B8: Pick a scalar value by walking sources in highest-precedence-first order.
+# A non-empty value at any layer wins; empty strings fall through to the next
+# layer so a stale empty in the base layer doesn't trump a populated request
+# field. The final fallback is the literal default.
+func _pick_scalar(highest: Dictionary, mid_high: Dictionary, mid_low: Dictionary, lowest: Dictionary, key: String, fallback) -> String:
+	for src in [highest, mid_high, mid_low, lowest]:
+		if src is Dictionary and src.has(key):
+			var v: String = String(src.get(key, ""))
+			if not v.is_empty():
+				return v
+	return String(fallback)
 
 
 func _apply_array_override(target: Dictionary, source: Dictionary, key: String) -> void:

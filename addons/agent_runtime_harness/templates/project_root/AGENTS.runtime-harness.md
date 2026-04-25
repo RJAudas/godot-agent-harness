@@ -19,7 +19,7 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
 # Runtime error triage
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-runtime-error-triage.ps1 `
   -ProjectRoot "<absolute path to this project>" `
-  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json"
+  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json"
 ```
 
 Parse the stdout JSON envelope — `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome` — for the result. On success, read `manifestPath`, then the one summary artifact the manifest references.

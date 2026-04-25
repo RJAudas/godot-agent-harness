@@ -43,8 +43,9 @@ pwsh ./tools/automation/invoke-behavior-watch.ps1 `
 | `outcome.samplesPath` | Absolute path to the behavior-watch trace (`trace.jsonl`) |
 | `outcome.sampleCount` | Number of frames sampled |
 | `outcome.frameRangeCovered.first` / `.last` | First and last frame numbers in the trace |
+| `outcome.warnings[]` | Non-fatal warnings — populated when `sampleCount=0`, e.g. `"target node not found or never sampled: <path>"`. Always report these to the user. |
 
-Report `sampleCount` and the frame range; read `samplesPath` only if the user asks for specific values.
+Report `sampleCount` and the frame range; read `samplesPath` only if the user asks for specific values. **When `sampleCount=0`, report `outcome.warnings[]` verbatim** — zero samples almost always means the target node was missing from the running scene, not that the property never changed.
 
 ## Failure handling
 

@@ -35,10 +35,11 @@ Pass `-IncludeRawBuildOutput` when the user asks for the raw build output path.
 | `status` | `"success"` (build clean) or `"failure"` |
 | `failureKind` | `null` on clean build; `build` when compile errors captured |
 | `manifestPath` | Absolute path to `evidence-manifest.json` |
-| `outcome.firstDiagnostic.file` / `.line` / `.message` | First GDScript compile error's location and message |
+| `outcome.firstDiagnostic.file` / `.line` / `.column` / `.message` | First GDScript compile error's location and message |
 | `outcome.rawBuildOutputPath` | Absolute path to raw build output (only when `-IncludeRawBuildOutput` was passed) |
+| `outcome.runResultPath` | Absolute path to `harness/automation/results/run-result.json` — read this for the full diagnostics array if `firstDiagnostic` is null |
 
-On `failureKind=build`, report `firstDiagnostic.file:line: message` verbatim to the user — do not paraphrase.
+On `failureKind=build`, report `firstDiagnostic.file:line: message` verbatim to the user — do not paraphrase. If `firstDiagnostic` is null, read `outcome.runResultPath` for the full `buildDiagnostics[]` array.
 
 ## Failure handling
 

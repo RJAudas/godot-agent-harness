@@ -11,8 +11,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": true
+    "stopAfterValidation": false
   },
   "requestedBy": "runbook-fixture",
-  "createdAt": "2026-04-22T00:00:00Z"
+  "createdAt": "2026-04-25T00:00:00Z"
 }

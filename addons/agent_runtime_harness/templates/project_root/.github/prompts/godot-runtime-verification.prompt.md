@@ -46,7 +46,7 @@ The `requestId` in the JSON is always overridden by the script with a fresh valu
 ```powershell
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-runtime-error-triage.ps1 `
   -ProjectRoot "<absolute path to this project>" `
-  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json"
+  -RequestFixturePath "{{HARNESS_REPO_ROOT}}/tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json"
 ```
 
 ## Reading the envelope

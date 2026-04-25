@@ -45,7 +45,7 @@
     # Then triage:
     pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
         -ProjectRoot ./integration-testing/probe `
-        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
+        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json
 
     Runs the project with pauseOnError enabled and emits a JSON envelope.
     On runtime error: outcome.latestErrorSummary contains the offending file, line,
@@ -54,7 +54,7 @@
 .EXAMPLE
     pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
         -ProjectRoot ./integration-testing/probe `
-        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json `
+        -RequestFixturePath ./tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json `
         -IncludeFullStack
 
     Same as above, with full stack trace in outcome.latestErrorSummary.message.
@@ -162,9 +162,46 @@ if (-not $cap.Ok) {
 }
 
 # Step 5: Materialize payload
-$payloadArgs = @{ RequestId = $requestId; ProjectRoot = $resolvedRoot }
-if ($hasFixture) { $payloadArgs['FixturePath'] = $RequestFixturePath }
-else             { $payloadArgs['InlineJson']  = $RequestJson }
+# F1: when the request's targetScene is missing or points at a scene that
+# doesn't exist in the project, fall back to project.godot's main_scene so
+# every project is drivable without a per-sandbox fixture variant.
+$payloadJson = if ($hasFixture) {
+    Get-Content -LiteralPath (Resolve-RunbookRepoPath -Path $RequestFixturePath) -Raw
+} else {
+    $RequestJson
+}
+
+try {
+    $payloadObj = $payloadJson | ConvertFrom-Json -Depth 20 -AsHashtable
+}
+catch {
+    Exit-Failure 'request-invalid' "Could not parse request payload as JSON: $($_.Exception.Message)"
+}
+
+$declaredScene = if ($payloadObj.ContainsKey('targetScene')) { [string]$payloadObj['targetScene'] } else { '' }
+$declaredSceneFile = if ($declaredScene.StartsWith('res://')) {
+    Join-Path $resolvedRoot $declaredScene.Substring('res://'.Length)
+} else { '' }
+$declaredSceneExists = (-not [string]::IsNullOrWhiteSpace($declaredSceneFile)) -and (Test-Path -LiteralPath $declaredSceneFile)
+
+if ([string]::IsNullOrWhiteSpace($declaredScene) -or -not $declaredSceneExists) {
+    $mainScene = Get-ProjectMainScene -ProjectRoot $resolvedRoot
+    if (-not [string]::IsNullOrWhiteSpace($mainScene)) {
+        $reason = if ([string]::IsNullOrWhiteSpace($declaredScene)) {
+            "request omitted targetScene; defaulting to project.godot run/main_scene='$mainScene'"
+        } else {
+            "request targetScene '$declaredScene' does not exist in '$resolvedRoot'; defaulting to project.godot run/main_scene='$mainScene'"
+        }
+        $_lifecycleDiags.Add($reason)
+        $payloadObj['targetScene'] = $mainScene
+    }
+}
+
+$payloadArgs = @{
+    RequestId  = $requestId
+    ProjectRoot = $resolvedRoot
+    InlineJson = ($payloadObj | ConvertTo-Json -Depth 20)
+}
 
 try {
     $materialized = Resolve-RunbookPayload @payloadArgs
@@ -199,7 +236,9 @@ if (-not [string]::IsNullOrWhiteSpace($manifestPath)) {
 if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
     $manifestCheck = Test-RunbookManifest -ManifestPath $absManifest -ProjectRoot $resolvedRoot
     if (-not $manifestCheck.Ok) {
-        Exit-Failure 'internal' $manifestCheck.Diagnostic
+        # B7/B9: propagate run-result.failureKind instead of collapsing to internal.
+        $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+        Exit-Failure $kind $manifestCheck.Diagnostic
     }
 }
 
@@ -264,21 +303,23 @@ if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace([string]
         Write-RunbookStderrSummary "FAIL: runtime; $msg"
         exit 1
     }
+    $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
     $msg = "Run failed with failureKind='$fk' (runtime-error triage handles diagnostics for failureKind=runtime only)."
     $diags = @($_lifecycleDiags) + @($msg)
-    Write-RunbookEnvelope -Status 'failure' -FailureKind $fk -ManifestPath $absManifest `
+    Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind -ManifestPath $absManifest `
         -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
             runtimeErrorRecordsPath = $runtimeErrorRecordsPath
             latestErrorSummary      = $latestErrorSummary
             terminationReason       = $terminationReason
         }
-    Write-RunbookStderrSummary "FAIL: $fk; $msg"
+    Write-RunbookStderrSummary "FAIL: $envelopeKind; $msg"
     exit 1
 }
 
 # Success path requires non-null manifestPath per envelope schema.
 if ([string]::IsNullOrWhiteSpace($absManifest)) {
-    Exit-Failure 'internal' "run-result.json did not contain a manifestPath on a successful run."
+    $kind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind ([string]$rr.failureKind) -FallbackKind 'internal'
+    Exit-Failure $kind "run-result.json did not contain a manifestPath on a successful run."
 }
 
 # Steps 10-12

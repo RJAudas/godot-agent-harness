@@ -47,7 +47,7 @@ pwsh ./tools/automation/invoke-build-error-triage.ps1 `
 # "Run and watch for runtime errors"
 pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
   -ProjectRoot <game-project-root> `
-  -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors.json
+  -RequestFixturePath tools/tests/fixtures/runbook/runtime-error-triage/run-and-watch-for-errors-no-early-stop.json
 ```
 
 For an ad-hoc input script that no fixture covers, pass `-RequestJson '<inline JSON>'` to `invoke-input-dispatch.ps1` — see its `.EXAMPLE` block. Key identifiers are bare Godot logical names (`ENTER`, `SPACE`, `LEFT`), not `KEY_*` constants.

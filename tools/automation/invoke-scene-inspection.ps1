@@ -140,78 +140,37 @@ if (-not $cap.Ok) {
     Exit-Failure $cap.FailureKind $cap.Diagnostic
 }
 
-# Step 5: Synthesize payload internally
-# NOTE: expectationFiles is required by the schema even when empty.
-# NOTE: the broker watches the canonical run-request.json path, not a per-request filename.
-$internalPayload = @{
-    requestId        = $requestId
+# Step 5: Synthesize the minimal startup-capture payload and route it through
+# the shared Resolve-RunbookPayload helper, like every other runtime invoker.
+# The helper handles validate-then-rename (C1), forces artifactRoot='' (C2),
+# defaults expectationFiles, and writes to the canonical path the broker
+# watches. Scene-inspection takes no caller-supplied fixture, so we synthesize
+# the fixed payload as inline JSON.
+$inlinePayload = [ordered]@{
+    requestId        = $requestId   # Resolve-RunbookPayload re-stamps this; harmless duplicate.
     scenarioId       = "runbook-scene-inspection-$requestId"
     runId            = $requestId
     targetScene      = $TargetScene
     outputDirectory  = "res://evidence/automation/$requestId"
-    # C2: legacy field. Empty string lets the runtime fall back to outputDirectory
-    # for manifest references (see scenegraph_artifact_writer._resolve_artifact_root).
-    # Schema still satisfied (string, present, no minLength).
-    artifactRoot     = ''
     expectationFiles = @()
-    capturePolicy    = @{ startup = $true; manual = $false; failure = $false }
-    stopPolicy       = @{ stopAfterValidation = $true }
+    capturePolicy    = [ordered]@{ startup = $true; manual = $false; failure = $false }
+    stopPolicy       = [ordered]@{ stopAfterValidation = $true }
     requestedBy      = 'runbook-scene-inspection'
     createdAt        = (Get-Date -Format 'o')
-}
-
-$requestsDir = Join-Path $resolvedRoot 'harness/automation/requests'
-if (-not (Test-Path -LiteralPath $requestsDir)) {
-    New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
-}
-# Write to the canonical path the editor broker watches (run-request.json),
-# not a per-request filename that the broker would never pick up.
-$canonicalPath = Join-Path $requestsDir 'run-request.json'
-
-# C1: validate-then-rename. The editor broker consumes $canonicalPath the
-# instant FileSystemWatcher fires; validating after the write means the
-# validator's Resolve-Path crashes when the broker has already moved the
-# file. Write to <canonical>.tmp first, validate the temp path (which the
-# broker is not watching), then atomic-rename into place. Mirrors the
-# pattern in Resolve-RunbookPayload. (Pass 2 H3 will fold this script's
-# inline write into Resolve-RunbookPayload via -InlineJson.)
-$tmpPath = "$canonicalPath.tmp"
-$internalPayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tmpPath -Encoding utf8
-
-$schemaPath = 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json'
-$schemaResolved = Resolve-RunbookRepoPath -Path $schemaPath
-$validation = & pwsh -NoProfile -File (Resolve-RunbookRepoPath -Path 'tools/validate-json.ps1') `
-    -InputPath $tmpPath -SchemaPath $schemaResolved -AllowInvalid 2>&1
-$validationExit = $LASTEXITCODE
+} | ConvertTo-Json -Depth 10
 
 try {
-    if ($validationExit -ne 0) {
-        $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
-        $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
-        Exit-Failure 'request-invalid' "Schema validator could not run (exit $validationExit): $captured"
-    }
-    $captured = ($validation | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
-    $captured = [regex]::Replace($captured, "`e\[[0-?]*[ -/]*[@-~]", '')
-    $parsed = $captured | ConvertFrom-Json -Depth 20
-    if (-not $parsed.valid) {
-        $errDetail = if ($null -ne $parsed.PSObject.Properties['error']) { $parsed.error } else { 'schema validation failed' }
-        Exit-Failure 'request-invalid' "Run request does not satisfy schema '$schemaPath': $errDetail"
-    }
-    Move-Item -LiteralPath $tmpPath -Destination $canonicalPath -Force
+    $materialized = Resolve-RunbookPayload -InlineJson $inlinePayload `
+        -RequestId $requestId -ProjectRoot $resolvedRoot
 }
 catch {
-    Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
-    if ($_.Exception.Message -match '^Run request does not satisfy|^Schema validator could not run') {
-        # Already routed through Exit-Failure; the catch is just for cleanup.
-        throw
-    }
-    Exit-Failure 'request-invalid' "Failed to validate run-request.json: $($_.Exception.Message)"
+    Exit-Failure 'request-invalid' $_.Exception.Message
 }
 
 # Step 6-7: Request + poll
 $runResult = Invoke-RunbookRequest `
     -ProjectRoot $resolvedRoot `
-    -RequestPath $canonicalPath `
+    -RequestPath $materialized.TempRequestPath `
     -ExpectedRequestId $requestId `
     -TimeoutSeconds $TimeoutSeconds `
     -PollIntervalMilliseconds $PollIntervalMilliseconds

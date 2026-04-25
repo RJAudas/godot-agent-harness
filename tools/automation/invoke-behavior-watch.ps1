@@ -108,8 +108,11 @@ if (-not $hasFixture -and -not $hasInline) {
 if ($EnsureEditor) {
     $launcher = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
     # Capture stdout only -- the helper writes a single-line stderr summary that
-    # would corrupt the JSON envelope if 2>&1-merged.
-    $launchOut = & pwsh -NoProfile -File $launcher -ProjectRoot $resolvedRoot
+    # would corrupt the JSON envelope if 2>&1-merged. Thread our own
+    # -MaxCapabilityAgeSeconds through so a stricter caller setting is not
+    # silently relaxed by the launcher's default (300s).
+    $launchOut = & pwsh -NoProfile -File $launcher `
+        -ProjectRoot $resolvedRoot -MaxCapabilityAgeSeconds $MaxCapabilityAgeSeconds
     try {
         $launchEnv = ($launchOut -join [Environment]::NewLine) | ConvertFrom-Json -Depth 20
     }

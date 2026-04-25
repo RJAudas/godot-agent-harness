@@ -16,7 +16,29 @@ $ErrorActionPreference = 'Stop'
 # invoke-*.ps1) reuses the same edition. Hardcoding 'pwsh' breaks on
 # locked-down Windows hosts that only ship powershell.exe (5.1) and on
 # environments where the binary isn't on PATH.
-$script:CurrentPwshPath = (Get-Process -Id $PID).Path
+#
+# Primary resolution is (Get-Process -Id $PID).Path, which reads the current
+# process's MainModule. That can return $null or throw on hosts where
+# Process.MainModule access is restricted (some locked-down Windows AV
+# contexts, certain Linux /proc permission setups). Fall back to $PSHOME +
+# the edition-appropriate binary name; if both fail, throw a clear error.
+$script:CurrentPwshPath = $null
+try {
+    $script:CurrentPwshPath = (Get-Process -Id $PID).Path
+} catch {
+    # MainModule access denied or unavailable -- fall through to PSHOME.
+}
+if ([string]::IsNullOrWhiteSpace($script:CurrentPwshPath)) {
+    $binaryName = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') { $binaryName += '.exe' }
+    $candidate = Join-Path $PSHOME $binaryName
+    if (Test-Path -LiteralPath $candidate) {
+        $script:CurrentPwshPath = $candidate
+    }
+}
+if ([string]::IsNullOrWhiteSpace($script:CurrentPwshPath)) {
+    throw "RunbookOrchestration: could not resolve the running pwsh binary path (tried Get-Process and `$PSHOME = '$PSHOME'). Set `$env:PWSH_PATH or run from a standard PowerShell install."
+}
 
 function Get-RunbookPwshPath {
     <#
@@ -600,6 +622,7 @@ function Get-RunZoneClassification {
         'lifecycle-status.json'      = 'transient'
         'run-result.json'            = 'transient'
         'run-request.json'           = 'transient'
+        'pause-decision.json'        = 'transient'
         'evidence-manifest.json'     = 'transient'
         'trace.jsonl'                = 'transient'
         'scenegraph-snapshot.json'   = 'transient'
@@ -610,6 +633,7 @@ function Get-RunZoneClassification {
         'pause-decision-log.jsonl'   = 'transient'
         'last-error-anchor.json'     = 'transient'
         'build-errors.jsonl'         = 'transient'
+        '*.tmp'                      = 'transient'
         '*.expected.json'            = 'oracle'
     }
 }
@@ -840,14 +864,13 @@ function Initialize-RunbookTransientZone {
     $blockedPath    = $null
 
     # Transient files live in three locations. The requests dir is included so
-    # that a stale run-request.json (or .tmp leftover from a crashed atomic
-    # rename) from a prior crashed orchestration cannot be re-processed by the
-    # editor on its next start-up.
-    $transientDirs = @(
-        (Join-Path $ProjectRoot 'harness/automation/results'),
-        (Join-Path $ProjectRoot 'harness/automation/requests'),
-        (Join-Path $ProjectRoot 'evidence/automation')
-    )
+    # that a stale run-request.json / pause-decision.json (or .tmp leftover
+    # from a crashed atomic rename) from a prior crashed orchestration cannot
+    # be re-processed by the editor on its next start-up.
+    $resultsDir  = Join-Path $ProjectRoot 'harness/automation/results'
+    $requestsDir = Join-Path $ProjectRoot 'harness/automation/requests'
+    $evidenceDir = Join-Path $ProjectRoot 'evidence/automation'
+    $transientDirs = @($resultsDir, $requestsDir, $evidenceDir)
 
     foreach ($dir in $transientDirs) {
         if (-not (Test-Path -LiteralPath $dir)) { continue }
@@ -871,14 +894,22 @@ function Initialize-RunbookTransientZone {
             # Skip editor-owned state (heartbeated by the editor on its own cadence).
             # Wiping these creates a window where invoke scripts mis-report editor-not-running.
             if ($zone -eq 'editor-state') { continue }
-            # Unclassified files are still deleted (otherwise unknown junk
-            # accumulates), but emit a diagnostic so a future addon that starts
-            # writing a new artifact kind doesn't disappear silently between
-            # runs. Add the file to Get-RunZoneClassification to suppress this.
+            # Unclassified files in the requests dir are PRESERVED (no diagnostic,
+            # no delete). Fixture project roots commit non-canonical request
+            # filenames there (run-request.healthy.json, behavior-watch-valid.json,
+            # input-dispatch/*.json, etc.) and we must not sweep them. Only
+            # explicitly-classified transients (run-request.json,
+            # pause-decision.json, *.tmp) get cleaned up here.
+            if ($null -eq $zone -and $dir -eq $requestsDir) { continue }
+            # Unclassified files in results/ and evidence/automation/ are still
+            # deleted (otherwise unknown junk accumulates), but emit a
+            # diagnostic so a future addon that starts writing a new artifact
+            # kind doesn't disappear silently between runs. Add the file to
+            # Get-RunZoneClassification to suppress this.
             if ($null -eq $zone) {
                 $diagnostics.Add("cleanup-unclassified: deleting '$relPath' -- file is not in Get-RunZoneClassification. Add it to the classification table to suppress this diagnostic.")
             }
-            # Unmatched files in the transient directories are also cleared
+            # Unmatched files in results/ and evidence/automation/ are also cleared
             if ($null -eq $zone -or $zone -eq 'transient') {
                 # Attempt delete with one retry
                 $deleted = $false

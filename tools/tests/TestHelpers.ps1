@@ -4,7 +4,19 @@ $script:RepoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')
 
 # Reuse the pwsh binary running this script for any child-process spawn.
 # Hardcoding 'pwsh' breaks on hosts where only powershell.exe is on PATH.
-$script:TestPwshPath = (Get-Process -Id $PID).Path
+# Primary path is (Get-Process -Id $PID).Path; fall back to $PSHOME if the
+# MainModule lookup is restricted (rare AV/permission contexts).
+$script:TestPwshPath = $null
+try { $script:TestPwshPath = (Get-Process -Id $PID).Path } catch { }
+if ([string]::IsNullOrWhiteSpace($script:TestPwshPath)) {
+    $binaryName = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') { $binaryName += '.exe' }
+    $candidate = Join-Path $PSHOME $binaryName
+    if (Test-Path -LiteralPath $candidate) { $script:TestPwshPath = $candidate }
+}
+if ([string]::IsNullOrWhiteSpace($script:TestPwshPath)) {
+    throw "TestHelpers: could not resolve the running pwsh binary path (tried Get-Process and `$PSHOME = '$PSHOME')."
+}
 
 function Get-RepoPath {
     param(

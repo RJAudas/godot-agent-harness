@@ -65,7 +65,11 @@ param(
 
     [int]$MaxCapabilityAgeSeconds = 300,
 
-    [int]$PollIntervalMilliseconds = 250
+    [int]$PollIntervalMilliseconds = 250,
+
+    # When set, auto-launch a Godot editor against -ProjectRoot before running.
+    # Idempotent: reuses an existing editor if capability.json is fresh.
+    [switch]$EnsureEditor
 )
 
 Set-StrictMode -Version Latest
@@ -108,6 +112,22 @@ if (-not $hasFixture -and -not $hasInline) {
 }
 
 # Step 2-3: Resolve project root (already done above)
+
+# Optional: auto-launch the editor if the caller asked for -EnsureEditor.
+if ($EnsureEditor) {
+    $launcher = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
+    $launchOut = & pwsh -NoProfile -File $launcher -ProjectRoot $resolvedRoot 2>&1
+    try {
+        $launchEnv = ($launchOut -join [Environment]::NewLine) | ConvertFrom-Json -Depth 20
+    }
+    catch {
+        Exit-Failure 'editor-not-running' "Auto-launch produced non-JSON output: $($launchOut -join '; ')"
+    }
+    if ($launchEnv.status -ne 'success') {
+        $detail = if ($null -ne $launchEnv.diagnostics -and @($launchEnv.diagnostics).Count -gt 0) { $launchEnv.diagnostics[0] } else { 'no diagnostic' }
+        Exit-Failure 'editor-not-running' "Auto-launch failed (failureKind=$($launchEnv.failureKind)): $detail"
+    }
+}
 
 # Lifecycle preamble (US1): concurrent-run guard, in-flight marker, transient-zone cleanup
 $_assertResult   = Assert-NoInFlightRun -ProjectRoot $resolvedRoot

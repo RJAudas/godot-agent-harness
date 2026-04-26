@@ -72,7 +72,7 @@ independently completable, testable, and shippable.
 
 **Goal**: A coding agent can dispatch a key (or `InputMap` action) and read the resulting scene state with one orchestration script invocation, using a tracked fixture.
 
-**Independent Test**: From a clean shell, with an editor running against an integration-testing sandbox, run `pwsh ./tools/automation/invoke-input-dispatch.ps1 -ProjectRoot integration-testing/<name> -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json` and observe a single stdout JSON envelope with `status = "success"`, `outcome.dispatchedEventCount >= 1`, and a valid `manifestPath`. Without an editor, `pwsh ./tools/tests/run-tool-tests.ps1` exercises the same script end-to-end via mocked helpers.
+**Independent Test**: From a clean shell, with an editor running against an integration-testing sandbox, run `pwsh ./tools/automation/invoke-input-dispatch.ps1 -ProjectRoot integration-testing/<name> -RequestFixturePath tools/tests/fixtures/runbook/input-dispatch/press-enter.json` and observe a single stdout JSON envelope with `status = "success"`, `outcome.actualDispatchedCount >= 1`, and a valid `manifestPath`. Without an editor, `pwsh ./tools/tests/run-tool-tests.ps1` exercises the same script end-to-end via mocked helpers.
 
 ### Validation for User Story 1 ⚠️
 
@@ -89,7 +89,7 @@ independently completable, testable, and shippable.
 - [X] T014 [US1] Create orchestration script `tools/automation/invoke-input-dispatch.ps1` per the contract in `specs/008-agent-runbook/contracts/orchestration-cli.md`:
   - Imports `RunbookOrchestration.psm1`.
   - Implements the 12-step common behavior (capability gate → payload materialization → request → poll → manifest validation → outcome assembly → stdout envelope).
-  - Workflow-specific `outcome` block: `outcomesPath` (path to `input-dispatch-outcomes.jsonl` from the manifest's `artifactRefs`), `dispatchedEventCount` (count of lines in that file), `firstFailureSummary` (first non-`success` outcome's message, or `null`).
+  - Workflow-specific `outcome` block: `outcomesPath` (path to `input-dispatch-outcomes.jsonl` from the manifest's `artifactRefs`), `declaredEventCount` (count of lines in that file), `actualDispatchedCount` (count of rows whose `status == "dispatched"`), `firstFailureSummary` (first non-`dispatched` outcome's message, or `null`).
   - Comment-based help is COMPLETE: `.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER` for every parameter, at least one `.EXAMPLE` (FR-008).
   - Stderr summary: `OK: dispatched <N> events; manifest at <path>` on success, `FAIL: <failureKind>; <first diagnostic>` on failure.
 - [X] T015 [US1] Create recipe `docs/runbook/input-dispatch.md` with the 5 required H2 sections (Prerequisites, Run it, Expected output, Failure handling, Anti-patterns) and the optional `Inline payload` section. The Anti-patterns section MUST contain the canonical `<!-- runbook:do-not-read-addon-source -->` marker block.

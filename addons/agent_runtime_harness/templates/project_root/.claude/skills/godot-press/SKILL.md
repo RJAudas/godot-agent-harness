@@ -48,8 +48,9 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-input-dispatch.ps1 `
 | `failureKind` | `null` on success; see failure table |
 | `manifestPath` | Absolute path to `evidence-manifest.json` on success |
 | `outcome.outcomesPath` | Absolute path to `input-dispatch-outcomes.jsonl` |
-| `outcome.dispatchedEventCount` | Number of events actually dispatched |
-| `outcome.firstFailureSummary` | First failed event's message, or `null` on clean success |
+| `outcome.declaredEventCount` | Number of events the script declared |
+| `outcome.actualDispatchedCount` | Number of events that **actually fired** (status=`dispatched`). When this is less than `declaredEventCount`, the run ended before the requested frames — do not claim the keys were delivered. |
+| `outcome.firstFailureSummary` | First non-`dispatched` event's reason, or `null` on clean success |
 
 ## Failure handling
 

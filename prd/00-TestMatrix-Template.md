@@ -196,13 +196,13 @@ pwsh ./tools/automation/invoke-input-dispatch.ps1 `
 **Expected envelope**:
 ```json
 { "status": "success",
-  "outcome": { "dispatchedEventCount": >=1, "firstFailureSummary": null } }
+  "outcome": { "declaredEventCount": >=1, "actualDispatchedCount": >=1, "firstFailureSummary": null } }
 ```
 
 **Always inspect** the produced `input-dispatch-outcomes.jsonl` and confirm each event row has `status: "dispatched"` (not `skipped_frame_unreached`). Mismatch between envelope and JSONL = B2.
 
 **Bugs to watch for**:
-- B2: `dispatchedEventCount` reported even when all events were skipped.
+- B2: `actualDispatchedCount` matches `declaredEventCount` even when every JSONL row is `skipped_frame_unreached` (the envelope should classify the run as `failure`).
 - B1: doubled prefix in output directory.
 - `firstFailureSummary` non-null with `status: success`.
 

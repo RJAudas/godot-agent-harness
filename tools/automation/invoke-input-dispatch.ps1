@@ -47,7 +47,8 @@
         -RequestFixturePath ./tools/tests/fixtures/runbook/input-dispatch/press-enter.json
 
     Dispatches the Enter key once and emits a JSON envelope with
-    outcome.dispatchedEventCount and outcome.outcomesPath.
+    outcome.declaredEventCount, outcome.actualDispatchedCount, and
+    outcome.outcomesPath.
 
 .EXAMPLE
     pwsh ./tools/automation/invoke-input-dispatch.ps1 `
@@ -99,7 +100,6 @@ function Exit-Failure {
             outcomesPath          = $null
             declaredEventCount    = 0
             actualDispatchedCount = 0
-            dispatchedEventCount  = 0
             firstFailureSummary   = $null
         }
     Write-RunbookStderrSummary "FAIL: $Kind; $Message"
@@ -189,6 +189,24 @@ if (-not $runResult.Ok) {
 $rr = $runResult.RunResult
 $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { $runId }
 
+# B16: when run-result already classified the failure as validation, surface
+# the validationResult.notes immediately. They carry the authoritative cause
+# (e.g. "Manifest runId did not match the active automation request"); without
+# this, the agent sees only the generic "Run failed with failureKind='validation'"
+# text below or a misleading "manifest not found" diagnostic from a downstream
+# Test-RunbookManifest call against a path the runtime never wrote to.
+if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation') {
+    $vNotes = Get-RunResultValidationDiagnostics -RunResult $rr
+    if ($vNotes.Count -gt 0) {
+        $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' -FallbackKind 'internal'
+        $diags = @($_lifecycleDiags) + @($vNotes)
+        Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind `
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{}
+        Write-RunbookStderrSummary "FAIL: $envelopeKind; $($vNotes -join ' | ')"
+        exit 1
+    }
+}
+
 # Check for harness-reported failures
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
@@ -258,9 +276,6 @@ $outcome = @{
     outcomesPath          = $outcomesPath
     declaredEventCount    = $declaredEventCount
     actualDispatchedCount = $actualDispatchedCount
-    # Kept for backwards compatibility — equals declaredEventCount. Prefer the
-    # explicit declared/actual fields above.
-    dispatchedEventCount  = $declaredEventCount
     firstFailureSummary   = $firstFailureSummary
 }
 

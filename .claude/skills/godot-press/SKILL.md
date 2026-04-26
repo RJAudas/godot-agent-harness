@@ -48,7 +48,6 @@ pwsh ./tools/automation/invoke-input-dispatch.ps1 `
 | `outcome.outcomesPath` | Absolute path to `input-dispatch-outcomes.jsonl` |
 | `outcome.declaredEventCount` | Number of events the script declared |
 | `outcome.actualDispatchedCount` | Number of events that **actually fired** (status=`dispatched`) |
-| `outcome.dispatchedEventCount` | Backwards-compat alias of `declaredEventCount`. Prefer `actualDispatchedCount`. |
 | `outcome.firstFailureSummary` | First non-`dispatched` event's reason, or `null` on clean success |
 
 Report `actualDispatchedCount` of `declaredEventCount`. Surface `firstFailureSummary` whenever it is non-null. When the two counts differ, the envelope returns `failureKind=runtime` — the run ended before the requested frames were reached. Tell the user the keys did **not** all fire; do not claim the input was delivered.

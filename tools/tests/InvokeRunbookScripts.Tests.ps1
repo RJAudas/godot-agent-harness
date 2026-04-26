@@ -875,3 +875,177 @@ Describe 'US2 SC-001: git status clean after canonical invocation (T024)' {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Pass 6a — Outcome shape cleanup (B14, B15, B16)
+# ---------------------------------------------------------------------------
+
+Describe 'B14: invoke-input-dispatch.ps1 drops legacy dispatchedEventCount' {
+    # The legacy field equalled declaredEventCount (not actual dispatched), so
+    # readers were misled. The fix removes it outright; the two truthful fields
+    # actualDispatchedCount and declaredEventCount remain.
+    BeforeAll {
+        $script:DispatchScriptPath = Join-Path $script:RepoRootPath 'tools/automation/invoke-input-dispatch.ps1'
+        $script:DispatchScriptText = Get-Content -LiteralPath $script:DispatchScriptPath -Raw
+    }
+
+    It 'invoke-input-dispatch.ps1 source contains no dispatchedEventCount references' {
+        $script:DispatchScriptText | Should -Not -Match 'dispatchedEventCount'
+    }
+
+    It 'invoke-input-dispatch.ps1 emits both declaredEventCount and actualDispatchedCount' {
+        $script:DispatchScriptText | Should -Match 'declaredEventCount'
+        $script:DispatchScriptText | Should -Match 'actualDispatchedCount'
+    }
+
+    It 'envelope built from the new outcome shape omits dispatchedEventCount' {
+        $outcome = @{
+            outcomesPath          = 'C:\fake\outcomes.jsonl'
+            declaredEventCount    = 2
+            actualDispatchedCount = 0
+            firstFailureSummary   = 'skipped_frame_unreached'
+        }
+        $json = Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' `
+            -ManifestPath 'C:\fake\manifest.json' -RunId 'run-001' -RequestId 'req-001' `
+            -Diagnostics @('synthetic') -Outcome $outcome
+        $parsed = $json | ConvertFrom-Json
+        $parsed.outcome.PSObject.Properties.Name | Should -Not -Contain 'dispatchedEventCount'
+        $parsed.outcome.declaredEventCount    | Should -Be 2
+        $parsed.outcome.actualDispatchedCount | Should -Be 0
+    }
+}
+
+Describe 'B15: invoke-behavior-watch.ps1 emits a flat warnings array' {
+    # The leading-comma idiom ,@($warnings) wraps an already-plural collection
+    # in another array layer, producing [[string]] in the JSON envelope and
+    # breaking strongly-typed consumers (TypeScript / Pydantic). The fix drops
+    # the leading comma so warnings is a flat [string] array.
+    BeforeAll {
+        $script:WatchScriptPath = Join-Path $script:RepoRootPath 'tools/automation/invoke-behavior-watch.ps1'
+        $script:WatchScriptText = Get-Content -LiteralPath $script:WatchScriptPath -Raw
+    }
+
+    It 'invoke-behavior-watch.ps1 does not use the leading-comma array wrapper around $warnings' {
+        # The exact bug: ,@($warnings). Use a relaxed pattern to also catch
+        # ", @($warnings)" or whitespace variants.
+        $script:WatchScriptText | Should -Not -Match ',\s*@\(\$warnings\)'
+    }
+
+    It 'envelope warnings stays flat when built from a multi-element List[string]' {
+        $list = [System.Collections.Generic.List[string]]::new()
+        $list.Add('target node not found or never sampled: /root/Main/Paddle')
+        $list.Add('zero samples captured; check that the watched node exists in the running scene at sample time')
+
+        $outcome = @{
+            samplesPath       = $null
+            sampleCount       = 0
+            frameRangeCovered = $null
+            warnings          = @($list)
+        }
+        $json = Write-RunbookEnvelope -Status 'success' `
+            -ManifestPath 'C:\fake\manifest.json' -RunId 'run-001' -RequestId 'req-001' `
+            -Diagnostics @() -Outcome $outcome
+
+        $parsed = $json | ConvertFrom-Json
+        @($parsed.outcome.warnings).Count | Should -Be 2
+        # Each element must be a string, not an array. ConvertFrom-Json preserves
+        # array nesting, so a nested [[string]] surfaces as Object[] for [0].
+        $parsed.outcome.warnings[0] | Should -BeOfType [string]
+        $parsed.outcome.warnings[1] | Should -BeOfType [string]
+    }
+}
+
+Describe 'B16: Get-RunResultValidationDiagnostics surfaces validationResult.notes' {
+    # When run-result reports failureKind=validation, validationResult.notes
+    # carries the authoritative explanation. The helper extracts those notes
+    # for the envelope diagnostics array, filtering the noisy "Persisted
+    # artifact references were written" boilerplate.
+
+    It 'returns empty array for $null input' {
+        Get-RunResultValidationDiagnostics -RunResult $null | Should -BeNullOrEmpty
+    }
+
+    It 'returns empty array when validationResult is missing' {
+        $rr = [pscustomobject]@{ failureKind = 'validation' }
+        Get-RunResultValidationDiagnostics -RunResult $rr | Should -BeNullOrEmpty
+    }
+
+    It 'returns empty array when validationResult.notes is missing' {
+        $rr = [pscustomobject]@{ validationResult = [pscustomobject]@{ manifestExists = $true } }
+        Get-RunResultValidationDiagnostics -RunResult $rr | Should -BeNullOrEmpty
+    }
+
+    It 'returns notes verbatim and filters out the Persisted-artifact boilerplate' {
+        $rr = [pscustomobject]@{
+            validationResult = [pscustomobject]@{
+                notes = @(
+                    'Manifest runId did not match the active automation request.',
+                    'Manifest scenarioId did not match the active automation request.',
+                    'Persisted artifact references were written successfully. Validate the manifest schema and paths.',
+                    'Persisted evidence bundle failed validation.'
+                )
+            }
+        }
+        $result = Get-RunResultValidationDiagnostics -RunResult $rr
+        @($result).Count | Should -Be 3
+        $result[0] | Should -Be 'Manifest runId did not match the active automation request.'
+        $result[1] | Should -Be 'Manifest scenarioId did not match the active automation request.'
+        $result[2] | Should -Be 'Persisted evidence bundle failed validation.'
+        # Boilerplate must be filtered:
+        @($result | Where-Object { $_ -match '^Persisted artifact references were written' }).Count | Should -Be 0
+    }
+
+    It 'skips null and whitespace-only entries' {
+        $rr = [pscustomobject]@{
+            validationResult = [pscustomobject]@{
+                notes = @($null, '', '  ', 'real diagnostic')
+            }
+        }
+        $result = Get-RunResultValidationDiagnostics -RunResult $rr
+        @($result).Count | Should -Be 1
+        $result[0] | Should -Be 'real diagnostic'
+    }
+}
+
+Describe 'B16: invoke-* scripts pre-empt Test-RunbookManifest on validation failures' {
+    # Every invoke-* script that hits Test-RunbookManifest should call
+    # Get-RunResultValidationDiagnostics first so the misleading "manifest not
+    # found" diagnostic never lands when the run actually failed validation.
+    BeforeAll {
+        $script:Pass6aScripts = @(
+            'tools/automation/invoke-input-dispatch.ps1',
+            'tools/automation/invoke-behavior-watch.ps1',
+            'tools/automation/invoke-scene-inspection.ps1',
+            'tools/automation/invoke-runtime-error-triage.ps1',
+            'tools/automation/invoke-build-error-triage.ps1'
+        )
+    }
+
+    It '<scriptPath> calls Get-RunResultValidationDiagnostics' -ForEach @(
+        @{ scriptPath = 'tools/automation/invoke-input-dispatch.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-behavior-watch.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-scene-inspection.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-runtime-error-triage.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-build-error-triage.ps1' }
+    ) {
+        $abs = Join-Path $script:RepoRootPath $scriptPath
+        $text = Get-Content -LiteralPath $abs -Raw
+        $text | Should -Match 'Get-RunResultValidationDiagnostics'
+    }
+
+    It '<scriptPath> calls the helper before Test-RunbookManifest' -ForEach @(
+        @{ scriptPath = 'tools/automation/invoke-input-dispatch.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-behavior-watch.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-scene-inspection.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-runtime-error-triage.ps1' }
+        @{ scriptPath = 'tools/automation/invoke-build-error-triage.ps1' }
+    ) {
+        $abs = Join-Path $script:RepoRootPath $scriptPath
+        $text = Get-Content -LiteralPath $abs -Raw
+        $helperIdx   = $text.IndexOf('Get-RunResultValidationDiagnostics')
+        $manifestIdx = $text.IndexOf('Test-RunbookManifest -ManifestPath')
+        $helperIdx   | Should -BeGreaterThan -1
+        $manifestIdx | Should -BeGreaterThan -1
+        $helperIdx   | Should -BeLessThan $manifestIdx -Because 'the validation pre-empt must run before the manifest sanity check'
+    }
+}

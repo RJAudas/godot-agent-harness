@@ -189,6 +189,22 @@ if (-not $runResult.Ok) {
 $rr = $runResult.RunResult
 $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { $runId }
 
+# B16: surface validationResult.notes for failureKind=validation before the
+# downstream Test-RunbookManifest check, which otherwise reports a misleading
+# "manifest not found" when the runtime wrote the manifest under a different
+# runId than run-result references.
+if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation') {
+    $vNotes = Get-RunResultValidationDiagnostics -RunResult $rr
+    if ($vNotes.Count -gt 0) {
+        $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' -FallbackKind 'internal'
+        $diags = @($_lifecycleDiags) + @($vNotes)
+        Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind `
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{}
+        Write-RunbookStderrSummary "FAIL: $envelopeKind; $($vNotes -join ' | ')"
+        exit 1
+    }
+}
+
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null

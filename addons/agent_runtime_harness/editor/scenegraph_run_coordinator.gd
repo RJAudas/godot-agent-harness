@@ -6,6 +6,7 @@ const InspectionConstants = preload("res://addons/agent_runtime_harness/shared/i
 const ScenegraphAutomationArtifactStore = preload("res://addons/agent_runtime_harness/editor/scenegraph_automation_artifact_store.gd")
 const BehaviorWatchRequestValidator = preload("res://addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd")
 const InputDispatchRequestValidator = preload("res://addons/agent_runtime_harness/shared/input_dispatch_request_validator.gd")
+const PlaytestProcessReaper = preload("res://addons/agent_runtime_harness/editor/playtest_process_reaper.gd")
 
 signal lifecycle_status_written(payload)
 signal run_completed(result)
@@ -485,6 +486,27 @@ func _finalize_after_stop(termination_status: String) -> void:
 	# on-disk-wins merge in _persist_coordinator_runtime_errors_if_any keeps
 	# the stopAfterValidation=true path safe — it's a no-op when the runtime
 	# already wrote authoritative records.
+	#
+	# B18 (pass 8c): editor_interface.stop_playing_scene() does not always
+	# reap the OS-level playtest child; if any survive, kill them BEFORE
+	# writing finalStatus=completed so the next workflow doesn't trip
+	# scene_already_running. Reaper is idempotent (no-op when no children),
+	# Windows-only, and runs synchronously — typical <1s.
+	#
+	# Mid-flush corruption is not a concern: the manifest is persisted before
+	# _request_stop fires (handle_manifest_persisted → _request_stop), and
+	# _persist_coordinator_runtime_errors_if_any below re-writes the
+	# runtime-error records from the in-memory dedup map after the kill, so
+	# any truncated last line on disk is overwritten.
+	var reap := PlaytestProcessReaper.terminate_playtest_descendants_if_windows()
+	var killed_pids: Array = reap.get("killedPids", [])
+	if not killed_pids.is_empty():
+		# stop_playing_scene() returned but a child survived — promote the
+		# termination status so the artifact reflects that we needed to
+		# force-kill. Reuse SHUTDOWN_FAILED rather than introducing a new
+		# enum value (schema migration is out of scope for B18).
+		termination_status = InspectionConstants.AUTOMATION_TERMINATION_SHUTDOWN_FAILED
+
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
 		return
@@ -847,7 +869,16 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 	if String(_active_request.get("targetScene", "")).is_empty():
 		blocked.append("target_scene_missing")
 	if _is_playing_scene():
-		blocked.append("scene_already_running")
+		# B18 belt-and-suspenders: a leaked playtest from a prior run can
+		# leave the editor reporting is_playing_scene=true. Try to reap any
+		# Godot* descendants of the editor first; if the editor still reports
+		# a scene afterward, the block is real and we surface it. Cost is one
+		# OS.execute per blocked-state check, only firing when there's already
+		# a problem — NOT in the broker's 0.5s capability poll.
+		var reap := PlaytestProcessReaper.terminate_playtest_descendants_if_windows()
+		var reaped: Array = reap.get("killedPids", [])
+		if reaped.is_empty() or _is_playing_scene():
+			blocked.append("scene_already_running")
 
 	var capture_policy: Dictionary = _active_request.get("capturePolicy", {})
 	if not bool(capture_policy.get("startup", false)) and not bool(capture_policy.get("manual", false)):

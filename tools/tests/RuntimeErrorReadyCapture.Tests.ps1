@@ -248,4 +248,46 @@ Describe 'B10: Get-RunbookRuntimeErrorOutcome projection contract' {
             finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
+
+    Context 'B10 (pass 8a): matrix-6c JSONL shape produced by the runtime OS Logger' {
+        # Locks in the projection for the exact JSONL shape the post-pass-8a
+        # runtime emits via _RuntimeErrorLogger -> _record_runtime_error_from_logger
+        # -> _append_runtime_error_record_to_disk. The capture path is verified
+        # live against integration-testing/probe (matrix row 6c); this test
+        # fences the projection-side contract so a regression in
+        # Get-RunbookRuntimeErrorOutcome's parsing of the on-disk row would
+        # turn a real failure back into a silent success.
+        It 'projects the exact Logger-captured _ready null-deref into latestErrorSummary' {
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true -Termination 'completed'
+                # Shape mirrors what _record_runtime_error_from_logger writes:
+                # function carries the GDScript func name reported by the
+                # engine Logger callback (e.g. "_ready" for a `_ready`-time
+                # crash), line is an integer (artifact writer's read-merge
+                # normalizes JSON-reparsed floats back to int), and message
+                # is the engine's "Cannot call method 'X' on a null value." text.
+                $row = [ordered]@{
+                    runId       = 'b10-projection-test'
+                    ordinal     = 1
+                    scriptPath  = 'res://scripts/broken.gd'
+                    line        = 4
+                    'function'  = '_ready'
+                    message     = "Cannot call method 'get_name' on a null value."
+                    severity    = 'error'
+                    firstSeenAt = '2026-04-26T19:01:47Z'
+                    lastSeenAt  = '2026-04-26T19:01:47Z'
+                    repeatCount = 1
+                }
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @($row)
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                $outcome.latestErrorSummary | Should -Not -BeNullOrEmpty
+                $outcome.latestErrorSummary.file | Should -Be 'res://scripts/broken.gd'
+                $outcome.latestErrorSummary.line | Should -Be 4
+                $outcome.latestErrorSummary.message | Should -Match 'null'
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }

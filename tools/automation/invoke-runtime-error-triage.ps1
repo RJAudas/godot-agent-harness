@@ -253,6 +253,14 @@ if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation'
     }
 }
 
+# B19: emit a structured envelope when the broker refused the run before any
+# evidence could be captured (e.g. scene_already_running). Must run before the
+# manifest read since blocked runs do not produce a manifest.
+$blockedMsg = Get-BlockedRunDiagnostics -RunResult $rr
+if ($null -ne $blockedMsg) {
+    Exit-Failure 'runtime' $blockedMsg
+}
+
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null
@@ -283,6 +291,25 @@ catch {
 $runtimeErrorRecordsPath = $outcome.runtimeErrorRecordsPath
 $latestErrorSummary      = $outcome.latestErrorSummary
 $terminationReason       = $outcome.terminationReason
+
+# B10/B17 (pass 7a): runtime-error triage's whole purpose is to detect runtime
+# errors. If the manifest's runtime-error-records.jsonl carries any record, the
+# workflow MUST report failure regardless of what the broker put in
+# rr.finalStatus. Pre-7a, runtime errors raised in _ready/_process were
+# silently dropped because the broker finalized as "completed" and the
+# orchestrator's success branch overrode latestErrorSummary to $null.
+if ($null -ne $latestErrorSummary -and $rr.finalStatus -ne 'failed') {
+    $msg = "Runtime error at $($latestErrorSummary.file):$($latestErrorSummary.line): $($latestErrorSummary.message)"
+    $diags = @($_lifecycleDiags) + @($msg)
+    Write-RunbookEnvelope -Status 'failure' -FailureKind 'runtime' -ManifestPath $absManifest `
+        -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
+            runtimeErrorRecordsPath = $runtimeErrorRecordsPath
+            latestErrorSummary      = $latestErrorSummary
+            terminationReason       = $terminationReason
+        }
+    Write-RunbookStderrSummary "FAIL: runtime; $msg"
+    exit 1
+}
 
 # Pass through any harness-reported failure (runtime, build, timeout, internal, ...).
 # Only the runtime case carries enriched outcome.latestErrorSummary; all other

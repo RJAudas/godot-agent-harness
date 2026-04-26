@@ -1188,3 +1188,92 @@ Describe 'Get-BlockedReasonDiagnostics (F2)' {
         ($hints[1]) | Should -Match 'res://x.tscn'
     }
 }
+
+# ---------------------------------------------------------------------------
+# B19 — Get-BlockedRunDiagnostics returns a single message string (or $null)
+# without throwing PropertyNotFoundStrict on single-element blockedReasons
+# arrays under Set-StrictMode -Version Latest.
+#
+# The regression repro is the single-element-array case — that is the exact
+# shape (`@("scene_already_running")`) that caused the original
+# invoke-scene-inspection.ps1 crash to bubble up as a raw PS exception
+# instead of a structured envelope.
+# ---------------------------------------------------------------------------
+
+Describe 'Get-BlockedRunDiagnostics (B19)' {
+
+    It 'returns $null when RunResult is $null' {
+        Get-BlockedRunDiagnostics -RunResult $null | Should -BeNullOrEmpty
+    }
+
+    It 'returns $null when finalStatus is "completed"' {
+        $rr = [pscustomobject]@{ finalStatus = 'completed'; blockedReasons = @() }
+        Get-BlockedRunDiagnostics -RunResult $rr | Should -BeNullOrEmpty
+    }
+
+    It 'returns $null when finalStatus is "failed"' {
+        $rr = [pscustomobject]@{ finalStatus = 'failed'; failureKind = 'runtime' }
+        Get-BlockedRunDiagnostics -RunResult $rr | Should -BeNullOrEmpty
+    }
+
+    It 'returns the diagnostic string for blocked + single-element blockedReasons (B19 regression)' {
+        # This is the original B19 repro: a single-element array used to
+        # unwrap to a bare string under StrictMode and `.Count` then threw
+        # PropertyNotFoundStrict. The leading-comma idiom inside the helper
+        # forces the array shape to survive.
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{
+            finalStatus    = 'blocked'
+            blockedReasons = @('scene_already_running')
+        }
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr
+        $msg | Should -Not -BeNullOrEmpty
+        $msg | Should -Match 'Run was blocked before evidence was captured'
+        $msg | Should -Match 'scene_already_running'
+        $msg | Should -Match 'invoke-stop-editor'
+    }
+
+    It 'returns the diagnostic string for blocked + multi-element blockedReasons' {
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{
+            finalStatus    = 'blocked'
+            blockedReasons = @('scene_already_running', 'target_scene_missing')
+        }
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr -TargetScene 'res://main.tscn'
+        $msg | Should -Match 'scene_already_running, target_scene_missing'
+        $msg | Should -Match 'res://main.tscn'
+    }
+
+    It 'returns the diagnostic string for blocked + empty blockedReasons array' {
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{
+            finalStatus    = 'blocked'
+            blockedReasons = @()
+        }
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr
+        $msg | Should -Match 'blockedReasons: unknown'
+        $msg | Should -Match 'No blockedReasons were reported'
+    }
+
+    It 'returns the diagnostic string for blocked + $null blockedReasons' {
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{
+            finalStatus    = 'blocked'
+            blockedReasons = $null
+        }
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr
+        $msg | Should -Match 'blockedReasons: unknown'
+    }
+
+    It 'returns the diagnostic string when blockedReasons property is missing entirely (Copilot review on PR #39)' {
+        # A malformed/older run-result could carry finalStatus="blocked" without
+        # a blockedReasons property at all. Under StrictMode, the bare property
+        # access would itself throw PropertyNotFoundStrict — the exact failure
+        # mode B19 was meant to eliminate. The function must guard the lookup
+        # and treat a missing property the same as $null/empty.
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{ finalStatus = 'blocked' }  # no blockedReasons property
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr
+        $msg | Should -Match 'blockedReasons: unknown'
+    }
+}

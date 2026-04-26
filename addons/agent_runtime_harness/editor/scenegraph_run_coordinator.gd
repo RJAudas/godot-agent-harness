@@ -291,7 +291,16 @@ func handle_manifest_persisted(manifest: Dictionary) -> void:
 				})
 		return
 
-	_finalize_run("completed", null, InspectionConstants.AUTOMATION_TERMINATION_RUNNING)
+	# B18: even on stopAfterValidation=false, terminate the playtest before
+	# finalizing — leaving it alive made subsequent runs trip
+	# scene_already_running and produced a self-contradictory
+	# finalStatus="completed" + terminationStatus="running" run-result.
+	# Finalization now fires from handle_session_state_changed's disconnect
+	# branch via _finalize_after_stop, which mirrors the stopAfterValidation=true
+	# path: terminationStatus reflects real post-stop state, and any late
+	# runtime-error records are persisted by the choke point in _finalize_run
+	# (see _persist_coordinator_runtime_errors_if_any).
+	_request_stop()
 
 
 func handle_runtime_session_configured(session_context: Dictionary) -> void:
@@ -469,103 +478,18 @@ func _finalize_after_stop(termination_status: String) -> void:
 	if not _active:
 		return
 	_awaiting_stop = false
-	# B10: only the deferred-finalization path (stopAfterValidation=false) needs
-	# coordinator-side merging of late runtime-error records. When
-	# stopAfterValidation=true, the runtime persists records during the validation
-	# stop flow (and _flush_runtime_error_records_on_exit handles any late writes
-	# from the runtime side), so flushing here would only duplicate work and risk
-	# overwriting the runtime's authoritative on-disk records with the
-	# coordinator's stale repeatCount/lastSeenAt (the coordinator only sees
-	# first-occurrence records — see _record_runtime_error_from_editor at line 409
-	# of scenegraph_runtime.gd which only forwards on first occurrence).
-	if not _should_stop_after_validation():
-		_flush_late_runtime_error_records_if_any()
+	# B10/B17 (pass 7a): the coordinator-side runtime-error flush moved into
+	# _finalize_run as a single choke point so EVERY finalization path persists
+	# the dedup map (the previous deferred-only flush missed the abnormal-exit
+	# paths where the runtime's own dedup is empty). The conservative
+	# on-disk-wins merge in _persist_coordinator_runtime_errors_if_any keeps
+	# the stopAfterValidation=true path safe — it's a no-op when the runtime
+	# already wrote authoritative records.
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
 		return
 
 	_finalize_run("completed", null, termination_status)
-
-
-## B10: Add coordinator-accumulated runtime-error records to the JSONL the runtime
-## wrote at persist time, when those records are MISSING from disk. Late records
-## (arriving after the initial persist but before clean stop) live only in
-## _runtime_error_dedup; without this flush they are lost. The on-disk record
-## always wins on dedup-key collision because the runtime sees every occurrence
-## (and maintains accurate repeatCount / lastSeenAt) while the coordinator only
-## sees the first occurrence (forwarded via RUNTIME_ERROR_MSG_RECORD on first
-## insert in scenegraph_runtime.gd:409). Conservative merge avoids regressing
-## already-persisted record fidelity.
-func _flush_late_runtime_error_records_if_any() -> void:
-	if _runtime_error_dedup.is_empty():
-		return
-	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
-	var abs_dir: String
-	if output_dir.begins_with("res://"):
-		var project_path := ProjectSettings.globalize_path("res://")
-		abs_dir = output_dir.replace("res://", project_path)
-	else:
-		abs_dir = output_dir
-	if not DirAccess.dir_exists_absolute(abs_dir):
-		DirAccess.make_dir_recursive_absolute(abs_dir)
-	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
-
-	# Read existing on-disk records first; on-disk entries are AUTHORITATIVE and
-	# never overwritten. Only coordinator records whose dedup key is absent from
-	# disk get appended.
-	var merged: Dictionary = {}
-	var on_disk_keys: Dictionary = {}
-	if FileAccess.file_exists(jsonl_path):
-		var rh := FileAccess.open(jsonl_path, FileAccess.READ)
-		if rh != null:
-			while not rh.eof_reached():
-				var raw := rh.get_line().strip_edges()
-				if raw.is_empty():
-					continue
-				var parsed = JSON.parse_string(raw)
-				if typeof(parsed) != TYPE_DICTIONARY:
-					continue
-				var rec: Dictionary = parsed
-				var k := "%s|%d|%s" % [
-					String(rec.get("scriptPath", "unknown")),
-					int(rec.get("line", -1)) if rec.get("line") != null else -1,
-					String(rec.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
-				]
-				merged[k] = rec
-				on_disk_keys[k] = true
-			rh.close()
-	# Add coordinator records only when the dedup key is missing from disk —
-	# never overwrite authoritative runtime data with coordinator's first-occurrence
-	# snapshot (which would lose repeatCount, lastSeenAt, and any later fields).
-	var added_late_records := false
-	for k in _runtime_error_dedup.keys():
-		var key_str := String(k)
-		if on_disk_keys.has(key_str):
-			continue
-		merged[key_str] = _runtime_error_dedup[k]
-		added_late_records = true
-
-	# If everything coordinator saw was already on disk, nothing to do — the
-	# runtime's persist + on-exit flush handled it.
-	if not added_late_records:
-		return
-
-	if merged.is_empty():
-		return
-
-	var records: Array = merged.values().duplicate(true)
-	records.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
-	var wh := FileAccess.open(jsonl_path, FileAccess.WRITE)
-	if wh == null:
-		return
-	for r in records:
-		wh.store_line(JSON.stringify(r))
-	wh.close()
-
-	var vn: Array = _last_validation.get("notes", []).duplicate(true)
-	if not "runtime_error_records: late_records_flushed" in vn:
-		vn.append("runtime_error_records: late_records_flushed")
-	_last_validation["notes"] = vn
 
 
 func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
@@ -653,12 +577,25 @@ func _fail_run(failure_kind: String, message: String) -> void:
 	_finalize_run("failed", failure_kind, _derive_failure_termination_status(), message)
 
 
-## Fix #19: Emergency persist of any in-memory error records accumulated by
-## _on_runtime_error_record when the run ends abnormally before the runtime
-## had a chance to write runtime-error-records.jsonl itself.  Only writes
-## when the target file is missing or empty so a runtime-written file is never
-## overwritten.
-func _emergency_persist_runtime_errors() -> void:
+## Persist any coordinator-accumulated runtime-error records to the JSONL,
+## merging conservatively against whatever the runtime already wrote.
+## On-disk records are AUTHORITATIVE — coordinator only fills in dedup keys
+## absent from disk so the runtime's full repeatCount/lastSeenAt fidelity is
+## never overwritten with the coordinator's first-occurrence snapshot.
+##
+## B10/B17 (pass 7a): wired into _finalize_run as the single choke point so
+## EVERY finalization path persists the coordinator's dedup map. Replaces
+## the pass-6b _flush_late_runtime_error_records_if_any (clean-stop only)
+## and the pre-7 _emergency_persist_runtime_errors (crash only). On
+## stopAfterValidation=true clean stops the merge is a no-op (runtime wrote
+## authoritative records first); on `_ready`/`_process` crashes — where the
+## runtime's own dedup map is empty because the editor-side bridge's
+## forwarded message races the playtest teardown — this is the ONLY surviving
+## copy of the records, so the merge writes them.
+##
+## Also persists the last-error anchor sidecar so crash classification has
+## a recoverable on-disk record when the runtime exited before writing one.
+func _persist_coordinator_runtime_errors_if_any() -> void:
 	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
 	var abs_dir: String
 	if output_dir.begins_with("res://"):
@@ -668,47 +605,81 @@ func _emergency_persist_runtime_errors() -> void:
 		abs_dir = output_dir
 	if not DirAccess.dir_exists_absolute(abs_dir):
 		DirAccess.make_dir_recursive_absolute(abs_dir)
+
 	var vn: Array = _last_validation.get("notes", []).duplicate(true)
+
 	if _runtime_error_dedup.is_empty():
 		if not "runtime_error_records: none_observed" in vn:
 			vn.append("runtime_error_records: none_observed")
 		_last_validation["notes"] = vn
 		return
+
 	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
-	var should_write := not FileAccess.file_exists(jsonl_path)
-	if not should_write:
-		var fh := FileAccess.open(jsonl_path, FileAccess.READ)
-		if fh != null:
-			should_write = fh.get_length() == 0
-			fh.close()
-	if should_write:
-		var records: Array = _runtime_error_dedup.values().duplicate(true)
+
+	# Conservative on-disk-wins merge.
+	var merged: Dictionary = {}
+	var on_disk_keys: Dictionary = {}
+	if FileAccess.file_exists(jsonl_path):
+		var rh := FileAccess.open(jsonl_path, FileAccess.READ)
+		if rh != null:
+			while not rh.eof_reached():
+				var raw := rh.get_line().strip_edges()
+				if raw.is_empty():
+					continue
+				var parsed = JSON.parse_string(raw)
+				if typeof(parsed) != TYPE_DICTIONARY:
+					continue
+				var rec: Dictionary = parsed
+				var k := "%s|%d|%s" % [
+					String(rec.get("scriptPath", "unknown")),
+					int(rec.get("line", -1)) if rec.get("line") != null else -1,
+					String(rec.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+				]
+				merged[k] = rec
+				on_disk_keys[k] = true
+			rh.close()
+
+	var added := false
+	for k in _runtime_error_dedup.keys():
+		var key_str := String(k)
+		if on_disk_keys.has(key_str):
+			continue
+		merged[key_str] = _runtime_error_dedup[k]
+		added = true
+
+	if added:
+		var records: Array = merged.values().duplicate(true)
 		records.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
-		var fh := FileAccess.open(jsonl_path, FileAccess.WRITE)
-		if fh != null:
+		var wh := FileAccess.open(jsonl_path, FileAccess.WRITE)
+		if wh != null:
 			for r in records:
-				fh.store_line(JSON.stringify(r))
-			fh.close()
-	# Comment 1: always stamp when records exist, independent of whether a write was
-	# needed — the runtime may have already written the file on a clean exit.
-	if not "runtime_error_records: emergency_persisted" in vn:
-		vn.append("runtime_error_records: emergency_persisted")
+				wh.store_line(JSON.stringify(r))
+			wh.close()
+		if not "runtime_error_records: coordinator_persisted" in vn:
+			vn.append("runtime_error_records: coordinator_persisted")
+	else:
+		if not "runtime_error_records: runtime_authoritative" in vn:
+			vn.append("runtime_error_records: runtime_authoritative")
+
 	_last_validation["notes"] = vn
+
 	if not _last_error_anchor.is_empty():
 		var anchor_path := abs_dir.path_join(InspectionConstants.DEFAULT_LAST_ERROR_ANCHOR_FILE)
 		if not FileAccess.file_exists(anchor_path):
-			var fh := FileAccess.open(anchor_path, FileAccess.WRITE)
-			if fh != null:
-				fh.store_string(JSON.stringify(_last_error_anchor))
-				fh.close()
+			var ah := FileAccess.open(anchor_path, FileAccess.WRITE)
+			if ah != null:
+				ah.store_string(JSON.stringify(_last_error_anchor))
+				ah.close()
 
 
 ## T031: Called on abnormal disconnect (no manifest, no stop request).
 ## Reads the coordinator's in-memory last-error anchor (populated by _on_runtime_error_record)
 ## or the on-disk sidecar written by T030, and finalizes the run with termination = crashed.
 func _fail_run_as_crashed() -> void:
-	# Fix #19: flush any in-memory error records the runtime never got to persist.
-	_emergency_persist_runtime_errors()
+	# B10/B17 (pass 7a): runtime-error records flush moved into _finalize_run
+	# as the single choke point for every finalization path. The anchor lookup
+	# below still runs here because crash classification (CRASHED termination)
+	# is unique to this path.
 	var anchor := _last_error_anchor.duplicate(true)
 	# Also try reading the sidecar from disk as a recovery fallback.
 	if anchor.is_empty():
@@ -750,6 +721,13 @@ func _read_last_error_anchor_sidecar() -> Dictionary:
 
 
 func _finalize_run(final_status: String, failure_kind, termination_status: String, note := "", build_failure := {}) -> void:
+	# B10/B17 (pass 7a): single choke point for persisting coordinator-side
+	# runtime-error records. Runs BEFORE _last_validation is duplicated so the
+	# notes the helper adds (coordinator_persisted / runtime_authoritative /
+	# none_observed) reach the run-result. Conservative on-disk-wins merge —
+	# safe to call on every path including stopAfterValidation=true clean stops.
+	_persist_coordinator_runtime_errors_if_any()
+
 	var manifest_path = null
 	if not _last_manifest.is_empty():
 		manifest_path = _resolve_manifest_repo_path()

@@ -760,6 +760,67 @@ function Get-BlockedReasonDiagnostics {
     return ,$result.ToArray()
 }
 
+function Get-BlockedRunDiagnostics {
+    <#
+    .SYNOPSIS
+        If the run-result is in finalStatus=blocked, return the human-readable
+        diagnostic message every invoke script should hand to its Exit-Failure
+        helper. Otherwise return $null. (B19)
+
+    .DESCRIPTION
+        Centralises the blocked-status branch that previously lived only in
+        invoke-scene-inspection.ps1 — and crashed there under StrictMode when
+        blockedReasons was a single-element array (B19). The unwrap-safe array
+        handling lives here once so every invoke script behaves identically.
+
+        Returns $null when finalStatus is not "blocked" so callers can use
+        the idiom:
+            $msg = Get-BlockedRunDiagnostics -RunResult $rr -TargetScene $TargetScene
+            if ($null -ne $msg) { Exit-Failure 'runtime' $msg }
+
+    .PARAMETER RunResult
+        The parsed run-result.json object (PSCustomObject).
+
+    .PARAMETER TargetScene
+        Optional targetScene string forwarded to Get-BlockedReasonDiagnostics
+        for the target_scene_missing hint. Empty string is fine when the
+        invoke script does not bind TargetScene as a parameter.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        # Intentionally not [Parameter(Mandatory)] so callers can pass $null
+        # (e.g. when ConvertFrom-Json returned $null on a malformed
+        # run-result.json) without binding-time exceptions.
+        $RunResult,
+        [string]$TargetScene = ''
+    )
+
+    if ($null -eq $RunResult) { return $null }
+    if (-not ($RunResult.PSObject.Properties.Name -contains 'finalStatus')) { return $null }
+    if ([string]$RunResult.finalStatus -ne 'blocked') { return $null }
+
+    # Force array shape with the leading-comma idiom (same precedent as B11 at
+    # line ~1492). Without the comma, a single-element array unwraps to a bare
+    # string under PowerShell's pipeline-unwrap rules and `.Count` then throws
+    # PropertyNotFoundStrict under Set-StrictMode.
+    #
+    # Guard the blockedReasons lookup as well: a malformed/older run-result
+    # could carry finalStatus="blocked" without a blockedReasons property at
+    # all, and the bare property access would itself throw
+    # PropertyNotFoundStrict under StrictMode — the exact failure mode B19
+    # was meant to eliminate (Copilot review on PR #39).
+    $hasBlockedReasons = $RunResult.PSObject.Properties.Name -contains 'blockedReasons'
+    $reasons = if ($hasBlockedReasons -and $null -ne $RunResult.blockedReasons) {
+        ,@($RunResult.blockedReasons | ForEach-Object { [string]$_ })
+    } else {
+        ,@()
+    }
+    $reasonList = if ($reasons.Count -gt 0) { $reasons -join ', ' } else { 'unknown' }
+    $hints      = Get-BlockedReasonDiagnostics -BlockedReasons $reasons -TargetScene $TargetScene
+    return "Run was blocked before evidence was captured. blockedReasons: $reasonList. $($hints -join ' ')"
+}
+
 function Get-RunbookRuntimeErrorOutcome {
     <#
     .SYNOPSIS
@@ -1853,6 +1914,7 @@ Export-ModuleMember -Function @(
     'ConvertTo-EnvelopeFailureKind',
     'Get-RunResultValidationDiagnostics',
     'Get-BlockedReasonDiagnostics',
+    'Get-BlockedRunDiagnostics',
     'Get-RunbookRuntimeErrorOutcome',
     'ConvertTo-FirstBuildDiagnostic',
     'Get-ProjectMainScene',

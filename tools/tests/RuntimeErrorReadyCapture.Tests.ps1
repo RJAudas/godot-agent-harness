@@ -333,6 +333,28 @@ Describe 'B10: Get-RunbookRuntimeErrorOutcome projection contract' {
             }
             finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
         }
+
+        It 'does NOT flip on malformed JSONL even when actualFrames < minRuntimeFrames' {
+            # Per Copilot review on PR #41: a non-empty JSONL whose last row
+            # fails ConvertFrom-Json projects as latestErrorSummary=null —
+            # which used to misfire as suspiciousEmptyCapture=true even though
+            # the capture pipeline DID write data. The capture wasn't empty;
+            # the projection failed. Different diagnostic semantics; do not
+            # flip the empty-capture flag.
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true `
+                    -MinRuntimeFrames 30 -ActualFrames 0
+                Set-Content -LiteralPath $sb.JsonlPath -Value 'not-json' -Encoding utf8
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                $outcome.latestErrorSummary | Should -BeNullOrEmpty -Because "projection bails on malformed JSON"
+
+                Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $sb.ManifestPath
+                $outcome.suspiciousEmptyCapture | Should -BeFalse -Because "the file has non-whitespace content; the capture pipeline ran, the projection failed — that's a different diagnostic"
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
     }
 
     Context 'B10 (pass 8a): matrix-6c JSONL shape produced by the runtime OS Logger' {

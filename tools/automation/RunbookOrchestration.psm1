@@ -969,10 +969,35 @@ function Add-SuspiciousEmptyCaptureFlag {
         return
     }
 
-    $jsonlEmpty = ($null -eq $Outcome.latestErrorSummary) -and `
-                  (-not [string]::IsNullOrWhiteSpace([string]$Outcome.runtimeErrorRecordsPath)) -and `
-                  (Test-Path -LiteralPath $Outcome.runtimeErrorRecordsPath)
-    if (-not $jsonlEmpty) {
+    # Cheap fast-path: if the projection already produced a latestErrorSummary,
+    # the capture pipeline worked — nothing to flag.
+    if ($null -ne $Outcome.latestErrorSummary) {
+        return
+    }
+
+    $runtimeErrorRecordsPath = [string]$Outcome.runtimeErrorRecordsPath
+    if ([string]::IsNullOrWhiteSpace($runtimeErrorRecordsPath) -or `
+        -not (Test-Path -LiteralPath $runtimeErrorRecordsPath)) {
+        return
+    }
+
+    # Distinguish a genuinely empty JSONL from one with malformed-but-present
+    # content. Get-RunbookRuntimeErrorOutcome treats both as null
+    # latestErrorSummary, but the diagnostic semantics differ:
+    #   - empty file + budget under-shot   → suspiciousEmptyCapture
+    #   - non-empty file + null projection → projection failure (different bug)
+    # If the file has any non-whitespace content, the capture pipeline DID
+    # write data; do NOT flip suspiciousEmptyCapture.
+    $jsonlRaw = $null
+    try {
+        $jsonlRaw = Get-Content -LiteralPath $runtimeErrorRecordsPath -Raw -ErrorAction Stop
+    }
+    catch {
+        # If we can't even read the file, do not silently flip the flag —
+        # treat as inconclusive and bail.
+        return
+    }
+    if (-not [string]::IsNullOrWhiteSpace($jsonlRaw)) {
         return
     }
 

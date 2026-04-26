@@ -239,11 +239,12 @@ if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.fail
     Exit-Failure $envelopeKind "Run failed with failureKind='$fk'."
 }
 
-if ($rr.finalStatus -eq 'blocked') {
-    $reasons    = if ($null -ne $rr.blockedReasons) { @($rr.blockedReasons | ForEach-Object { [string]$_ }) } else { @() }
-    $reasonList = if ($reasons.Count -gt 0) { $reasons -join ', ' } else { 'unknown' }
-    $hints      = Get-BlockedReasonDiagnostics -BlockedReasons $reasons -TargetScene $TargetScene
-    Exit-Failure 'runtime' "Run was blocked before evidence was captured. blockedReasons: $reasonList. $($hints -join ' ')"
+# B19: Get-BlockedRunDiagnostics centralises the unwrap-safe blockedReasons
+# handling that previously lived inline here and crashed under StrictMode when
+# blockedReasons was a single-element array.
+$blockedMsg = Get-BlockedRunDiagnostics -RunResult $rr -TargetScene $TargetScene
+if ($null -ne $blockedMsg) {
+    Exit-Failure 'runtime' $blockedMsg
 }
 
 # Step 8: Read manifest

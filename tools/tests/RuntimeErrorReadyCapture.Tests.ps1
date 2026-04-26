@@ -216,4 +216,36 @@ Describe 'B10: Get-RunbookRuntimeErrorOutcome projection contract' {
             finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
+
+    Context 'B10/B17 (pass 7a): orchestrator elevation contract' {
+        # invoke-runtime-error-triage.ps1 elevates to status=failure /
+        # failureKind=runtime when latestErrorSummary is non-null, regardless
+        # of rr.finalStatus. This Context locks in the projection contract
+        # the elevation reads:
+        #   - terminationReason="completed" + JSONL with at least one record
+        #     MUST yield a non-null latestErrorSummary so the orchestrator
+        #     elevates and exits 1 with failureKind=runtime.
+        # The full elevation behavior is verified by the live-editor pass-7
+        # matrix re-run; this test prevents the projection from regressing
+        # to "$null when terminationReason=completed" which would silently
+        # disable the elevation.
+        It 'projection emits non-null latestErrorSummary even when termination=completed' {
+            $sb = & $script:NewSandbox
+            try {
+                # Mirrors the post-7a coordinator state on a _ready-time crash:
+                # broker writes finalStatus=completed (the playtest exited via
+                # the harness's deferred-stop path), but the JSONL has the
+                # error record the coordinator persisted via the new choke point.
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true -Termination 'completed'
+                $rec = & $script:NewErrorRecord
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @($rec)
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                $outcome.terminationReason | Should -Be 'completed' -Because "the broker finalized as completed; the elevation must rely on latestErrorSummary, not terminationReason"
+                $outcome.latestErrorSummary | Should -Not -BeNullOrEmpty -Because "the orchestrator's elevation conditions on latestErrorSummary being non-null"
+                $outcome.latestErrorSummary.file | Should -Be 'res://scripts/error_main.gd'
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }

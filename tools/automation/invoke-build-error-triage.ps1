@@ -217,6 +217,14 @@ if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation'
     }
 }
 
+# B19: emit a structured envelope when the broker refused the run before any
+# evidence could be captured (e.g. scene_already_running). Must run before the
+# manifest read since blocked runs do not produce a manifest.
+$blockedMsg = Get-BlockedRunDiagnostics -RunResult $rr
+if ($null -ne $blockedMsg) {
+    Exit-Failure 'runtime' $blockedMsg
+}
+
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null

@@ -205,6 +205,14 @@ if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation'
     }
 }
 
+# B19: emit a structured envelope when the broker refused the run before any
+# evidence could be captured (e.g. scene_already_running). Without this branch
+# the script would fall through to the manifestPath read and crash differently.
+$blockedMsg = Get-BlockedRunDiagnostics -RunResult $rr
+if ($null -ne $blockedMsg) {
+    Exit-Failure 'runtime' $blockedMsg
+}
+
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
     $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'

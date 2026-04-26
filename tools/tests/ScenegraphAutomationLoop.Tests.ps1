@@ -362,3 +362,93 @@ Describe 'Fix #18: stopAfterValidation=false deferred-failure contract' {
         $result.ParsedOutput.valid | Should -BeTrue -Because 'the schema permits terminationStatus=running; behavioral correctness is the coordinator fix'
     }
 }
+
+Describe 'B18: stopAfterValidation=false clean-stop contract (pass 7)' {
+    # Pass 7 extended Fix #18 to also stop the playtest on the clean-validation
+    # path (not just the validation-failure path). Before B18 the coordinator
+    # finalized at scenegraph_run_coordinator.gd:294 with
+    # finalStatus="completed" + terminationStatus="running" and left the
+    # playtest alive — the next run hit scene_already_running.
+    #
+    # These tests lock in the post-fix shape: when validation passes with
+    # stopAfterValidation=false, finalization defers to the disconnect
+    # handler via _request_stop, so terminationStatus reflects real
+    # post-stop state ("stopped_cleanly") and never the impossible
+    # "running" pairing.
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    It 'a clean-validation deferred-stop run-result with terminationStatus=stopped_cleanly is schema-valid' {
+        # The fixed coordinator routes the stopAfterValidation=false clean
+        # path through _request_stop → disconnect → _finalize_after_stop,
+        # which emits terminationStatus="stopped_cleanly" instead of the
+        # pre-B18 contradictory "running".
+        $payloadPath = Join-Path $TestDrive 'b18-clean-stop-run-result.json'
+        @{
+            requestId        = 'runbook-runtime-error-triage-b18-clean-001'
+            runId            = 'runbook-runtime-error-triage-b18-clean-run-001'
+            finalStatus      = 'completed'
+            failureKind      = $null
+            manifestPath     = 'integration-testing/probe/evidence/automation/runbook-runtime-error-triage-b18-clean-run-001/evidence-manifest.json'
+            outputDirectory  = 'res://evidence/automation/runbook-runtime-error-triage-b18-clean-run-001'
+            validationResult = @{
+                manifestExists       = $true
+                artifactRefsChecked  = 4
+                missingArtifacts     = @()
+                bundleValid          = $true
+                notes                = @()
+                validatedAt          = '2026-04-26T00:00:00Z'
+            }
+            terminationStatus = 'stopped_cleanly'
+            blockedReasons    = @()
+            controlPath       = 'file_broker'
+            completedAt       = '2026-04-26T00:00:00Z'
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue
+    }
+
+    It 'finalStatus="completed" + terminationStatus="running" is schema-valid but MUST NOT appear post-B18' {
+        # Documents the pre-B18 contradictory pairing for reviewers — the
+        # schema permits it, but the coordinator (post-fix) never emits it.
+        # If a future regression reintroduces this shape, the live-editor
+        # rerun of the pass-7 matrix is the gating signal; this test only
+        # establishes the contract the schema permits.
+        $payloadPath = Join-Path $TestDrive 'b18-broken-running-completed.json'
+        @{
+            requestId         = 'runbook-runtime-error-triage-b18-broken-001'
+            runId             = 'runbook-runtime-error-triage-b18-broken-run-001'
+            finalStatus       = 'completed'
+            failureKind       = $null
+            manifestPath      = 'integration-testing/probe/evidence/automation/runbook-runtime-error-triage-b18-broken-run-001/evidence-manifest.json'
+            outputDirectory   = 'res://evidence/automation/runbook-runtime-error-triage-b18-broken-run-001'
+            validationResult  = @{
+                manifestExists       = $true
+                artifactRefsChecked  = 4
+                missingArtifacts     = @()
+                bundleValid          = $true
+                notes                = @()
+                validatedAt          = '2026-04-26T00:00:00Z'
+            }
+            terminationStatus = 'running'
+            blockedReasons    = @()
+            controlPath       = 'file_broker'
+            completedAt       = '2026-04-26T00:00:00Z'
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $payloadPath
+
+        $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+            '-InputPath', $payloadPath,
+            '-SchemaPath', 'specs/003-editor-evidence-loop/contracts/automation-run-result.schema.json'
+        )
+
+        $result.ExitCode | Should -Be 0
+        $result.ParsedOutput.valid | Should -BeTrue -Because 'the schema permits the pairing; behavioral correctness is the coordinator fix'
+    }
+}

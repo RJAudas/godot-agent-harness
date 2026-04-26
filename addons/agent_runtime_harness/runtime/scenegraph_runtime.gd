@@ -107,7 +107,12 @@ func configure_session(session_context: Dictionary) -> void:
 	if session_context.has("applied_input_dispatch"):
 		_session_context["applied_input_dispatch"] = session_context.get("applied_input_dispatch", {}).duplicate(true)
 
-	if session_context.has("config_path"):
+	# B8: when an automation request is active (broker stamps request_id), the
+	# broker's _resolve_request has already merged inspection-run-config.json with
+	# the request — re-loading the config here would re-introduce the divergence
+	# the broker resolved away. Config is a defaults source for editor-button
+	# playtests with no broker request only.
+	if session_context.has("config_path") and String(session_context.get("request_id", "")).is_empty():
 		_load_session_config(String(session_context.get("config_path")), session_context)
 
 	_send_debugger_message("session_configured", [_build_session_configuration_event()])

@@ -469,11 +469,81 @@ func _finalize_after_stop(termination_status: String) -> void:
 	if not _active:
 		return
 	_awaiting_stop = false
+	# B10: with stopAfterValidation=false, the runtime persists the manifest at
+	# startup-validation time — *before* the user scene's _ready can fire any
+	# errors. The runtime-error-records artifactRef is now always emitted (B10.1),
+	# but the JSONL the runtime wrote at persist time is empty. Late errors that
+	# arrived between persist and clean stop live only in the coordinator's
+	# _runtime_error_dedup map. Flush them to the already-referenced JSONL so the
+	# manifest's reference resolves to a populated file.
+	_flush_late_runtime_error_records_if_any()
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
 		return
 
 	_finalize_run("completed", null, termination_status)
+
+
+## B10: Merge any coordinator-accumulated runtime-error records into the JSONL the
+## runtime wrote at persist time. Late records (arriving after the initial persist
+## but before clean stop) live only in _runtime_error_dedup; without this flush they
+## are lost. Unlike _emergency_persist_runtime_errors which only writes when the
+## file is missing/empty, this merges so a runtime-written file is preserved and
+## extended.
+func _flush_late_runtime_error_records_if_any() -> void:
+	if _runtime_error_dedup.is_empty():
+		return
+	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var abs_dir: String
+	if output_dir.begins_with("res://"):
+		var project_path := ProjectSettings.globalize_path("res://")
+		abs_dir = output_dir.replace("res://", project_path)
+	else:
+		abs_dir = output_dir
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+
+	# Build a merged dedup map: existing on-disk records first, coordinator's map second.
+	# Coordinator entries take precedence on key collision (latest counts/timestamps).
+	var merged: Dictionary = {}
+	if FileAccess.file_exists(jsonl_path):
+		var rh := FileAccess.open(jsonl_path, FileAccess.READ)
+		if rh != null:
+			while not rh.eof_reached():
+				var raw := rh.get_line().strip_edges()
+				if raw.is_empty():
+					continue
+				var parsed = JSON.parse_string(raw)
+				if typeof(parsed) != TYPE_DICTIONARY:
+					continue
+				var rec: Dictionary = parsed
+				var k := "%s|%d|%s" % [
+					String(rec.get("scriptPath", "unknown")),
+					int(rec.get("line", -1)) if rec.get("line") != null else -1,
+					String(rec.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+				]
+				merged[k] = rec
+			rh.close()
+	for k in _runtime_error_dedup.keys():
+		merged[String(k)] = _runtime_error_dedup[k]
+
+	if merged.is_empty():
+		return
+
+	var records: Array = merged.values().duplicate(true)
+	records.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
+	var wh := FileAccess.open(jsonl_path, FileAccess.WRITE)
+	if wh == null:
+		return
+	for r in records:
+		wh.store_line(JSON.stringify(r))
+	wh.close()
+
+	var vn: Array = _last_validation.get("notes", []).duplicate(true)
+	if not "runtime_error_records: late_records_flushed" in vn:
+		vn.append("runtime_error_records: late_records_flushed")
+	_last_validation["notes"] = vn
 
 
 func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
@@ -798,10 +868,16 @@ func _resolve_request(config: Dictionary, request: Dictionary, capability: Dicti
 	var base_capture_policy: Dictionary = config.get("capturePolicy", {}).duplicate(true)
 	var base_stop_policy := {"stopAfterValidation": true}
 
+	# B8: scenarioId / runId must NOT fall back to config when the request omits
+	# them. The agent's request is authoritative; config is a defaults source for
+	# editor-button playtests with no broker request. Pre-fix, an inline -RequestJson
+	# without runId silently inherited inspection-run-config.json's runId, which made
+	# the manifest land at the wrong path and the orchestrator report a misleading
+	# "manifest not found" failure.
 	var resolved := {
 		"requestId": String(request.get("requestId", "request-%s" % str(Time.get_ticks_usec()))),
-		"scenarioId": String(request.get("scenarioId", config.get("scenarioId", InspectionConstants.DEFAULT_SCENARIO_ID))),
-		"runId": String(request.get("runId", config.get("runId", "run-%s" % str(Time.get_ticks_usec())))),
+		"scenarioId": String(request.get("scenarioId", InspectionConstants.DEFAULT_SCENARIO_ID)),
+		"runId": String(request.get("runId", request.get("requestId", "run-%s" % str(Time.get_ticks_usec())))),
 		"targetScene": _pick_scalar(overrides, request, default_overrides, config, "targetScene", ""),
 		"outputDirectory": _pick_scalar(overrides, request, default_overrides, config, "outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY),
 		"artifactRoot": _pick_scalar(overrides, request, default_overrides, config, "artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT),

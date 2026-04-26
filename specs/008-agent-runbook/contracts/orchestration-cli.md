@@ -57,6 +57,27 @@ names, types, or defaults.
     `"FAIL: editor-not-running; launch with: godot --editor --path <ProjectRoot>"`).
 12. Exit `0` on success, non-zero on any failure.
 
+## Request vs `inspection-run-config.json` precedence
+
+For every overlapping field, an inbound automation request takes precedence
+over the sandbox's `inspection-run-config.json`. The config is a **defaults
+source only** — it applies when no automation request is active (for example,
+editor-button playtests where a human presses Play in the editor without going
+through the broker).
+
+The fields the request always wins on:
+
+- `runId`, `scenarioId`
+- `targetScene`, `outputDirectory`, `artifactRoot`
+- `capturePolicy`, `stopPolicy`
+
+When the orchestrator generates a fresh `requestId` per invocation, it also
+stamps `runId = requestId` if the payload omits one. The broker's
+`_resolve_request` then carries those request values through unchanged; the
+runtime's `_load_session_config` is skipped entirely when an automation
+request is active. This three-layer guarantee is intentional belt-and-braces
+so a config-bearing sandbox can never silently overrule the agent.
+
 ## Per-Workflow Differences
 
 | Script | Takes payload? | Workflow-specific optional parameters |

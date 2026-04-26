@@ -44,16 +44,41 @@ var _pause_counter := 0
 var _startup_capture_fired := false
 ## Fix #17: reference to the session-ready watchdog timer.
 var _session_ready_watchdog: SceneTreeTimer = null
+## Re-entry guard for the runtime-side engine-error capture: prevents recursive
+## capture if our handling itself triggers an error.
+var _capturing_engine_error := false
+## B10 (pass 8a): handle to the OS-level Logger that intercepts engine errors
+## from inside the playtest. Held so we can remove it on _exit_tree.
+var _runtime_error_logger: Logger = null
 
 
 func _ready() -> void:
 	set_physics_process(false)
 	if _session_context.is_empty():
 		configure_session({})
+	# B10 (pass 8a): install the engine-error Logger BEFORE any subsequent
+	# script `_ready` so a `_ready`-time crash in user code is captured.
+	# OS.add_logger works regardless of debugger TCP state, so it is the
+	# single hook that survives both warm-spawn races and standalone runs.
+	_install_runtime_error_logger()
 	_register_debugger_transport()
 	# Fix #17: Gate startup capture behind editor handshake instead of firing
 	# immediately via call_deferred, which races the broker's configure_session.
 	_notify_editor_session_ready()
+
+
+func _install_runtime_error_logger() -> void:
+	if _runtime_error_logger != null:
+		return
+	_runtime_error_logger = _RuntimeErrorLogger.new(self)
+	OS.add_logger(_runtime_error_logger)
+
+
+func _uninstall_runtime_error_logger() -> void:
+	if _runtime_error_logger == null:
+		return
+	OS.remove_logger(_runtime_error_logger)
+	_runtime_error_logger = null
 
 
 func _exit_tree() -> void:
@@ -63,12 +88,21 @@ func _exit_tree() -> void:
 	_flush_pending_input_dispatch_outcomes()
 	# Fix #19: best-effort flush of any unwritten runtime error records on exit.
 	_flush_runtime_error_records_on_exit()
+	# B10 (pass 8a): remove the OS-level Logger paired with _install_runtime_error_logger.
+	_uninstall_runtime_error_logger()
 	if EngineDebugger.is_active():
 		EngineDebugger.unregister_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL)
 
 
 func configure_session(session_context: Dictionary) -> void:
 	_run_started_at_msec = Time.get_ticks_msec()
+	# B10 (pass 8a): preserve any errors captured by the OS Logger between the
+	# autoload's _ready and the broker's configure_session call. Those errors
+	# (the common case being a Main scene `_ready` null-deref) were written
+	# synchronously to the previous output_directory; we re-stamp their runId,
+	# keep them in the dedup map, and re-flush them to the new output_directory
+	# below so the broker reads them at the canonical path it expects.
+	var preserved_errors: Array = _runtime_error_dedup.values().duplicate(true)
 	_runtime_error_dedup.clear()
 	_runtime_error_ordinal = 0
 	# T034: default to enabled; degraded mode disables pause-on-error if capability says unavailable.
@@ -114,6 +148,28 @@ func configure_session(session_context: Dictionary) -> void:
 	# playtests with no broker request only.
 	if session_context.has("config_path") and String(session_context.get("request_id", "")).is_empty():
 		_load_session_config(String(session_context.get("config_path")), session_context)
+
+	# B10 (pass 8a): re-flush errors captured before this configure_session call.
+	# The new run_id wins; the dedup key is invariant w.r.t. runId so re-stamping
+	# is safe. The synchronous JSONL append in _record_runtime_error_from_logger
+	# uses the current _session_context.output_directory, which is now the
+	# broker's run-specific path.
+	if not preserved_errors.is_empty():
+		var new_run_id := String(_session_context.get("run_id", ""))
+		for prev in preserved_errors:
+			var entry: Dictionary = prev
+			entry["runId"] = new_run_id
+			_runtime_error_ordinal += 1
+			entry["ordinal"] = _runtime_error_ordinal
+			var dedup_key := "%s|%d|%s" % [
+				String(entry.get("scriptPath", "unknown")),
+				int(entry.get("line", -1)) if entry.get("line") != null else -1,
+				String(entry.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+			]
+			_runtime_error_dedup[dedup_key] = entry
+			_append_runtime_error_record_to_disk(entry)
+			if String(entry.get("severity", "")) == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
+				_flush_last_error_anchor(entry)
 
 	_send_debugger_message("session_configured", [_build_session_configuration_event()])
 	_install_input_dispatch_runtime_if_needed()
@@ -310,6 +366,91 @@ func _register_debugger_transport() -> void:
 		EngineDebugger.register_message_capture(InspectionConstants.EDITOR_TO_RUNTIME_CHANNEL, _on_debugger_request)
 
 
+## B10 (pass 8a): playtest-side capture of all engine errors via OS.add_logger.
+## In Godot 4.6 EditorDebuggerPlugin._capture("error", ...) never fires for
+## engine errors and EngineDebugger.register_message_capture("error", ...) only
+## sees messages sent via send_message — engine errors use send_error and
+## bypass it. The Logger callback IS the only synchronous in-process hook for
+## SCRIPT ERROR / push_error / etc., so the runtime adds its own Logger and
+## routes each captured error through the existing dedup + JSONL + anchor path.
+class _RuntimeErrorLogger extends Logger:
+	var _runtime: WeakRef
+	func _init(runtime: Object) -> void:
+		_runtime = weakref(runtime)
+	func _log_error(_function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _script_backtraces: Array) -> void:
+		var rt = _runtime.get_ref()
+		if rt == null:
+			return
+		# Engine error_type enum: 0=ERROR, 1=WARNING, 2=SCRIPT, 3=SHADER.
+		# Map WARNING to "warning"; everything else (script error, push_error,
+		# shader error) is treated as "error".
+		var severity: String = InspectionConstants.RUNTIME_ERROR_SEVERITY_WARNING if error_type == 1 else InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR
+		# Prefer code as the primary message; append non-empty rationale.
+		var msg := code
+		if not rationale.is_empty():
+			if msg.is_empty():
+				msg = rationale
+			else:
+				msg = "%s: %s" % [code, rationale]
+		var record := {
+			"scriptPath": file if not file.is_empty() else "unknown",
+			"line": line if line > 0 else null,
+			"function": null,
+			"message": msg,
+			"severity": severity,
+		}
+		rt._record_runtime_error_from_logger(record)
+
+
+## Routes a Logger-captured error through the dedup + sync-JSONL + anchor +
+## send-to-editor pipeline. Mirrors the structure of
+## _record_runtime_error_from_editor but skips the pause-on-error trigger,
+## which is unsafe to call from inside the engine's error handler stack.
+func _record_runtime_error_from_logger(record: Dictionary) -> void:
+	if _capturing_engine_error:
+		return
+	_capturing_engine_error = true
+	var script_path := String(record.get("scriptPath", "unknown"))
+	var line: int = int(record.get("line", -1)) if record.get("line") != null else -1
+	var severity := String(record.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR))
+	var dedup_key := "%s|%d|%s" % [script_path, line, severity]
+	var now_ts := InspectionConstants.utc_timestamp_now()
+	if _runtime_error_dedup.has(dedup_key):
+		var existing: Dictionary = _runtime_error_dedup[dedup_key]
+		var count: int = int(existing.get("repeatCount", 1))
+		if count < InspectionConstants.RUNTIME_ERROR_REPEAT_CAP:
+			existing["repeatCount"] = count + 1
+			existing["lastSeenAt"] = now_ts
+		else:
+			existing["truncatedAt"] = InspectionConstants.RUNTIME_ERROR_REPEAT_CAP
+	else:
+		_runtime_error_ordinal += 1
+		var new_record := {
+			"runId": String(_session_context.get("run_id", "")),
+			"ordinal": _runtime_error_ordinal,
+			"scriptPath": script_path,
+			"line": line if line > 0 else null,
+			"function": null,
+			"message": String(record.get("message", "")),
+			"severity": severity,
+			"firstSeenAt": now_ts,
+			"lastSeenAt": now_ts,
+			"repeatCount": 1,
+		}
+		_runtime_error_dedup[dedup_key] = new_record
+		# Synchronous durability: write the JSONL row before returning so the
+		# file survives an immediate process exit (e.g. _ready null-deref).
+		_append_runtime_error_record_to_disk(new_record)
+		# Last-error anchor sidecar for crash classification.
+		if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR:
+			_flush_last_error_anchor(new_record)
+		# Forward to editor coordinator on next frame (avoids re-entering the
+		# debugger transport while the engine is still inside its error handler).
+		if EngineDebugger.is_active():
+			call_deferred("_send_debugger_message", InspectionConstants.RUNTIME_ERROR_MSG_RECORD, [new_record])
+	_capturing_engine_error = false
+
+
 func _on_debugger_request(message: String, data: Array) -> bool:
 	match message:
 		"configure_session":
@@ -409,6 +550,12 @@ func _record_runtime_error_from_editor(record: Dictionary) -> void:
 			"repeatCount": 1,
 		}
 		_runtime_error_dedup[dedup_key] = new_record
+		# B10 (pass 8a): write the JSONL row synchronously so the file is
+		# durable even if the playtest crashes before persist_latest_bundle
+		# runs (the common case for a `_ready`-time null-deref). The artifact
+		# writer's primary flush reads + merges this on-disk file at persist
+		# time — see scenegraph_artifact_writer.gd.
+		_append_runtime_error_record_to_disk(new_record)
 		# Send the first-occurrence record onward to the editor for real-time
 		# awareness (e.g. the run coordinator can update its anchor tracker).
 		_send_debugger_message(InspectionConstants.RUNTIME_ERROR_MSG_RECORD, [new_record])
@@ -440,6 +587,31 @@ func get_runtime_error_records() -> Array:
 func _send_debugger_message(message_name: String, data: Array) -> void:
 	if EngineDebugger.is_active():
 		EngineDebugger.send_message("%s:%s" % [InspectionConstants.RUNTIME_TO_EDITOR_CHANNEL, message_name], data)
+
+
+## B10 (pass 8a): synchronously append a single JSONL row to the run's
+## runtime-error-records.jsonl. Open-append-flush-close on each call so the
+## file survives an immediate process exit (e.g. a `_ready` null-deref that
+## terminates the playtest before persist_latest_bundle runs). The artifact
+## writer's primary flush reads + merges this file at persist time — see
+## scenegraph_artifact_writer.gd._flush_runtime_error_records.
+func _append_runtime_error_record_to_disk(record: Dictionary) -> void:
+	var output_dir := String(_session_context.get("output_directory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var abs_dir := ProjectSettings.globalize_path(output_dir)
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+	var fh: FileAccess
+	if FileAccess.file_exists(jsonl_path):
+		fh = FileAccess.open(jsonl_path, FileAccess.READ_WRITE)
+		if fh != null:
+			fh.seek_end()
+	else:
+		fh = FileAccess.open(jsonl_path, FileAccess.WRITE)
+	if fh == null:
+		return
+	fh.store_line(JSON.stringify(record))
+	fh.close()
 
 
 ## T030: Write (or overwrite) the last-error-anchor.json sidecar inside the run's

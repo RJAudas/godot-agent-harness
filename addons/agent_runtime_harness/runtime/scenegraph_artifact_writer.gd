@@ -361,19 +361,69 @@ func _join_strings(values: Array) -> String:
 func _flush_runtime_error_records(records: Array, path: String, run_id: String) -> Dictionary:
 	## Write runtime-error-records.jsonl; one row per dedup key.
 	## Returns {} on success or { "error": <message> } on failure.
-	if records.is_empty():
-		return {}
-
-	var handle := FileAccess.open(path, FileAccess.WRITE)
-	if handle == null:
-		return {"error": "Could not open %s for writing (%s)." % [path, error_string(FileAccess.get_open_error())]}
+	##
+	## B10 (pass 8a): read-merge-write rather than truncate. The runtime now
+	## appends each first-occurrence row synchronously in
+	## _append_runtime_error_record_to_disk so the file survives a `_ready`
+	## crash. If we naively truncated here, an in-memory dedup that lost rows
+	## (e.g. because persist races a stop) would clobber the durable disk
+	## copy. On-disk-wins for keys not in `records`; in-memory wins for keys
+	## in both (preserves repeatCount / lastSeenAt fidelity).
+	var existing: Dictionary = {}
+	if FileAccess.file_exists(path):
+		var rh := FileAccess.open(path, FileAccess.READ)
+		if rh != null:
+			while not rh.eof_reached():
+				var raw := rh.get_line().strip_edges()
+				if raw.is_empty():
+					continue
+				var parsed = JSON.parse_string(raw)
+				if typeof(parsed) != TYPE_DICTIONARY:
+					continue
+				var rec: Dictionary = parsed
+				# Normalize numeric fields: JSON re-parse of integer values may
+				# come back as floats (4 -> 4.0). Coerce so the dedup key and
+				# the written-back row both match the in-memory shape.
+				if rec.get("line") != null:
+					rec["line"] = int(rec.get("line"))
+				if rec.get("ordinal") != null:
+					rec["ordinal"] = int(rec.get("ordinal"))
+				if rec.get("repeatCount") != null:
+					rec["repeatCount"] = int(rec.get("repeatCount"))
+				var line_value = rec.get("line")
+				var line_part: String = "null" if line_value == null else str(int(line_value))
+				var k := "%s|%s|%s" % [
+					String(rec.get("scriptPath", "unknown")),
+					line_part,
+					String(rec.get("severity", "error")),
+				]
+				existing[k] = rec
+			rh.close()
 
 	for record_value in records:
 		var record: Dictionary = record_value
 		# Safety: enforce run_id consistency.
 		record["runId"] = run_id
-		handle.store_line(JSON.stringify(record))
+		var line_value = record.get("line")
+		var line_part: String = "null" if line_value == null else str(int(line_value))
+		var k := "%s|%s|%s" % [
+			String(record.get("scriptPath", "unknown")),
+			line_part,
+			String(record.get("severity", "error")),
+		]
+		existing[k] = record
 
+	if existing.is_empty():
+		return {}
+
+	var sorted: Array = existing.values()
+	sorted.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
+
+	var handle := FileAccess.open(path, FileAccess.WRITE)
+	if handle == null:
+		return {"error": "Could not open %s for writing (%s)." % [path, error_string(FileAccess.get_open_error())]}
+	for r in sorted:
+		handle.store_line(JSON.stringify(r))
 	handle.close()
 	return {}
 

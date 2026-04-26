@@ -140,6 +140,14 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 		termination = InspectionConstants.RUNTIME_TERMINATION_COMPLETED
 	runtime_error_reporting["termination"] = termination
 
+	# Pass 8b: stamp the configured frame budget (stop_policy.minRuntimeFrames)
+	# and the actual process-frame count at capture time so the orchestrator's
+	# suspicious-empty-capture diagnostic can detect "playtest exited before
+	# user _process code had a chance to fire" without re-reading the request.
+	var stop_policy_for_manifest: Dictionary = session_context.get("stop_policy", {})
+	runtime_error_reporting["minRuntimeFrames"] = int(stop_policy_for_manifest.get("minRuntimeFrames", 0))
+	runtime_error_reporting["actualFrames"] = int(snapshot.get("trigger", {}).get("frame", 0))
+
 	# T031: Add lastErrorAnchor only when termination = crashed.
 	if termination == InspectionConstants.RUNTIME_TERMINATION_CRASHED:
 		var last_error_anchor: Variant = session_context.get("last_error_anchor", null)

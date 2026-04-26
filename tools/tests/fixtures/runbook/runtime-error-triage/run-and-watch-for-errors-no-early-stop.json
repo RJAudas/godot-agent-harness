@@ -11,7 +11,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": false
+    "stopAfterValidation": false,
+    "minRuntimeFrames": 30
   },
   "requestedBy": "runbook-fixture",
   "createdAt": "2026-04-25T00:00:00Z"

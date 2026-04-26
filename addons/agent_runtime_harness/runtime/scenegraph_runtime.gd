@@ -42,6 +42,16 @@ var _pending_pause_id := -1
 var _pause_counter := 0
 ## Fix #17: ensures the startup capture fires at most once per game launch.
 var _startup_capture_fired := false
+## Pass 8b: re-entry guard for `_trigger_startup_capture_if_pending` while the
+## minRuntimeFrames frame-budget gate is in progress. Distinct from
+## `_startup_capture_fired` so a SceneTree teardown mid-budget can clear it
+## without locking the gate forever.
+var _startup_capture_armed := false
+## Pass 8b: the target value of Engine.get_process_frames() at which the
+## startup capture should fire. Set by `_trigger_startup_capture_if_pending`
+## when min_frames > 0; checked from the per-frame poll connected to
+## get_tree().process_frame. -1 means no gate is active.
+var _frame_budget_target := -1
 ## Fix #17: reference to the session-ready watchdog timer.
 var _session_ready_watchdog: SceneTreeTimer = null
 ## Re-entry guard for the runtime-side engine-error capture: prevents recursive
@@ -352,12 +362,75 @@ func _cancel_session_ready_watchdog() -> void:
 		_session_ready_watchdog = null
 
 
-## Fix #17: Idempotent gate — fires the startup capture exactly once per launch.
+## Fix #17 + Pass 8b: Idempotent gate — fires the startup capture exactly once
+## per launch, after Engine.get_process_frames() has reached the configured
+## stop_policy.minRuntimeFrames threshold. The frame budget gives user
+## `_process` / `_physics_process` / signal / deferred-call code a window to
+## surface runtime errors, which Pass 8a's OS Logger captures synchronously
+## into runtime-error-records.jsonl. Without this gate, the editor handshake
+## completes synchronously before frame 1 ticks and user code never runs.
+##
+## The gate uses a per-frame poll on get_tree().process_frame so the budget
+## tracks real process-frame advancement rather than wall-clock time — under
+## low or variable FPS the same number of frames takes longer, but the agent
+## still gets the same number of `_process` ticks of user code. If Godot's
+## built-in "stop on script error" pauses the SceneTree mid-budget,
+## process_frame stops firing and the gate stalls — but
+## _record_runtime_error_from_logger fires the startup capture eagerly from
+## inside the OS Logger callback (synchronously, before the engine pauses),
+## so any error that triggers the pause is captured before the stall.
+##
+## `_startup_capture_armed` suppresses re-entry from the watchdog or the
+## editor handshake while the gate is in progress.
 func _trigger_startup_capture_if_pending() -> void:
+	if _startup_capture_fired or _startup_capture_armed:
+		return
+	_startup_capture_armed = true
+	_cancel_session_ready_watchdog()
+	var stop_policy: Dictionary = _session_context.get("stop_policy", {})
+	var min_frames := int(stop_policy.get("minRuntimeFrames", 0))
+	if min_frames <= 0 or get_tree() == null:
+		_fire_startup_capture()
+		return
+	_frame_budget_target = Engine.get_process_frames() + min_frames
+	get_tree().process_frame.connect(_on_process_frame_during_budget)
+
+
+## Pass 8b: per-frame poll connected to get_tree().process_frame while the
+## minRuntimeFrames gate is active. Fires the startup capture once
+## Engine.get_process_frames() reaches `_frame_budget_target`, then
+## disconnects itself.
+func _on_process_frame_during_budget() -> void:
+	if _startup_capture_fired:
+		_disconnect_frame_budget_poll()
+		return
+	if get_tree() == null:
+		_startup_capture_armed = false
+		_frame_budget_target = -1
+		return
+	if Engine.get_process_frames() >= _frame_budget_target:
+		_disconnect_frame_budget_poll()
+		_fire_startup_capture()
+
+
+func _disconnect_frame_budget_poll() -> void:
+	_frame_budget_target = -1
+	if get_tree() != null and get_tree().process_frame.is_connected(_on_process_frame_during_budget):
+		get_tree().process_frame.disconnect(_on_process_frame_during_budget)
+
+
+## Pass 8b: idempotent helper that flips `_startup_capture_fired` and runs
+## `_capture_startup_if_enabled`. Bails cleanly if the SceneTree was torn
+## down (Stop pressed, scene called get_tree().quit, or a `_ready` crash
+## terminated the run before the budget elapsed) — _exit_tree's flush still
+## persists whatever the OS Logger captured.
+func _fire_startup_capture() -> void:
 	if _startup_capture_fired:
 		return
+	if get_tree() == null:
+		_startup_capture_armed = false
+		return
 	_startup_capture_fired = true
-	_cancel_session_ready_watchdog()
 	_capture_startup_if_enabled()
 
 
@@ -454,6 +527,18 @@ func _record_runtime_error_from_logger(record: Dictionary) -> void:
 		# debugger transport while the engine is still inside its error handler).
 		if EngineDebugger.is_active():
 			call_deferred("_send_debugger_message", InspectionConstants.RUNTIME_ERROR_MSG_RECORD, [new_record])
+		# Pass 8b: when an error fires before the startup capture has been
+		# taken, eagerly fire it now from inside this Logger callback. The
+		# callback runs synchronously inside the engine's error handler,
+		# BEFORE the engine pauses at the error site. Without this, Godot's
+		# built-in "stop on script error" freezes the SceneTree and any
+		# budget timer never elapses — the run hangs forever waiting on a
+		# snapshot that can never be captured. We do NOT gate on
+		# `_startup_capture_armed` because errors can fire before
+		# configure_session arrives — the autoload installs the Logger in
+		# `_ready`, but configure_session is sent later by the editor.
+		if severity == InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR and not _startup_capture_fired:
+			_fire_startup_capture()
 	_capturing_engine_error = false
 
 

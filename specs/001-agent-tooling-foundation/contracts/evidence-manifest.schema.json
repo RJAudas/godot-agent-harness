@@ -295,6 +295,16 @@
         },
         "lastErrorAnchor": {
           "type": "object"
+        },
+        "minRuntimeFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pass 8b: configured minimum frame budget from stop_policy.minRuntimeFrames. Stamped at persist time so the orchestrator's suspicious-empty-capture diagnostic is self-describing without re-reading the request fixture."
+        },
+        "actualFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pass 8b: Engine.get_process_frames() at the moment the startup snapshot was taken. Compared against minRuntimeFrames to detect runs that exited before user _process code had a chance to fire."
         }
       }
     }

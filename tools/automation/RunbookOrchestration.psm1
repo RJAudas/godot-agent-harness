@@ -868,9 +868,11 @@ function Get-RunbookRuntimeErrorOutcome {
     )
 
     $outcome = @{
-        runtimeErrorRecordsPath = $null
-        latestErrorSummary      = $null
-        terminationReason       = 'completed'
+        runtimeErrorRecordsPath        = $null
+        latestErrorSummary             = $null
+        terminationReason              = 'completed'
+        suspiciousEmptyCapture         = $false
+        suspiciousEmptyCaptureReason   = $null
     }
 
     if ([string]::IsNullOrWhiteSpace($ManifestPath) -or -not (Test-Path -LiteralPath $ManifestPath)) {
@@ -930,6 +932,89 @@ function Get-RunbookRuntimeErrorOutcome {
     }
 
     return $outcome
+}
+
+function Add-SuspiciousEmptyCaptureFlag {
+    <#
+    .SYNOPSIS
+        Pass 8b defense-in-depth: detect when runtime-error-records.jsonl is empty
+        but the playtest exited before the configured minRuntimeFrames frame
+        budget was reached, meaning user `_process` code never had a chance to
+        fire. The orchestrator surfaces this as a diagnostic so a future
+        regression that re-introduces the frame-0 exit cannot silently report
+        clean success.
+
+    .DESCRIPTION
+        Mutates the supplied $Outcome hashtable in place, setting
+        suspiciousEmptyCapture=$true and suspiciousEmptyCaptureReason when the
+        manifest's runtimeErrorReporting block carries minRuntimeFrames /
+        actualFrames and the records file is empty. Does NOT flip status to
+        failure — this is an advisory signal, not a hard fail.
+
+    .PARAMETER Outcome
+        The hashtable returned by Get-RunbookRuntimeErrorOutcome. Must already
+        contain runtimeErrorRecordsPath and latestErrorSummary.
+
+    .PARAMETER ManifestPath
+        Absolute path to evidence-manifest.json. May be empty/$null/missing —
+        in that case the function is a no-op.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Outcome,
+        [string]$ManifestPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ManifestPath) -or -not (Test-Path -LiteralPath $ManifestPath)) {
+        return
+    }
+
+    # Cheap fast-path: if the projection already produced a latestErrorSummary,
+    # the capture pipeline worked — nothing to flag.
+    if ($null -ne $Outcome.latestErrorSummary) {
+        return
+    }
+
+    $runtimeErrorRecordsPath = [string]$Outcome.runtimeErrorRecordsPath
+    if ([string]::IsNullOrWhiteSpace($runtimeErrorRecordsPath) -or `
+        -not (Test-Path -LiteralPath $runtimeErrorRecordsPath)) {
+        return
+    }
+
+    # Distinguish a genuinely empty JSONL from one with malformed-but-present
+    # content. Get-RunbookRuntimeErrorOutcome treats both as null
+    # latestErrorSummary, but the diagnostic semantics differ:
+    #   - empty file + budget under-shot   → suspiciousEmptyCapture
+    #   - non-empty file + null projection → projection failure (different bug)
+    # If the file has any non-whitespace content, the capture pipeline DID
+    # write data; do NOT flip suspiciousEmptyCapture.
+    $jsonlRaw = $null
+    try {
+        $jsonlRaw = Get-Content -LiteralPath $runtimeErrorRecordsPath -Raw -ErrorAction Stop
+    }
+    catch {
+        # If we can't even read the file, do not silently flip the flag —
+        # treat as inconclusive and bail.
+        return
+    }
+    if (-not [string]::IsNullOrWhiteSpace($jsonlRaw)) {
+        return
+    }
+
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -Depth 20
+    if ($null -eq $manifest.PSObject.Properties['runtimeErrorReporting'] -or `
+        $null -eq $manifest.runtimeErrorReporting -or `
+        $null -eq $manifest.runtimeErrorReporting.PSObject.Properties['minRuntimeFrames'] -or `
+        $null -eq $manifest.runtimeErrorReporting.PSObject.Properties['actualFrames']) {
+        return
+    }
+
+    $minFrames    = [int]$manifest.runtimeErrorReporting.minRuntimeFrames
+    $actualFrames = [int]$manifest.runtimeErrorReporting.actualFrames
+    if ($actualFrames -lt $minFrames) {
+        $Outcome.suspiciousEmptyCapture = $true
+        $Outcome.suspiciousEmptyCaptureReason = "Pass 8b: actualFrames=$actualFrames < minRuntimeFrames=$minFrames; user _process code may not have had a chance to fire."
+    }
 }
 
 
@@ -1916,6 +2001,7 @@ Export-ModuleMember -Function @(
     'Get-BlockedReasonDiagnostics',
     'Get-BlockedRunDiagnostics',
     'Get-RunbookRuntimeErrorOutcome',
+    'Add-SuspiciousEmptyCaptureFlag',
     'ConvertTo-FirstBuildDiagnostic',
     'Get-ProjectMainScene',
     'Test-RunbookManifest',

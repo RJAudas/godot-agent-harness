@@ -128,6 +128,12 @@
       "properties": {
         "stopAfterValidation": {
           "type": "boolean"
+        },
+        "minRuntimeFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Pass 8b: minimum process frames Engine.get_process_frames() must reach before the startup capture (and the validation-pass stop it gates) fires. Default 0 preserves pre-8b behavior; runtime-error-triage workflows set 30 (~0.5s at 60fps) to give user _process code a window to fire so its errors are captured."
         }
       }
     },

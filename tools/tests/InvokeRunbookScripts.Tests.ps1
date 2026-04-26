@@ -1135,3 +1135,56 @@ Describe 'B16: invoke-* scripts pre-empt Test-RunbookManifest on validation fail
         $block | Should -Not -Match '-Outcome\s+@\{\s*\}' -Because 'the B16 pre-empt must not emit an empty outcome'
     }
 }
+
+# ---------------------------------------------------------------------------
+# F2 — Get-BlockedReasonDiagnostics maps blockedReasons to actionable hints
+# ---------------------------------------------------------------------------
+
+Describe 'Get-BlockedReasonDiagnostics (F2)' {
+
+    It 'scene_already_running maps to editor-restart hint and NOT targetScene hint' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('scene_already_running') -TargetScene 'res://main.tscn'
+        $hints | Should -Not -BeNullOrEmpty
+        ($hints -join ' ') | Should -Match 'invoke-stop-editor'
+        ($hints -join ' ') | Should -Not -Match 'Check that targetScene'
+    }
+
+    It 'target_scene_missing maps to targetScene hint with the supplied scene path' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('target_scene_missing') -TargetScene 'res://scenes/main.tscn'
+        ($hints -join ' ') | Should -Match 'res://scenes/main.tscn'
+        ($hints -join ' ') | Should -Not -Match 'invoke-stop-editor'
+    }
+
+    It 'harness_autoload_missing maps to plugin-enable hint' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('harness_autoload_missing')
+        ($hints -join ' ') | Should -Match 'agent_runtime_harness'
+        ($hints -join ' ') | Should -Match 'Plugins'
+    }
+
+    It 'run_in_progress maps to wait-or-restart hint' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('run_in_progress')
+        ($hints -join ' ') | Should -Match 'in flight'
+        ($hints -join ' ') | Should -Match 'invoke-stop-editor'
+    }
+
+    It 'unknown reason gets generic fallback hint' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('some_unknown_reason')
+        ($hints -join ' ') | Should -Match 'some_unknown_reason'
+    }
+
+    It 'empty reasons array returns non-duplicating fallback' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @()
+        $hints | Should -Not -BeNullOrEmpty
+        # The caller already prepends "Run was blocked before evidence was captured."
+        # so the fallback must NOT repeat that same sentence.
+        ($hints -join ' ') | Should -Not -Match 'Run was blocked before evidence'
+        ($hints -join ' ') | Should -Match 'No blockedReasons'
+    }
+
+    It 'multiple reasons produce one hint each' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('scene_already_running', 'target_scene_missing') -TargetScene 'res://x.tscn'
+        @($hints).Count | Should -Be 2
+        ($hints[0]) | Should -Match 'invoke-stop-editor'
+        ($hints[1]) | Should -Match 'res://x.tscn'
+    }
+}

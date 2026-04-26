@@ -145,6 +145,124 @@ function Invoke-Helper {
 # Exported functions
 # ---------------------------------------------------------------------------
 
+function Stop-GodotDescendantsUnder {
+    # Recursively kills every Godot-named descendant of $RootPid (Windows only).
+    # Does NOT kill $RootPid itself. Used by Invoke-EnsureEditor's hard-cap
+    # timeout so a wedged launcher does not leak a Godot child it had time
+    # to spawn (mirrors F3's process-tree cleanup in invoke-stop-editor).
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$RootPid)
+
+    if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) { return }
+    try {
+        $children = Get-CimInstance Win32_Process `
+            -Filter "ParentProcessId=$RootPid AND Name LIKE 'Godot%'" -ErrorAction SilentlyContinue
+        foreach ($child in @($children)) {
+            Stop-GodotDescendantsUnder -RootPid $child.ProcessId
+            try { Stop-Process -Id $child.ProcessId -Force -ErrorAction Stop } catch { }
+        }
+    } catch { }
+}
+
+function Invoke-EnsureEditor {
+    <#
+    .SYNOPSIS
+        Runs invoke-launch-editor.ps1 via Start-Process to prevent the B13
+        stdout-pipe-inheritance deadlock on Windows cold starts.
+
+    .DESCRIPTION
+        The inline `& (Get-RunbookPwshPath) -File invoke-launch-editor.ps1` pattern
+        creates a stdout pipe. The launcher spawns Godot via Start-Process; Godot
+        inherits a copy of that pipe handle. When the launcher exits the pipe stays
+        open (Godot holds it), so the outer `&` never returns. Fix: use Start-Process
+        with -RedirectStandardOutput to a temp file. No pipe means no inherited handle.
+
+        Also adds stderr heartbeats and a hard-cap timeout (B13 defense-in-depth).
+        On hard-cap, any Godot grandchildren the launcher had time to spawn are
+        also killed so a timeout does not leak orphan editors.
+
+    .PARAMETER LauncherScriptPath
+        Absolute path to invoke-launch-editor.ps1.
+
+    .PARAMETER ProjectRoot
+        Resolved absolute path to the target project.
+
+    .PARAMETER MaxCapabilityAgeSeconds
+        Forwarded to invoke-launch-editor.ps1 -MaxCapabilityAgeSeconds. Default 300.
+
+    .PARAMETER TimeoutSeconds
+        Hard cap: if the launcher has not exited, it is killed and a failure is
+        returned. Default 90 (matches launch-editor's own -ReadyTimeoutSeconds).
+
+    .OUTPUTS
+        PSCustomObject: { Ok [bool], EnvelopeJson [string|null], Diagnostic [string|null] }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$LauncherScriptPath,
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [int]$MaxCapabilityAgeSeconds = 300,
+        [int]$TimeoutSeconds = 90
+    )
+
+    $tmpOut = $null
+    $proc   = $null
+    try {
+        try {
+            $tmpOut = [System.IO.Path]::GetTempFileName()
+            $procArgs = @('-NoProfile', '-File', $LauncherScriptPath,
+                          '-ProjectRoot', $ProjectRoot,
+                          '-MaxCapabilityAgeSeconds', $MaxCapabilityAgeSeconds)
+            $proc = Start-Process -FilePath $script:CurrentPwshPath -ArgumentList $procArgs `
+                -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut
+
+            $deadline      = (Get-Date).AddSeconds($TimeoutSeconds)
+            $nextHeartbeat = (Get-Date).AddSeconds(10)
+            while (-not $proc.HasExited -and (Get-Date) -lt $deadline) {
+                Start-Sleep -Milliseconds 200
+                if ((Get-Date) -ge $nextHeartbeat) {
+                    $elapsed = [int]((Get-Date) - $proc.StartTime).TotalSeconds
+                    [Console]::Error.WriteLine("[ensure-editor] waiting for editor launch: ${elapsed}s elapsed")
+                    $nextHeartbeat = (Get-Date).AddSeconds(10)
+                }
+            }
+
+            if (-not $proc.HasExited) {
+                Stop-GodotDescendantsUnder -RootPid $proc.Id
+                try { $proc.Kill() } catch { }
+                return [pscustomobject]@{
+                    Ok           = $false
+                    EnvelopeJson = $null
+                    Diagnostic   = "Editor launch timed out after ${TimeoutSeconds}s (B13 hard-cap). Use invoke-stop-editor then invoke-launch-editor explicitly."
+                }
+            }
+
+            $output = if ($tmpOut -and (Test-Path -LiteralPath $tmpOut)) { Get-Content -LiteralPath $tmpOut -Raw } else { '' }
+            return [pscustomobject]@{ Ok = $true; EnvelopeJson = $output; Diagnostic = $null }
+        }
+        catch {
+            # Convert any internal failure (Start-Process, GetTempFileName, etc.)
+            # into the structured Ok=false shape so the caller invoke-* script's
+            # Exit-Failure path always emits a JSON envelope.
+            $message = if (-not [string]::IsNullOrWhiteSpace($_.Exception.Message)) {
+                $_.Exception.Message
+            } else { ($_ | Out-String).Trim() }
+            return [pscustomobject]@{
+                Ok           = $false
+                EnvelopeJson = $null
+                Diagnostic   = "Invoke-EnsureEditor failed: $message"
+            }
+        }
+    }
+    finally {
+        if ($null -ne $proc -and -not $proc.HasExited) {
+            Stop-GodotDescendantsUnder -RootPid $proc.Id
+            try { $proc.Kill() } catch { }
+        }
+        if ($tmpOut) { Remove-Item -LiteralPath $tmpOut -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 function New-RunbookRequestId {
     <#
     .SYNOPSIS
@@ -596,6 +714,50 @@ function Get-RunResultValidationDiagnostics {
         $_ -notmatch '^Persisted artifact references were written'
     })
     return ,$kept
+}
+
+function Get-BlockedReasonDiagnostics {
+    <#
+    .SYNOPSIS
+        Maps blockedReasons from run-result.json to actionable diagnostic strings (F2).
+
+    .DESCRIPTION
+        When a run ends with finalStatus="blocked", blockedReasons carries one or
+        more reason codes. This function translates each code into a human-readable
+        hint so agents receive actionable guidance rather than a generic message.
+
+    .PARAMETER BlockedReasons
+        Array of reason strings from run-result.json blockedReasons.
+
+    .PARAMETER TargetScene
+        The targetScene value to interpolate into target_scene_missing hints.
+
+    .OUTPUTS
+        [string[]] one hint per reason; falls back to generic text for unmapped reasons.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [string[]]$BlockedReasons,
+        [string]$TargetScene = ''
+    )
+
+    $hints = @{
+        'scene_already_running'    = "A previous playtest is still running. Restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+        'target_scene_missing'     = "Check that targetScene '$TargetScene' exists in the project."
+        'harness_autoload_missing' = "The agent_runtime_harness autoload is not registered. Enable the plugin in Project Settings → Plugins, or add the autoload manually."
+        'run_in_progress'          = "Another harness run is still in flight. Wait for it to complete, or restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+    }
+
+    $result = [System.Collections.Generic.List[string]]::new()
+    foreach ($reason in @($BlockedReasons)) {
+        if ([string]::IsNullOrWhiteSpace($reason)) { continue }
+        $result.Add($(if ($hints.ContainsKey($reason)) { $hints[$reason] } else { "Blocked: $reason." }))
+    }
+    # Caller (e.g. invoke-scene-inspection) prepends its own "Run was blocked…"
+    # sentence; keep this fallback distinct so the two don't duplicate.
+    if ($result.Count -eq 0) { $result.Add("No blockedReasons were reported.") }
+    return ,$result.ToArray()
 }
 
 function Get-RunbookRuntimeErrorOutcome {
@@ -1685,10 +1847,12 @@ Export-ModuleMember -Function @(
     'Test-RunbookCapability',
     'Resolve-RunbookPayload',
     'Invoke-RunbookRequest',
+    'Invoke-EnsureEditor',
     'Write-RunbookEnvelope',
     'Write-LifecycleEnvelope',
     'ConvertTo-EnvelopeFailureKind',
     'Get-RunResultValidationDiagnostics',
+    'Get-BlockedReasonDiagnostics',
     'Get-RunbookRuntimeErrorOutcome',
     'ConvertTo-FirstBuildDiagnostic',
     'Get-ProjectMainScene',

@@ -99,20 +99,27 @@ Two sibling helpers manage the editor process so agents don't have to:
 | Helper | What it does |
 |---|---|
 | `tools/automation/invoke-launch-editor.ps1` | Idempotently launch (or attach to) a Godot editor for `-ProjectRoot`. Returns success in <1s when an editor is already running and capability.json is fresh; otherwise spawns Godot with `--editor --path ROOT --verbose` and polls capability.json until it appears. `-ForceRestart` stops any existing editor first. Output envelope carries `outcome.editorPid`, `outcome.capabilityPath`, `outcome.capabilityAgeSeconds`, `outcome.reusedExistingEditor`. |
-| `tools/automation/invoke-stop-editor.ps1` | Stop the Godot editor for `-ProjectRoot`. Matches by `--path` command-line so it leaves unrelated editor instances alone. Output envelope carries `outcome.stoppedPids` and `outcome.remainingPids`. |
+| `tools/automation/invoke-stop-editor.ps1` | Stop the Godot editor for `-ProjectRoot`. Matches by `--path` command-line so it leaves unrelated editor instances alone. Also kills any child playtest processes spawned by the editor (Windows: full process-tree walk via Win32_Process). Output envelope carries `outcome.stoppedPids` and `outcome.remainingPids`. |
 
-Every runtime-verification invoker also accepts a `-EnsureEditor` switch that delegates to `invoke-launch-editor.ps1` before running the workflow. Auto-launch failures surface as the workflow's own `editor-not-running` envelope.
+Every runtime-verification invoker also accepts a `-EnsureEditor` switch that delegates to `invoke-launch-editor.ps1` before running the workflow. Auto-launch failures surface as the workflow's own `editor-not-running` envelope. The launcher runs in a pipe-free subprocess to avoid a Windows handle-inheritance deadlock (B13 fix); it includes stderr heartbeats and a 90s hard-cap timeout.
 
-> **⚠️ Known issue (B13):** `-EnsureEditor` has been observed to hang on cold starts (no prior editor running, no shader cache). The launcher itself now emits stderr heartbeats and bounded timeouts, but the chained workflow can still wedge in some configurations. **Until B13 lands fully, prefer the explicit two-step pattern** — launch the editor first, then run the workflow as a separate `pwsh` invocation.
+> **Workaround — `scene_already_running` after a runtime workflow (F2):** if a workflow fails with `failureKind="runtime"` and the diagnostic mentions `blockedReasons: scene_already_running`, a previous playtest left the broker in a non-idle state. Restart the editor before retrying:
+>
+> ```powershell
+> pwsh ./tools/automation/invoke-stop-editor.ps1 -ProjectRoot <root>
+> pwsh ./tools/automation/invoke-launch-editor.ps1 -ProjectRoot <root>
+> ```
+>
+> The orchestrator's diagnostic now points at this remediation rather than blaming `targetScene`. The runtime-side broker cleanup is tracked separately and may make this workaround unnecessary in a future release.
 
 ```powershell
-# Two-step explicit (recommended): launch editor first, then run workflow
+# Two-step explicit: launch editor first, then run workflow
 pwsh ./tools/automation/invoke-launch-editor.ps1 -ProjectRoot ./integration-testing/probe
 pwsh ./tools/automation/invoke-input-dispatch.ps1 `
     -ProjectRoot ./integration-testing/probe `
     -RequestFixturePath ./tools/tests/fixtures/runbook/input-dispatch/press-enter.json
 
-# One-step convenience (use only when an editor is already warm):
+# One-step convenience: auto-launch + workflow in a single call
 pwsh ./tools/automation/invoke-scene-inspection.ps1 `
     -ProjectRoot ./integration-testing/probe -EnsureEditor
 

@@ -145,3 +145,73 @@ Describe 'invoke-stop-editor.ps1' {
         $envelope.outcome.noopReason       | Should -Be 'no-matching-editor'
     }
 }
+
+Describe 'Invoke-EnsureEditor (B13)' {
+
+    BeforeAll {
+        $script:ModulePath = Join-Path $script:RepoRootPath 'tools/automation/RunbookOrchestration.psm1'
+        Import-Module $script:ModulePath -Force
+    }
+
+    It 'returns Ok=true and non-null EnvelopeJson when launcher exits cleanly' {
+        # Launcher script: emits a valid success envelope and exits 0.
+        $launcher = Join-Path $TestDrive 'fake-launcher-ok.ps1'
+        @'
+$env = @{
+    status      = "success"
+    failureKind = $null
+    manifestPath = $null
+    runId       = "run-test"
+    requestId   = "req-test"
+    completedAt = [datetime]::UtcNow.ToString("o")
+    diagnostics = @()
+    outcome     = @{ editorPid = 0; capabilityPath = ""; capabilityAgeSeconds = 0 }
+}
+$env | ConvertTo-Json -Depth 5
+exit 0
+'@ | Set-Content -LiteralPath $launcher -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Launcher = $launcher } {
+            param($Launcher)
+            $result = Invoke-EnsureEditor -LauncherScriptPath $Launcher -ProjectRoot $TestDrive -TimeoutSeconds 10
+            $result.Ok           | Should -BeTrue
+            $result.EnvelopeJson | Should -Not -BeNullOrEmpty
+            $result.Diagnostic   | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'returns Ok=false with timed-out diagnostic when launcher does not exit within TimeoutSeconds' {
+        # Launcher script: sleeps forever (we set TimeoutSeconds=2 so it triggers quickly).
+        $launcher = Join-Path $TestDrive 'fake-launcher-hang.ps1'
+        @'
+Start-Sleep -Seconds 120
+'@ | Set-Content -LiteralPath $launcher -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Launcher = $launcher } {
+            param($Launcher)
+            $result = Invoke-EnsureEditor -LauncherScriptPath $Launcher -ProjectRoot $TestDrive -TimeoutSeconds 2
+            $result.Ok           | Should -BeFalse
+            $result.EnvelopeJson | Should -BeNullOrEmpty
+            $result.Diagnostic   | Should -Match 'timed out'
+        }
+    }
+
+    It 'returns Ok=false with structured diagnostic when Start-Process throws (envelope contract)' {
+        # Mock Start-Process to throw, simulating spawn failures (bad pwsh path,
+        # ACL denial, etc). Invoke-EnsureEditor must catch and return Ok=$false
+        # so the caller's Exit-Failure path always emits a JSON envelope.
+        $launcher = Join-Path $TestDrive 'fake-launcher-mocked.ps1'
+        Set-Content -LiteralPath $launcher -Value 'exit 0' -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Launcher = $launcher } {
+            param($Launcher)
+            Mock -CommandName Start-Process -MockWith { throw 'simulated spawn failure' }
+
+            $result = Invoke-EnsureEditor -LauncherScriptPath $Launcher -ProjectRoot $TestDrive -TimeoutSeconds 5
+            $result.Ok           | Should -BeFalse
+            $result.EnvelopeJson | Should -BeNullOrEmpty
+            $result.Diagnostic   | Should -Match 'Invoke-EnsureEditor failed'
+            $result.Diagnostic   | Should -Match 'simulated spawn failure'
+        }
+    }
+}

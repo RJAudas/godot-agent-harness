@@ -68,8 +68,15 @@ through the broker).
 The fields the request always wins on:
 
 - `runId`, `scenarioId`
-- `targetScene`, `outputDirectory`, `artifactRoot`
+- `targetScene`, `outputDirectory`
 - `capturePolicy`, `stopPolicy`
+
+`artifactRoot` is a CLI-internal normalization field, not a caller-controlled
+precedence field. The invoke scripts ignore any caller-provided
+`artifactRoot`, force it to `''` during payload resolution
+(`Resolve-RunbookPayload`), and rely on `outputDirectory` as the source of
+truth for manifest and artifact paths. This keeps `manifestPath →
+artifactRefs[*].path` navigation consistent regardless of fixture content.
 
 When the orchestrator generates a fresh `requestId` per invocation, it also
 stamps `runId = requestId` if the payload omits one. The broker's

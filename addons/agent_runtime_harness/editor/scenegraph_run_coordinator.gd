@@ -469,14 +469,17 @@ func _finalize_after_stop(termination_status: String) -> void:
 	if not _active:
 		return
 	_awaiting_stop = false
-	# B10: with stopAfterValidation=false, the runtime persists the manifest at
-	# startup-validation time — *before* the user scene's _ready can fire any
-	# errors. The runtime-error-records artifactRef is now always emitted (B10.1),
-	# but the JSONL the runtime wrote at persist time is empty. Late errors that
-	# arrived between persist and clean stop live only in the coordinator's
-	# _runtime_error_dedup map. Flush them to the already-referenced JSONL so the
-	# manifest's reference resolves to a populated file.
-	_flush_late_runtime_error_records_if_any()
+	# B10: only the deferred-finalization path (stopAfterValidation=false) needs
+	# coordinator-side merging of late runtime-error records. When
+	# stopAfterValidation=true, the runtime persists records during the validation
+	# stop flow (and _flush_runtime_error_records_on_exit handles any late writes
+	# from the runtime side), so flushing here would only duplicate work and risk
+	# overwriting the runtime's authoritative on-disk records with the
+	# coordinator's stale repeatCount/lastSeenAt (the coordinator only sees
+	# first-occurrence records — see _record_runtime_error_from_editor at line 409
+	# of scenegraph_runtime.gd which only forwards on first occurrence).
+	if not _should_stop_after_validation():
+		_flush_late_runtime_error_records_if_any()
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
 		return
@@ -484,12 +487,15 @@ func _finalize_after_stop(termination_status: String) -> void:
 	_finalize_run("completed", null, termination_status)
 
 
-## B10: Merge any coordinator-accumulated runtime-error records into the JSONL the
-## runtime wrote at persist time. Late records (arriving after the initial persist
-## but before clean stop) live only in _runtime_error_dedup; without this flush they
-## are lost. Unlike _emergency_persist_runtime_errors which only writes when the
-## file is missing/empty, this merges so a runtime-written file is preserved and
-## extended.
+## B10: Add coordinator-accumulated runtime-error records to the JSONL the runtime
+## wrote at persist time, when those records are MISSING from disk. Late records
+## (arriving after the initial persist but before clean stop) live only in
+## _runtime_error_dedup; without this flush they are lost. The on-disk record
+## always wins on dedup-key collision because the runtime sees every occurrence
+## (and maintains accurate repeatCount / lastSeenAt) while the coordinator only
+## sees the first occurrence (forwarded via RUNTIME_ERROR_MSG_RECORD on first
+## insert in scenegraph_runtime.gd:409). Conservative merge avoids regressing
+## already-persisted record fidelity.
 func _flush_late_runtime_error_records_if_any() -> void:
 	if _runtime_error_dedup.is_empty():
 		return
@@ -504,9 +510,11 @@ func _flush_late_runtime_error_records_if_any() -> void:
 		DirAccess.make_dir_recursive_absolute(abs_dir)
 	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
 
-	# Build a merged dedup map: existing on-disk records first, coordinator's map second.
-	# Coordinator entries take precedence on key collision (latest counts/timestamps).
+	# Read existing on-disk records first; on-disk entries are AUTHORITATIVE and
+	# never overwritten. Only coordinator records whose dedup key is absent from
+	# disk get appended.
 	var merged: Dictionary = {}
+	var on_disk_keys: Dictionary = {}
 	if FileAccess.file_exists(jsonl_path):
 		var rh := FileAccess.open(jsonl_path, FileAccess.READ)
 		if rh != null:
@@ -524,9 +532,23 @@ func _flush_late_runtime_error_records_if_any() -> void:
 					String(rec.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
 				]
 				merged[k] = rec
+				on_disk_keys[k] = true
 			rh.close()
+	# Add coordinator records only when the dedup key is missing from disk —
+	# never overwrite authoritative runtime data with coordinator's first-occurrence
+	# snapshot (which would lose repeatCount, lastSeenAt, and any later fields).
+	var added_late_records := false
 	for k in _runtime_error_dedup.keys():
-		merged[String(k)] = _runtime_error_dedup[k]
+		var key_str := String(k)
+		if on_disk_keys.has(key_str):
+			continue
+		merged[key_str] = _runtime_error_dedup[k]
+		added_late_records = true
+
+	# If everything coordinator saw was already on disk, nothing to do — the
+	# runtime's persist + on-exit flush handled it.
+	if not added_late_records:
+		return
 
 	if merged.is_empty():
 		return

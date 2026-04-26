@@ -179,6 +179,26 @@ if (-not $runResult.Ok) {
 $rr    = $runResult.RunResult
 $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { $runId }
 
+# B16: surface validationResult.notes for failureKind=validation before the
+# generic failed-status branch or the downstream Test-RunbookManifest check.
+if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation') {
+    $vNotes = Get-RunResultValidationDiagnostics -RunResult $rr
+    if ($vNotes.Count -gt 0) {
+        $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' -FallbackKind 'internal'
+        $diags = @($_lifecycleDiags) + @($vNotes)
+        # Match Exit-Failure's outcome shape so consumers see the same keys on every failure path.
+        Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind `
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
+                samplesPath       = $null
+                sampleCount       = 0
+                frameRangeCovered = $null
+                warnings          = @()
+            }
+        Write-RunbookStderrSummary "FAIL: $envelopeKind; $($vNotes -join ' | ')"
+        exit 1
+    }
+}
+
 if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.failureKind)) {
     $fk = [string]$rr.failureKind
     $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind $fk -FallbackKind 'internal'
@@ -266,7 +286,7 @@ $envelope = Write-RunbookEnvelope -Status 'success' -ManifestPath $absManifest `
         samplesPath       = $samplesPath
         sampleCount       = $sampleCount
         frameRangeCovered = $frameRangeCovered
-        warnings          = ,@($warnings)
+        warnings          = @($warnings)
     }
 $envelope
 $warnSuffix = if ($warnings.Count -gt 0) { "; warnings: $($warnings -join ' | ')" } else { '' }

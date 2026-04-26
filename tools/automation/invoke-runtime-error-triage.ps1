@@ -225,6 +225,28 @@ if (-not $runResult.Ok) {
 $rr    = $runResult.RunResult
 $runId = if (-not [string]::IsNullOrWhiteSpace($rr.runId)) { $rr.runId } else { $runId }
 
+# B16: when run-result already classified the failure as validation, surface the
+# validationResult.notes immediately. Without this pre-empt, Test-RunbookManifest
+# below fires a misleading "manifest not found at <path>" when the runtime wrote
+# the manifest under a different runId (e.g. inspection-run-config override),
+# masking the real cause that validationResult.notes already explains.
+if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation') {
+    $vNotes = Get-RunResultValidationDiagnostics -RunResult $rr
+    if ($vNotes.Count -gt 0) {
+        $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' -FallbackKind 'internal'
+        $diags = @($_lifecycleDiags) + @($vNotes)
+        # Match Exit-Failure's outcome shape so consumers see the same keys on every failure path.
+        Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind `
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
+                runtimeErrorRecordsPath = $null
+                latestErrorSummary      = $null
+                terminationReason       = 'unknown'
+            }
+        Write-RunbookStderrSummary "FAIL: $envelopeKind; $($vNotes -join ' | ')"
+        exit 1
+    }
+}
+
 # Step 8: Read manifest
 $manifestPath = [string]$rr.manifestPath
 $absManifest  = $null

@@ -94,7 +94,7 @@ See [`contracts/orchestration-stdout.schema.json`](contracts/orchestration-stdou
 
 | Workflow | `outcome` keys |
 |---|---|
-| Input dispatch | `outcomesPath` (path to `input-dispatch-outcomes.jsonl`), `dispatchedEventCount` (int), `firstFailureSummary` (string \| null) |
+| Input dispatch | `outcomesPath` (path to `input-dispatch-outcomes.jsonl`), `declaredEventCount` (int), `actualDispatchedCount` (int), `firstFailureSummary` (string \| null) |
 | Scene inspection | `sceneTreePath` (path to captured `scene-tree.json`), `nodeCount` (int) |
 | Behavior watch | `samplesPath` (path to behavior samples artifact), `sampleCount` (int), `frameRangeCovered` (`{first, last}` ints) |
 | Build-error triage | `rawBuildOutputPath` (string \| null), `firstDiagnostic` (`{file, line, message}` \| null) |

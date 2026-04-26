@@ -546,6 +546,48 @@ function ConvertTo-EnvelopeFailureKind {
     }
 }
 
+function Get-RunResultValidationDiagnostics {
+    <#
+    .SYNOPSIS
+        Extract human-readable diagnostic notes from a run-result's validationResult block (B16).
+
+    .DESCRIPTION
+        When run-result.json reports failureKind="validation", validationResult.notes
+        carries the authoritative explanation of what failed (for example
+        "Manifest runId did not match the active automation request"). Surface those
+        notes so agents reading the envelope's diagnostics[] get the real cause
+        instead of a downstream "manifest not found" sanity-check error fired by
+        Test-RunbookManifest against a path the runtime never actually wrote to.
+
+        Filters out the noisy "Persisted artifact references were written
+        successfully" boilerplate, which is informational and not a failure cause.
+
+    .PARAMETER RunResult
+        The parsed run-result object (PSCustomObject from ConvertFrom-Json).
+
+    .OUTPUTS
+        [string[]] possibly empty list of diagnostic strings ready to insert into
+        the envelope's diagnostics array.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param($RunResult)
+
+    # Leading-comma return idiom keeps an empty / single-element array from
+    # being unwrapped to $null / a bare scalar across the function boundary.
+    if ($null -eq $RunResult) { return ,@() }
+    if (-not ($RunResult.PSObject.Properties.Name -contains 'validationResult')) { return ,@() }
+    $vr = $RunResult.validationResult
+    if ($null -eq $vr) { return ,@() }
+    if (-not ($vr.PSObject.Properties.Name -contains 'notes')) { return ,@() }
+
+    $kept = @($vr.notes | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_) -and
+        $_ -notmatch '^Persisted artifact references were written'
+    })
+    return ,$kept
+}
+
 function Write-RunbookEnvelope {
     <#
     .SYNOPSIS
@@ -1524,6 +1566,7 @@ Export-ModuleMember -Function @(
     'Write-RunbookEnvelope',
     'Write-LifecycleEnvelope',
     'ConvertTo-EnvelopeFailureKind',
+    'Get-RunResultValidationDiagnostics',
     'ConvertTo-FirstBuildDiagnostic',
     'Get-ProjectMainScene',
     'Test-RunbookManifest',

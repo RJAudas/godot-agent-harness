@@ -56,20 +56,27 @@ function Stop-DescendantTree {
     # invoke-stop-editor.ps1, the entry point here is ONE LEVEL DOWN from the
     # editor — i.e. the caller has already filtered to non-editor descendants —
     # so the recursion may freely kill its $RootPid argument.
+    #
+    # $Attempted captures EVERY PID we tried to kill (including ones where
+    # Stop-Process threw, e.g. access denied), so the survivor pass can detect
+    # processes that resisted termination. $Collected only records successful
+    # Stop-Process calls.
     param(
         [Parameter(Mandatory)][int]$RootPid,
         [System.Collections.Generic.List[int]]$Collected,
+        [System.Collections.Generic.List[int]]$Attempted,
         [System.Collections.Generic.List[string]]$Errs
     )
     try {
         $children = Get-CimInstance Win32_Process `
             -Filter "ParentProcessId=$RootPid AND Name LIKE 'Godot%'" -ErrorAction SilentlyContinue
         foreach ($child in @($children)) {
-            Stop-DescendantTree -RootPid ([int]$child.ProcessId) -Collected $Collected -Errs $Errs
+            Stop-DescendantTree -RootPid ([int]$child.ProcessId) -Collected $Collected -Attempted $Attempted -Errs $Errs
         }
     } catch {
         [void]$Errs.Add("enumerate-children-of-$($RootPid): $($_.Exception.Message)")
     }
+    [void]$Attempted.Add($RootPid)
     try {
         Stop-Process -Id $RootPid -Force -ErrorAction Stop
         [void]$Collected.Add($RootPid)
@@ -79,6 +86,7 @@ function Stop-DescendantTree {
 }
 
 $collected = [System.Collections.Generic.List[int]]::new()
+$attempted = [System.Collections.Generic.List[int]]::new()
 $errors = [System.Collections.Generic.List[string]]::new()
 
 # Verify the editor PID itself exists; if not, nothing to do.
@@ -100,15 +108,17 @@ try {
     foreach ($child in @($directChildren)) {
         $childPid = [int]$child.ProcessId
         if ($childPid -eq $EditorPid) { continue }  # Defense-in-depth.
-        Stop-DescendantTree -RootPid $childPid -Collected $collected -Errs $errors
+        Stop-DescendantTree -RootPid $childPid -Collected $collected -Attempted $attempted -Errs $errors
     }
 } catch {
     [void]$errors.Add("enumerate-direct-children: $($_.Exception.Message)")
 }
 
-# Re-verify: did anything we tried to kill survive?
+# Re-verify: iterate ATTEMPTED PIDs (not just successful kills) so any PID
+# whose Stop-Process threw — access denied, race, etc. — is reported as a
+# survivor instead of silently disappearing.
 $survivors = [System.Collections.Generic.List[int]]::new()
-foreach ($p in $collected) {
+foreach ($p in $attempted) {
     if (Get-Process -Id $p -ErrorAction SilentlyContinue) {
         [void]$survivors.Add($p)
     }
@@ -116,5 +126,7 @@ foreach ($p in $collected) {
 
 Write-Result -KilledPids $collected -SurvivorPids $survivors -Errors $errors
 
-if ($survivors.Count -gt 0) { exit 1 }
+# Exit non-zero on either survivors OR errors, so the caller treats a failed
+# enumeration / Stop-Process throw as shutdown_failed too.
+if ($survivors.Count -gt 0 -or $errors.Count -gt 0) { exit 1 }
 exit 0

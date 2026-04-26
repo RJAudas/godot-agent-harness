@@ -500,11 +500,22 @@ func _finalize_after_stop(termination_status: String) -> void:
 	# any truncated last line on disk is overwritten.
 	var reap := PlaytestProcessReaper.terminate_playtest_descendants_if_windows()
 	var killed_pids: Array = reap.get("killedPids", [])
-	if not killed_pids.is_empty():
-		# stop_playing_scene() returned but a child survived — promote the
-		# termination status so the artifact reflects that we needed to
-		# force-kill. Reuse SHUTDOWN_FAILED rather than introducing a new
-		# enum value (schema migration is out of scope for B18).
+	var survivor_pids: Array = reap.get("survivorPids", [])
+	var reap_errors: Array = reap.get("errors", [])
+	var reap_exit_code: int = int(reap.get("exitCode", 0))
+	var reap_parse_failed: bool = bool(reap.get("parseFailed", false))
+	# Promote terminationStatus to SHUTDOWN_FAILED on ANY abnormal reap signal:
+	# kills happened (stop_playing_scene didn't fully reap), survivors remained
+	# (Stop-Process threw on something — access denied, race, etc.), errors
+	# were recorded (enumeration failed), the helper exited non-zero, or the
+	# JSON payload could not be parsed at all. Reuse SHUTDOWN_FAILED rather
+	# than introducing a new enum value (schema migration is out of scope).
+	var clean_reap := killed_pids.is_empty() \
+		and survivor_pids.is_empty() \
+		and reap_errors.is_empty() \
+		and reap_exit_code == 0 \
+		and not reap_parse_failed
+	if not clean_reap:
 		termination_status = InspectionConstants.AUTOMATION_TERMINATION_SHUTDOWN_FAILED
 
 	if _pending_failure_kind != null:
@@ -869,16 +880,13 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 	if String(_active_request.get("targetScene", "")).is_empty():
 		blocked.append("target_scene_missing")
 	if _is_playing_scene():
-		# B18 belt-and-suspenders: a leaked playtest from a prior run can
-		# leave the editor reporting is_playing_scene=true. Try to reap any
-		# Godot* descendants of the editor first; if the editor still reports
-		# a scene afterward, the block is real and we surface it. Cost is one
-		# OS.execute per blocked-state check, only firing when there's already
-		# a problem — NOT in the broker's 0.5s capability poll.
-		var reap := PlaytestProcessReaper.terminate_playtest_descendants_if_windows()
-		var reaped: Array = reap.get("killedPids", [])
-		if reaped.is_empty() or _is_playing_scene():
-			blocked.append("scene_already_running")
+		# Per Copilot review on PR #42: do NOT reap-on-block here. An
+		# is_playing_scene() hit can also represent a manually-launched F5
+		# session from a developer at the keyboard — silently terminating
+		# that would be a worse failure than blocking the automation
+		# request. The leak is closed at finalization in _finalize_after_stop;
+		# this path stays as the original "refuse and surface" guard.
+		blocked.append("scene_already_running")
 
 	var capture_policy: Dictionary = _active_request.get("capturePolicy", {})
 	if not bool(capture_policy.get("startup", false)) and not bool(capture_policy.get("manual", false)):

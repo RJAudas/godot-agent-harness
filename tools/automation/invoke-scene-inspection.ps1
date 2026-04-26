@@ -122,18 +122,17 @@ function Exit-Failure {
 
 # Optional: auto-launch the editor if the caller asked for -EnsureEditor.
 if ($EnsureEditor) {
-    $launcher = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
-    # Capture stdout only -- the helper writes a single-line stderr summary that
-    # would corrupt the JSON envelope if 2>&1-merged. Thread our own
-    # -MaxCapabilityAgeSeconds through so a stricter caller setting is not
-    # silently relaxed by the launcher's default (300s).
-    $launchOut = & (Get-RunbookPwshPath) -NoProfile -File $launcher `
+    $launcher     = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
+    $ensureResult = Invoke-EnsureEditor -LauncherScriptPath $launcher `
         -ProjectRoot $resolvedRoot -MaxCapabilityAgeSeconds $MaxCapabilityAgeSeconds
+    if (-not $ensureResult.Ok) {
+        Exit-Failure 'editor-not-running' $ensureResult.Diagnostic
+    }
     try {
-        $launchEnv = ($launchOut -join [Environment]::NewLine) | ConvertFrom-Json -Depth 20
+        $launchEnv = $ensureResult.EnvelopeJson | ConvertFrom-Json -Depth 20
     }
     catch {
-        Exit-Failure 'editor-not-running' "Auto-launch produced non-JSON output: $($launchOut -join '; ')"
+        Exit-Failure 'editor-not-running' "Auto-launch produced non-JSON output: $($ensureResult.EnvelopeJson)"
     }
     if ($launchEnv.status -ne 'success') {
         $detail = if ($null -ne $launchEnv.diagnostics -and @($launchEnv.diagnostics).Count -gt 0) { $launchEnv.diagnostics[0] } else { 'no diagnostic' }
@@ -234,8 +233,10 @@ if ($rr.finalStatus -eq 'failed' -and -not [string]::IsNullOrWhiteSpace($rr.fail
 }
 
 if ($rr.finalStatus -eq 'blocked') {
-    $reasons = if ($null -ne $rr.blockedReasons) { ($rr.blockedReasons | ForEach-Object { [string]$_ }) -join ', ' } else { 'unknown' }
-    Exit-Failure 'runtime' "Run was blocked before evidence was captured. blockedReasons: $reasons. Check that targetScene '$TargetScene' exists in the project."
+    $reasons    = if ($null -ne $rr.blockedReasons) { @($rr.blockedReasons | ForEach-Object { [string]$_ }) } else { @() }
+    $reasonList = if ($reasons.Count -gt 0) { $reasons -join ', ' } else { 'unknown' }
+    $hints      = Get-BlockedReasonDiagnostics -BlockedReasons $reasons -TargetScene $TargetScene
+    Exit-Failure 'runtime' "Run was blocked before evidence was captured. blockedReasons: $reasonList. $($hints -join ' ')"
 }
 
 # Step 8: Read manifest

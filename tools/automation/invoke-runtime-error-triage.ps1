@@ -120,18 +120,17 @@ if (-not $hasFixture -and -not $hasInline) {
 
 # Optional: auto-launch the editor if the caller asked for -EnsureEditor.
 if ($EnsureEditor) {
-    $launcher = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
-    # Capture stdout only -- the helper writes a single-line stderr summary that
-    # would corrupt the JSON envelope if 2>&1-merged. Thread our own
-    # -MaxCapabilityAgeSeconds through so a stricter caller setting is not
-    # silently relaxed by the launcher's default (300s).
-    $launchOut = & (Get-RunbookPwshPath) -NoProfile -File $launcher `
+    $launcher     = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
+    $ensureResult = Invoke-EnsureEditor -LauncherScriptPath $launcher `
         -ProjectRoot $resolvedRoot -MaxCapabilityAgeSeconds $MaxCapabilityAgeSeconds
+    if (-not $ensureResult.Ok) {
+        Exit-Failure 'editor-not-running' $ensureResult.Diagnostic
+    }
     try {
-        $launchEnv = ($launchOut -join [Environment]::NewLine) | ConvertFrom-Json -Depth 20
+        $launchEnv = $ensureResult.EnvelopeJson | ConvertFrom-Json -Depth 20
     }
     catch {
-        Exit-Failure 'editor-not-running' "Auto-launch produced non-JSON output: $($launchOut -join '; ')"
+        Exit-Failure 'editor-not-running' "Auto-launch produced non-JSON output: $($ensureResult.EnvelopeJson)"
     }
     if ($launchEnv.status -ne 'success') {
         $detail = if ($null -ne $launchEnv.diagnostics -and @($launchEnv.diagnostics).Count -gt 0) { $launchEnv.diagnostics[0] } else { 'no diagnostic' }

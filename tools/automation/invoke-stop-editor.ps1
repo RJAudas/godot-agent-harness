@@ -5,9 +5,10 @@
 
 .DESCRIPTION
     invoke-stop-editor.ps1 finds Godot processes whose command-line includes
-    `--path <ProjectRoot>` and terminates them. Three Godot processes typically
-    spawn from `--editor --path <root>` (project manager, editor, optional
-    console wrapper); the script targets all three.
+    `--path <ProjectRoot>` and terminates them along with any child Godot
+    processes they spawned (e.g. playtest sessions). On Windows the full
+    process tree is walked via Win32_Process; on POSIX only the matched
+    editor process is stopped.
 
     Pair with invoke-launch-editor.ps1. The stdout envelope shape mirrors the
     runtime-verification invokers; manifestPath is always null.
@@ -107,6 +108,27 @@ function Get-EditorProcessesForProject {
     return ,@($found)
 }
 
+function Stop-GodotProcessTree {
+    # Recursively stops child Godot processes before the root (Windows only).
+    # Children are walked depth-first so they are terminated before their parent
+    # can disappear, which would otherwise clear their ParentProcessId in WMI.
+    param(
+        [Parameter(Mandatory)][int]$RootPid,
+        [System.Collections.Generic.List[int]]$Collected
+    )
+    try {
+        $children = Get-CimInstance Win32_Process `
+            -Filter "ParentProcessId=$RootPid AND Name LIKE 'Godot%'" -ErrorAction SilentlyContinue
+        foreach ($child in @($children)) {
+            Stop-GodotProcessTree -RootPid $child.ProcessId -Collected $Collected
+        }
+    } catch { }
+    try {
+        Stop-Process -Id $RootPid -Force -ErrorAction Stop
+        [void]$Collected.Add($RootPid)
+    } catch { }
+}
+
 if (-not (Test-Path -LiteralPath $resolvedRoot)) {
     Exit-Failure 'internal' "ProjectRoot '$resolvedRoot' does not exist."
 }
@@ -126,14 +148,16 @@ if ($pidCount -eq 0) {
     exit 0
 }
 
-$stopped = @()
-foreach ($processId in @($pidsToStop)) {
-    try {
-        Stop-Process -Id $processId -Force -ErrorAction Stop
-        $stopped += $processId
+$isWin = $IsWindows -or $env:OS -eq 'Windows_NT'
+$allStopped = [System.Collections.Generic.List[int]]::new()
+foreach ($editorPid in @($pidsToStop)) {
+    if ($isWin) {
+        Stop-GodotProcessTree -RootPid $editorPid -Collected $allStopped
+    } else {
+        try { Stop-Process -Id $editorPid -Force -ErrorAction Stop; [void]$allStopped.Add($editorPid) } catch { }
     }
-    catch { }
 }
+$stopped = @($allStopped)
 Start-Sleep -Milliseconds 500
 
 # Re-check: anything still running for this project?

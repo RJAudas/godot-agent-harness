@@ -377,7 +377,7 @@ class _RuntimeErrorLogger extends Logger:
 	var _runtime: WeakRef
 	func _init(runtime: Object) -> void:
 		_runtime = weakref(runtime)
-	func _log_error(_function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _script_backtraces: Array) -> void:
+	func _log_error(function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _script_backtraces: Array) -> void:
 		var rt = _runtime.get_ref()
 		if rt == null:
 			return
@@ -392,10 +392,12 @@ class _RuntimeErrorLogger extends Logger:
 				msg = rationale
 			else:
 				msg = "%s: %s" % [code, rationale]
+		# The Logger callback DOES provide the source function name (e.g. the
+		# GDScript func where a SCRIPT ERROR fired). Empty when unavailable.
 		var record := {
 			"scriptPath": file if not file.is_empty() else "unknown",
 			"line": line if line > 0 else null,
-			"function": null,
+			"function": function if not function.is_empty() else null,
 			"message": msg,
 			"severity": severity,
 		}
@@ -425,12 +427,16 @@ func _record_runtime_error_from_logger(record: Dictionary) -> void:
 			existing["truncatedAt"] = InspectionConstants.RUNTIME_ERROR_REPEAT_CAP
 	else:
 		_runtime_error_ordinal += 1
+		# function may be a non-empty String (Logger captured a GDScript func
+		# name) or null (engine-internal error with no source function). The
+		# Logger sets it via `function if not function.is_empty() else null`.
+		var func_value = record.get("function")
 		var new_record := {
 			"runId": String(_session_context.get("run_id", "")),
 			"ordinal": _runtime_error_ordinal,
 			"scriptPath": script_path,
 			"line": line if line > 0 else null,
-			"function": null,
+			"function": func_value if (func_value != null and String(func_value).length() > 0) else null,
 			"message": String(record.get("message", "")),
 			"severity": severity,
 			"firstSeenAt": now_ts,

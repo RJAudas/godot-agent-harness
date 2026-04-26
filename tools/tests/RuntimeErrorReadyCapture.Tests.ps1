@@ -262,16 +262,17 @@ Describe 'B10: Get-RunbookRuntimeErrorOutcome projection contract' {
             try {
                 & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true -Termination 'completed'
                 # Shape mirrors what _record_runtime_error_from_logger writes:
-                # function=null (the engine Logger callback does not provide one),
-                # line is an integer (artifact writer's read-merge normalizes
-                # JSON-reparsed floats back to int), message is the engine's
-                # "Cannot call method 'X' on a null value." text.
+                # function carries the GDScript func name reported by the
+                # engine Logger callback (e.g. "_ready" for a `_ready`-time
+                # crash), line is an integer (artifact writer's read-merge
+                # normalizes JSON-reparsed floats back to int), and message
+                # is the engine's "Cannot call method 'X' on a null value." text.
                 $row = [ordered]@{
                     runId       = 'b10-projection-test'
                     ordinal     = 1
                     scriptPath  = 'res://scripts/broken.gd'
                     line        = 4
-                    'function'  = $null
+                    'function'  = '_ready'
                     message     = "Cannot call method 'get_name' on a null value."
                     severity    = 'error'
                     firstSeenAt = '2026-04-26T19:01:47Z'

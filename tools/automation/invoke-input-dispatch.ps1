@@ -200,8 +200,16 @@ if ($rr.finalStatus -eq 'failed' -and ([string]$rr.failureKind) -eq 'validation'
     if ($vNotes.Count -gt 0) {
         $envelopeKind = ConvertTo-EnvelopeFailureKind -RunResultFailureKind 'validation' -FallbackKind 'internal'
         $diags = @($_lifecycleDiags) + @($vNotes)
+        # Match Exit-Failure's outcome shape so consumers see the same per-workflow keys
+        # on every failure path. Validation failures don't produce per-workflow data, so
+        # the values are null/0 just like Exit-Failure's literal.
         Write-RunbookEnvelope -Status 'failure' -FailureKind $envelopeKind `
-            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{}
+            -RunId $runId -RequestId $requestId -Diagnostics $diags -Outcome @{
+                outcomesPath          = $null
+                declaredEventCount    = 0
+                actualDispatchedCount = 0
+                firstFailureSummary   = $null
+            }
         Write-RunbookStderrSummary "FAIL: $envelopeKind; $($vNotes -join ' | ')"
         exit 1
     }

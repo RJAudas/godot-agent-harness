@@ -1048,4 +1048,25 @@ Describe 'B16: invoke-* scripts pre-empt Test-RunbookManifest on validation fail
         $manifestIdx | Should -BeGreaterThan -1
         $helperIdx   | Should -BeLessThan $manifestIdx -Because 'the validation pre-empt must run before the manifest sanity check'
     }
+
+    # Per Copilot review on PR #35: the B16 pre-empt path must emit the same
+    # workflow-specific outcome keys as Exit-Failure, not an empty @{}, so
+    # consumers see a stable shape on every failure path.
+    It '<scriptPath> B16 pre-empt emits the workflow-specific outcome keys (not -Outcome @{})' -ForEach @(
+        @{ scriptPath = 'tools/automation/invoke-input-dispatch.ps1';      requiredKey = 'declaredEventCount' }
+        @{ scriptPath = 'tools/automation/invoke-behavior-watch.ps1';      requiredKey = 'samplesPath' }
+        @{ scriptPath = 'tools/automation/invoke-scene-inspection.ps1';    requiredKey = 'sceneTreePath' }
+        @{ scriptPath = 'tools/automation/invoke-runtime-error-triage.ps1';requiredKey = 'runtimeErrorRecordsPath' }
+        @{ scriptPath = 'tools/automation/invoke-build-error-triage.ps1';  requiredKey = 'rawBuildOutputPath' }
+    ) {
+        $abs = Join-Path $script:RepoRootPath $scriptPath
+        $text = Get-Content -LiteralPath $abs -Raw
+        # Locate the pre-empt block by anchor and capture its body up to the next 'exit 1'.
+        $pattern = '(?s)Get-RunResultValidationDiagnostics.*?exit 1'
+        $match = [regex]::Match($text, $pattern)
+        $match.Success | Should -BeTrue -Because 'the B16 pre-empt block must be present'
+        $block = $match.Value
+        $block | Should -Match $requiredKey -Because "the B16 pre-empt outcome must include the workflow's $requiredKey field"
+        $block | Should -Not -Match '-Outcome\s+@\{\s*\}' -Because 'the B16 pre-empt must not emit an empty outcome'
+    }
 }

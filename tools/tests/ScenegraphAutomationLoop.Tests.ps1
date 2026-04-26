@@ -415,12 +415,15 @@ Describe 'B18: stopAfterValidation=false clean-stop contract (pass 7)' {
         $result.ParsedOutput.valid | Should -BeTrue
     }
 
-    It 'finalStatus="completed" + terminationStatus="running" is schema-valid but MUST NOT appear post-B18' {
+    It 'accepts the pre-B18 finalStatus="completed" + terminationStatus="running" payload as schema-valid' {
         # Documents the pre-B18 contradictory pairing for reviewers — the
-        # schema permits it, but the coordinator (post-fix) never emits it.
-        # If a future regression reintroduces this shape, the live-editor
-        # rerun of the pass-7 matrix is the gating signal; this test only
-        # establishes the contract the schema permits.
+        # schema still permits this legacy shape even though the coordinator
+        # fix (post-B18) should never emit it at runtime. This test ONLY
+        # verifies schema permissiveness; the behavioral guarantee that the
+        # pairing never appears is verified by the live-editor rerun of the
+        # pass-7 matrix, not by this assertion. (Renamed in response to
+        # Copilot review on PR #39 — original "MUST NOT appear" wording
+        # overstated what's actually checked here.)
         $payloadPath = Join-Path $TestDrive 'b18-broken-running-completed.json'
         @{
             requestId         = 'runbook-runtime-error-triage-b18-broken-001'

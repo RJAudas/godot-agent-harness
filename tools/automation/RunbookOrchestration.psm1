@@ -804,7 +804,14 @@ function Get-BlockedRunDiagnostics {
     # line ~1492). Without the comma, a single-element array unwraps to a bare
     # string under PowerShell's pipeline-unwrap rules and `.Count` then throws
     # PropertyNotFoundStrict under Set-StrictMode.
-    $reasons = if ($null -ne $RunResult.blockedReasons) {
+    #
+    # Guard the blockedReasons lookup as well: a malformed/older run-result
+    # could carry finalStatus="blocked" without a blockedReasons property at
+    # all, and the bare property access would itself throw
+    # PropertyNotFoundStrict under StrictMode — the exact failure mode B19
+    # was meant to eliminate (Copilot review on PR #39).
+    $hasBlockedReasons = $RunResult.PSObject.Properties.Name -contains 'blockedReasons'
+    $reasons = if ($hasBlockedReasons -and $null -ne $RunResult.blockedReasons) {
         ,@($RunResult.blockedReasons | ForEach-Object { [string]$_ })
     } else {
         ,@()

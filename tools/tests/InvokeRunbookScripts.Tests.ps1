@@ -1264,4 +1264,16 @@ Describe 'Get-BlockedRunDiagnostics (B19)' {
         $msg = Get-BlockedRunDiagnostics -RunResult $rr
         $msg | Should -Match 'blockedReasons: unknown'
     }
+
+    It 'returns the diagnostic string when blockedReasons property is missing entirely (Copilot review on PR #39)' {
+        # A malformed/older run-result could carry finalStatus="blocked" without
+        # a blockedReasons property at all. Under StrictMode, the bare property
+        # access would itself throw PropertyNotFoundStrict — the exact failure
+        # mode B19 was meant to eliminate. The function must guard the lookup
+        # and treat a missing property the same as $null/empty.
+        Set-StrictMode -Version Latest
+        $rr = [pscustomobject]@{ finalStatus = 'blocked' }  # no blockedReasons property
+        $msg = Get-BlockedRunDiagnostics -RunResult $rr
+        $msg | Should -Match 'blockedReasons: unknown'
+    }
 }

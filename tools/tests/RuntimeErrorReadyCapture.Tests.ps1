@@ -28,7 +28,13 @@ BeforeAll {
     }
 
     $script:WriteManifest = {
-        param([string]$Path, [bool]$WithRuntimeErrorRecords = $true, [string]$Termination = 'completed')
+        param(
+            [string]$Path,
+            [bool]$WithRuntimeErrorRecords = $true,
+            [string]$Termination = 'completed',
+            [Nullable[int]]$MinRuntimeFrames = $null,
+            [Nullable[int]]$ActualFrames = $null
+        )
         $artifactRefs = @(
             [ordered]@{
                 kind = 'scenegraph-snapshot'
@@ -45,6 +51,13 @@ BeforeAll {
                 description = 'Deduplicated runtime error and warning records captured after the runtime harness attaches.'
             }
         }
+        $rer = [ordered]@{
+            runtimeErrorRecordsArtifact = 'evidence/run-001/runtime-error-records.jsonl'
+            pauseOnErrorMode = 'active'
+            termination = $Termination
+        }
+        if ($null -ne $MinRuntimeFrames) { $rer['minRuntimeFrames'] = [int]$MinRuntimeFrames }
+        if ($null -ne $ActualFrames)     { $rer['actualFrames']     = [int]$ActualFrames }
         $manifest = [ordered]@{
             schemaVersion = '1.0.0'
             manifestId = 'scenegraph-b10-projection-test'
@@ -53,11 +66,7 @@ BeforeAll {
             status = 'unknown'
             summary = [ordered]@{ headline = 'Projection test fixture.'; outcome = 'unknown'; keyFindings = @() }
             artifactRefs = $artifactRefs
-            runtimeErrorReporting = [ordered]@{
-                runtimeErrorRecordsArtifact = 'evidence/run-001/runtime-error-records.jsonl'
-                pauseOnErrorMode = 'active'
-                termination = $Termination
-            }
+            runtimeErrorReporting = $rer
             validation = [ordered]@{ bundleValid = $true; notes = @() }
             producer = [ordered]@{ surface = 'scenegraph_harness_runtime'; toolingArtifactId = 'scenegraph_automation_broker' }
             createdAt = '2026-04-25T00:00:00Z'
@@ -244,6 +253,83 @@ Describe 'B10: Get-RunbookRuntimeErrorOutcome projection contract' {
                 $outcome.terminationReason | Should -Be 'completed' -Because "the broker finalized as completed; the elevation must rely on latestErrorSummary, not terminationReason"
                 $outcome.latestErrorSummary | Should -Not -BeNullOrEmpty -Because "the orchestrator's elevation conditions on latestErrorSummary being non-null"
                 $outcome.latestErrorSummary.file | Should -Be 'res://scripts/error_main.gd'
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    Context 'Pass 8b: suspicious empty capture diagnostic (Add-SuspiciousEmptyCaptureFlag)' {
+        # When stop_policy.minRuntimeFrames > 0 but the playtest exits before
+        # reaching that frame budget (e.g. an old build path that pre-empts
+        # user _process), the JSONL stays empty and the orchestrator
+        # historically reports clean success — silently masking the regression.
+        # Add-SuspiciousEmptyCaptureFlag flips an advisory bit so a future
+        # regression cannot re-introduce the frame-0 exit without the agent
+        # seeing it. Status is NOT auto-flipped to failure (the workflow
+        # doesn't lie about success when there are genuinely no errors); the
+        # orchestrator surfaces the reason as a diagnostic entry instead.
+
+        It 'flips suspiciousEmptyCapture=true when JSONL empty AND actualFrames < minRuntimeFrames' {
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true `
+                    -MinRuntimeFrames 30 -ActualFrames 0
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @()
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                $outcome.suspiciousEmptyCapture | Should -BeFalse -Because "the projector itself does not run the diagnostic; the orchestrator layers it on top"
+
+                Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $sb.ManifestPath
+                $outcome.suspiciousEmptyCapture | Should -BeTrue -Because "JSONL empty + actualFrames=0 < minRuntimeFrames=30 means user _process never fired"
+                $outcome.suspiciousEmptyCaptureReason | Should -Match 'actualFrames=0'
+                $outcome.suspiciousEmptyCaptureReason | Should -Match 'minRuntimeFrames=30'
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+
+        It 'leaves suspiciousEmptyCapture=false when JSONL empty AND actualFrames >= minRuntimeFrames' {
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true `
+                    -MinRuntimeFrames 30 -ActualFrames 45
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @()
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $sb.ManifestPath
+
+                $outcome.suspiciousEmptyCapture | Should -BeFalse -Because "the playtest hit the budget and produced no errors — that's a clean success, not a missed capture"
+                $outcome.suspiciousEmptyCaptureReason | Should -BeNullOrEmpty
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+
+        It 'leaves suspiciousEmptyCapture=false when JSONL non-empty regardless of frame count' {
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true `
+                    -MinRuntimeFrames 30 -ActualFrames 0
+                $rec = & $script:NewErrorRecord
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @($rec)
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $sb.ManifestPath
+
+                $outcome.suspiciousEmptyCapture | Should -BeFalse -Because "records present means the capture pipeline worked; no diagnostic needed"
+                $outcome.latestErrorSummary | Should -Not -BeNullOrEmpty
+            }
+            finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+
+        It 'is a no-op when manifest lacks minRuntimeFrames / actualFrames (pre-8b shape)' {
+            $sb = & $script:NewSandbox
+            try {
+                & $script:WriteManifest -Path $sb.ManifestPath -WithRuntimeErrorRecords $true
+                & $script:WriteJsonl -Path $sb.JsonlPath -Records @()
+
+                $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $sb.ManifestPath -ProjectRoot $sb.Root
+                Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $sb.ManifestPath
+
+                $outcome.suspiciousEmptyCapture | Should -BeFalse -Because "without budget metadata in the manifest the diagnostic must abstain rather than guess"
             }
             finally { Remove-Item -LiteralPath $sb.Root -Recurse -Force -ErrorAction SilentlyContinue }
         }

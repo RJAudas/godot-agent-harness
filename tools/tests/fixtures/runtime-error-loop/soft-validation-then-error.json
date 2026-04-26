@@ -12,7 +12,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": false
+    "stopAfterValidation": false,
+    "minRuntimeFrames": 30
   },
   "requestedBy": "runtime-error-loop-fixture",
   "createdAt": "2026-04-21T00:00:00Z"

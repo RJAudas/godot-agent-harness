@@ -292,6 +292,14 @@ $runtimeErrorRecordsPath = $outcome.runtimeErrorRecordsPath
 $latestErrorSummary      = $outcome.latestErrorSummary
 $terminationReason       = $outcome.terminationReason
 
+# Pass 8b: layer the suspicious-empty-capture diagnostic on top of the projection.
+# This is advisory only — never flips status to failure. Fires when JSONL is empty
+# AND the playtest exited before the configured minRuntimeFrames was reached.
+Add-SuspiciousEmptyCaptureFlag -Outcome $outcome -ManifestPath $absManifest
+if ($outcome.suspiciousEmptyCapture) {
+    $_lifecycleDiags = @($_lifecycleDiags) + @([string]$outcome.suspiciousEmptyCaptureReason)
+}
+
 # B10/B17 (pass 7a): runtime-error triage's whole purpose is to detect runtime
 # errors. If the manifest's runtime-error-records.jsonl carries any record, the
 # workflow MUST report failure regardless of what the broker put in

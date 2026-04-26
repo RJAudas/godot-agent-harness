@@ -119,11 +119,18 @@ if (-not $hasFixture -and -not $hasInline) {
     Exit-Failure 'request-invalid' 'Exactly one of -RequestFixturePath or -RequestJson must be supplied.'
 }
 
+# End-to-end TimeoutSeconds budget. The optional EnsureEditor step deducts
+# its elapsed time so the total wall-clock stays bounded by TimeoutSeconds.
+$_timeoutBudget = $TimeoutSeconds
+
 # Optional: auto-launch the editor if the caller asked for -EnsureEditor.
 if ($EnsureEditor) {
     $launcher     = Join-Path $PSScriptRoot 'invoke-launch-editor.ps1'
+    $_ensureStart = Get-Date
     $ensureResult = Invoke-EnsureEditor -LauncherScriptPath $launcher `
-        -ProjectRoot $resolvedRoot -MaxCapabilityAgeSeconds $MaxCapabilityAgeSeconds
+        -ProjectRoot $resolvedRoot -MaxCapabilityAgeSeconds $MaxCapabilityAgeSeconds `
+        -TimeoutSeconds $_timeoutBudget
+    $_timeoutBudget = [Math]::Max(1, $TimeoutSeconds - [int]((Get-Date) - $_ensureStart).TotalSeconds)
     if (-not $ensureResult.Ok) {
         Exit-Failure 'editor-not-running' $ensureResult.Diagnostic
     }
@@ -178,7 +185,7 @@ $runResult = Invoke-RunbookRequest `
     -ProjectRoot $resolvedRoot `
     -RequestPath $materialized.TempRequestPath `
     -ExpectedRequestId $requestId `
-    -TimeoutSeconds $TimeoutSeconds `
+    -TimeoutSeconds $_timeoutBudget `
     -PollIntervalMilliseconds $PollIntervalMilliseconds
 
 if (-not $runResult.Ok) {

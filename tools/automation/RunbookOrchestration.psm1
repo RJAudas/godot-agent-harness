@@ -205,45 +205,61 @@ function Invoke-EnsureEditor {
         [int]$TimeoutSeconds = 90
     )
 
-    $tmpOut = [System.IO.Path]::GetTempFileName()
+    $tmpOut = $null
     $proc   = $null
     try {
-        $procArgs = @('-NoProfile', '-File', $LauncherScriptPath,
-                      '-ProjectRoot', $ProjectRoot,
-                      '-MaxCapabilityAgeSeconds', $MaxCapabilityAgeSeconds)
-        $proc = Start-Process -FilePath $script:CurrentPwshPath -ArgumentList $procArgs `
-            -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut
+        try {
+            $tmpOut = [System.IO.Path]::GetTempFileName()
+            $procArgs = @('-NoProfile', '-File', $LauncherScriptPath,
+                          '-ProjectRoot', $ProjectRoot,
+                          '-MaxCapabilityAgeSeconds', $MaxCapabilityAgeSeconds)
+            $proc = Start-Process -FilePath $script:CurrentPwshPath -ArgumentList $procArgs `
+                -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut
 
-        $deadline      = (Get-Date).AddSeconds($TimeoutSeconds)
-        $nextHeartbeat = (Get-Date).AddSeconds(10)
-        while (-not $proc.HasExited -and (Get-Date) -lt $deadline) {
-            Start-Sleep -Milliseconds 200
-            if ((Get-Date) -ge $nextHeartbeat) {
-                $elapsed = [int]((Get-Date) - $proc.StartTime).TotalSeconds
-                [Console]::Error.WriteLine("[ensure-editor] waiting for editor launch: ${elapsed}s elapsed")
-                $nextHeartbeat = (Get-Date).AddSeconds(10)
+            $deadline      = (Get-Date).AddSeconds($TimeoutSeconds)
+            $nextHeartbeat = (Get-Date).AddSeconds(10)
+            while (-not $proc.HasExited -and (Get-Date) -lt $deadline) {
+                Start-Sleep -Milliseconds 200
+                if ((Get-Date) -ge $nextHeartbeat) {
+                    $elapsed = [int]((Get-Date) - $proc.StartTime).TotalSeconds
+                    [Console]::Error.WriteLine("[ensure-editor] waiting for editor launch: ${elapsed}s elapsed")
+                    $nextHeartbeat = (Get-Date).AddSeconds(10)
+                }
             }
-        }
 
-        if (-not $proc.HasExited) {
-            Stop-GodotDescendantsUnder -RootPid $proc.Id
-            try { $proc.Kill() } catch { }
+            if (-not $proc.HasExited) {
+                Stop-GodotDescendantsUnder -RootPid $proc.Id
+                try { $proc.Kill() } catch { }
+                return [pscustomobject]@{
+                    Ok           = $false
+                    EnvelopeJson = $null
+                    Diagnostic   = "Editor launch timed out after ${TimeoutSeconds}s (B13 hard-cap). Use invoke-stop-editor then invoke-launch-editor explicitly."
+                }
+            }
+
+            $output = if ($tmpOut -and (Test-Path -LiteralPath $tmpOut)) { Get-Content -LiteralPath $tmpOut -Raw } else { '' }
+            return [pscustomobject]@{ Ok = $true; EnvelopeJson = $output; Diagnostic = $null }
+        }
+        catch {
+            # Convert any internal failure (Start-Process, GetTempFileName, etc.)
+            # into the structured Ok=false shape so the caller invoke-* script's
+            # Exit-Failure path always emits a JSON envelope.
+            $message = if (-not [string]::IsNullOrWhiteSpace($_.Exception.Message)) {
+                $_.Exception.Message
+            } else { ($_ | Out-String).Trim() }
             return [pscustomobject]@{
                 Ok           = $false
                 EnvelopeJson = $null
-                Diagnostic   = "Editor launch timed out after ${TimeoutSeconds}s (B13 hard-cap). Use invoke-stop-editor then invoke-launch-editor explicitly."
+                Diagnostic   = "Invoke-EnsureEditor failed: $message"
             }
         }
-
-        $output = if (Test-Path -LiteralPath $tmpOut) { Get-Content -LiteralPath $tmpOut -Raw } else { '' }
-        return [pscustomobject]@{ Ok = $true; EnvelopeJson = $output; Diagnostic = $null }
     }
     finally {
         if ($null -ne $proc -and -not $proc.HasExited) {
             Stop-GodotDescendantsUnder -RootPid $proc.Id
             try { $proc.Kill() } catch { }
         }
-        Remove-Item -LiteralPath $tmpOut -Force -ErrorAction SilentlyContinue
+        if ($tmpOut) { Remove-Item -LiteralPath $tmpOut -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -738,7 +754,9 @@ function Get-BlockedReasonDiagnostics {
         if ([string]::IsNullOrWhiteSpace($reason)) { continue }
         $result.Add($(if ($hints.ContainsKey($reason)) { $hints[$reason] } else { "Blocked: $reason." }))
     }
-    if ($result.Count -eq 0) { $result.Add("Run was blocked before evidence was captured.") }
+    # Caller (e.g. invoke-scene-inspection) prepends its own "Run was blocked…"
+    # sentence; keep this fallback distinct so the two don't duplicate.
+    if ($result.Count -eq 0) { $result.Add("No blockedReasons were reported.") }
     return ,$result.ToArray()
 }
 

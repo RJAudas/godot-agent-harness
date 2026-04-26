@@ -195,4 +195,23 @@ Start-Sleep -Seconds 120
             $result.Diagnostic   | Should -Match 'timed out'
         }
     }
+
+    It 'returns Ok=false with structured diagnostic when Start-Process throws (envelope contract)' {
+        # Mock Start-Process to throw, simulating spawn failures (bad pwsh path,
+        # ACL denial, etc). Invoke-EnsureEditor must catch and return Ok=$false
+        # so the caller's Exit-Failure path always emits a JSON envelope.
+        $launcher = Join-Path $TestDrive 'fake-launcher-mocked.ps1'
+        Set-Content -LiteralPath $launcher -Value 'exit 0' -Encoding utf8
+
+        InModuleScope RunbookOrchestration -Parameters @{ Launcher = $launcher } {
+            param($Launcher)
+            Mock -CommandName Start-Process -MockWith { throw 'simulated spawn failure' }
+
+            $result = Invoke-EnsureEditor -LauncherScriptPath $Launcher -ProjectRoot $TestDrive -TimeoutSeconds 5
+            $result.Ok           | Should -BeFalse
+            $result.EnvelopeJson | Should -BeNullOrEmpty
+            $result.Diagnostic   | Should -Match 'Invoke-EnsureEditor failed'
+            $result.Diagnostic   | Should -Match 'simulated spawn failure'
+        }
+    }
 }

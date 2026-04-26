@@ -7,7 +7,7 @@ BeforeAll {
 
 Describe 'invoke-stop-editor.ps1 — envelope schema' {
 
-    It 'failure envelope (missing ProjectRoot) validates against orchestration-stdout schema' {
+    It 'failure envelope (non-existent ProjectRoot path) validates against orchestration-stdout schema' {
         $bogus = Join-Path $TestDrive 'does-not-exist'
         $result = Invoke-RepoPowerShell -ScriptPath 'tools/automation/invoke-stop-editor.ps1' `
             -Arguments @('-ProjectRoot', $bogus)

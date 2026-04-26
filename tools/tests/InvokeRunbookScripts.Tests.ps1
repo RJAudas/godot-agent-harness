@@ -1172,10 +1172,13 @@ Describe 'Get-BlockedReasonDiagnostics (F2)' {
         ($hints -join ' ') | Should -Match 'some_unknown_reason'
     }
 
-    It 'empty reasons array returns non-empty fallback' {
+    It 'empty reasons array returns non-duplicating fallback' {
         $hints = Get-BlockedReasonDiagnostics -BlockedReasons @()
         $hints | Should -Not -BeNullOrEmpty
-        ($hints -join ' ').Length | Should -BeGreaterThan 0
+        # The caller already prepends "Run was blocked before evidence was captured."
+        # so the fallback must NOT repeat that same sentence.
+        ($hints -join ' ') | Should -Not -Match 'Run was blocked before evidence'
+        ($hints -join ' ') | Should -Match 'No blockedReasons'
     }
 
     It 'multiple reasons produce one hint each' {

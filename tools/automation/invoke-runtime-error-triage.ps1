@@ -264,49 +264,19 @@ if (-not [string]::IsNullOrWhiteSpace($absManifest)) {
     }
 }
 
-# Step 9: Build outcome
-$runtimeErrorRecordsPath = $null
-$latestErrorSummary      = $null
-$terminationReason       = 'completed'
-
-if (-not [string]::IsNullOrWhiteSpace($absManifest) -and (Test-Path -LiteralPath $absManifest)) {
-    try {
-        $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
-
-        # Termination reason from runtimeErrorReporting block
-        if ($null -ne $manifest.runtimeErrorReporting -and -not [string]::IsNullOrWhiteSpace($manifest.runtimeErrorReporting.termination)) {
-            $terminationReason = [string]$manifest.runtimeErrorReporting.termination
-        }
-
-        # Runtime error records
-        $errRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'runtime-error-records' } | Select-Object -First 1
-        if ($null -ne $errRef) {
-            $runtimeErrorRecordsPath = Resolve-RunbookEvidencePath -Path $errRef.path -ProjectRoot $resolvedRoot
-            if (Test-Path -LiteralPath $runtimeErrorRecordsPath) {
-                # Get last (most recent) error record
-                $lines = Get-Content -LiteralPath $runtimeErrorRecordsPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                $lastLine = $lines | Select-Object -Last 1
-                if (-not [string]::IsNullOrWhiteSpace($lastLine)) {
-                    $d = $lastLine | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue
-                    if ($null -ne $d) {
-                        $msgText = if ($IncludeFullStack -and -not [string]::IsNullOrWhiteSpace($d.stackTrace)) {
-                            "$($d.message)`n$($d.stackTrace)"
-                        }
-                        else { [string]$d.message }
-                        $latestErrorSummary = @{
-                            file    = [string]$d.scriptPath
-                            line    = [int]$d.line
-                            message = $msgText
-                        }
-                    }
-                }
-            }
-        }
-    }
-    catch {
-        Exit-Failure 'internal' "Failed to assemble runtime-error outcome from manifest: $($_.Exception.Message)"
-    }
+# Step 9: Build outcome (B10: projection extracted into Get-RunbookRuntimeErrorOutcome
+# so it is unit-testable independently of a live editor).
+$outcome = $null
+try {
+    $outcome = Get-RunbookRuntimeErrorOutcome -ManifestPath $absManifest -ProjectRoot $resolvedRoot -IncludeFullStack:$IncludeFullStack
 }
+catch {
+    Exit-Failure 'internal' "Failed to assemble runtime-error outcome from manifest: $($_.Exception.Message)"
+}
+
+$runtimeErrorRecordsPath = $outcome.runtimeErrorRecordsPath
+$latestErrorSummary      = $outcome.latestErrorSummary
+$terminationReason       = $outcome.terminationReason
 
 # Pass through any harness-reported failure (runtime, build, timeout, internal, ...).
 # Only the runtime case carries enriched outcome.latestErrorSummary; all other

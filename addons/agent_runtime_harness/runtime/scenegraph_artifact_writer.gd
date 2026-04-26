@@ -108,21 +108,28 @@ func persist_bundle(snapshot: Dictionary, diagnostics: Array, session_context: D
 	var runtime_error_reporting := {}
 	var runtime_error_records_path := output_directory.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
 	var flush_result := _flush_runtime_error_records(runtime_error_records, runtime_error_records_path, run_id)
+	# B10: emit the runtime-error-records artifactRef unconditionally — even when
+	# the flush itself failed — so consumers always have a stable path to inspect
+	# (an absent artifact is indistinguishable from a broken pipeline; an empty or
+	# error-stamped file is unambiguously "no errors" or "flush failed, see notes").
+	# Always ensure the referenced file exists; on flush success with an empty
+	# dedup map, _flush_runtime_error_records is a no-op so we touch the file here.
+	# On flush error, _flush_runtime_error_records may have produced a partial
+	# write; touch is idempotent and the validation note carries the failure cause.
+	_ensure_runtime_error_records_empty(runtime_error_records_path)
+	artifact_refs.append(_build_artifact_ref(
+		InspectionConstants.ARTIFACT_KIND_RUNTIME_ERROR_RECORDS,
+		artifact_root,
+		InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE,
+		"application/jsonl",
+		"Deduplicated runtime error and warning records captured after the runtime harness attaches."
+	))
+	runtime_error_reporting["runtimeErrorRecordsArtifact"] = artifact_root.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
 	if flush_result.has("error"):
 		validation_notes.append("Runtime error records could not be flushed: %s" % String(flush_result.get("error", "")))
-	else:
-		if not runtime_error_records.is_empty():
-			artifact_refs.append(_build_artifact_ref(
-				InspectionConstants.ARTIFACT_KIND_RUNTIME_ERROR_RECORDS,
-				artifact_root,
-				InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE,
-				"application/jsonl",
-				"Deduplicated runtime error and warning records captured after the runtime harness attaches."
-			))
-			runtime_error_reporting["runtimeErrorRecordsArtifact"] = artifact_root.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
-		else:
-			# No errors — write an empty file so the manifest reference stays consistent.
-			_ensure_runtime_error_records_empty(runtime_error_records_path)
+		# A flush failure is a hard evidence-integrity issue; mark the bundle
+		# invalid so consumers don't trust the records artifact silently.
+		bundle_valid = false
 	# T034: pauseOnErrorMode is set from the session context (coordinator stamps it at run start).
 	var pause_on_error_mode := String(session_context.get("pause_on_error_mode", InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE))
 	runtime_error_reporting["pauseOnErrorMode"] = pause_on_error_mode if not pause_on_error_mode.is_empty() else InspectionConstants.PAUSE_ON_ERROR_MODE_ACTIVE

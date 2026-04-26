@@ -175,6 +175,71 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
         $written.artifactRoot | Should -Be ''
     }
 
+    It 'B8: stamps runId = RequestId when payload omits runId (broker-can-not-fall-back-to-config invariant)' {
+        # Pre-fix, an inline -RequestJson without an explicit runId let the broker fall back
+        # to inspection-run-config.json's runId, so the manifest landed at the wrong path
+        # and the orchestrator reported a misleading "manifest not found" failure.
+        # Resolve-RunbookPayload now mirrors the requestId stamping for runId so the
+        # request always carries a runId by the time it reaches the broker.
+        $requestId = 'runbook-input-dispatch-b8-no-runid'
+        $payloadHash = @{
+            requestId        = 'will-be-overwritten'
+            scenarioId       = 'b8-test-scenario'
+            targetScene      = 'res://scenes/main.tscn'
+            outputDirectory  = 'res://evidence/automation/$REQUEST_ID'
+            artifactRoot     = 'tools/tests/fixtures/runbook/input-dispatch/evidence'
+            expectationFiles = @()
+            capturePolicy    = @{ startup = $true; manual = $true; failure = $true }
+            stopPolicy       = @{ stopAfterValidation = $true }
+            requestedBy      = 'b8-test'
+            createdAt        = '2026-04-25T00:00:00Z'
+        }
+        # Note: runId is intentionally NOT in the payload.
+        $inline = $payloadHash | ConvertTo-Json -Depth 5
+
+        $result = Resolve-RunbookPayload `
+            -InlineJson $inline `
+            -RequestId $requestId `
+            -ProjectRoot $script:C1Root
+
+        $result.Payload['runId'] | Should -Be $requestId
+
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.runId | Should -Be $requestId
+    }
+
+    It 'B8: preserves caller-provided runId verbatim (does not clobber)' {
+        # Belt-and-braces must NOT overwrite an explicit runId — fixtures and any
+        # caller that wants the manifest to land at a known runId must remain in control.
+        $requestId      = 'runbook-input-dispatch-b8-has-runid'
+        $callerRunId    = 'caller-provided-run-id-001'
+        $payloadHash = @{
+            requestId        = 'will-be-overwritten'
+            scenarioId       = 'b8-test-scenario'
+            runId            = $callerRunId
+            targetScene      = 'res://scenes/main.tscn'
+            outputDirectory  = 'res://evidence/automation/$REQUEST_ID'
+            artifactRoot     = 'tools/tests/fixtures/runbook/input-dispatch/evidence'
+            expectationFiles = @()
+            capturePolicy    = @{ startup = $true; manual = $true; failure = $true }
+            stopPolicy       = @{ stopAfterValidation = $true }
+            requestedBy      = 'b8-test'
+            createdAt        = '2026-04-25T00:00:00Z'
+        }
+        $inline = $payloadHash | ConvertTo-Json -Depth 5
+
+        $result = Resolve-RunbookPayload `
+            -InlineJson $inline `
+            -RequestId $requestId `
+            -ProjectRoot $script:C1Root
+
+        $result.Payload['runId']    | Should -Be $callerRunId
+        $result.Payload['requestId'] | Should -Be $requestId
+
+        $written = Get-Content -LiteralPath $script:C1Canonical -Raw | ConvertFrom-Json
+        $written.runId | Should -Be $callerRunId
+    }
+
     It 'M6: substitutes $REQUEST_ID placeholder in outputDirectory with the resolved RequestId' {
         # Fixtures declare outputDirectory as "res://evidence/automation/$REQUEST_ID" so each
         # run lands in its own collision-free directory. Resolve-RunbookPayload must perform

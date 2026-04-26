@@ -469,11 +469,103 @@ func _finalize_after_stop(termination_status: String) -> void:
 	if not _active:
 		return
 	_awaiting_stop = false
+	# B10: only the deferred-finalization path (stopAfterValidation=false) needs
+	# coordinator-side merging of late runtime-error records. When
+	# stopAfterValidation=true, the runtime persists records during the validation
+	# stop flow (and _flush_runtime_error_records_on_exit handles any late writes
+	# from the runtime side), so flushing here would only duplicate work and risk
+	# overwriting the runtime's authoritative on-disk records with the
+	# coordinator's stale repeatCount/lastSeenAt (the coordinator only sees
+	# first-occurrence records — see _record_runtime_error_from_editor at line 409
+	# of scenegraph_runtime.gd which only forwards on first occurrence).
+	if not _should_stop_after_validation():
+		_flush_late_runtime_error_records_if_any()
 	if _pending_failure_kind != null:
 		_finalize_run("failed", String(_pending_failure_kind), termination_status, _pending_failure_message)
 		return
 
 	_finalize_run("completed", null, termination_status)
+
+
+## B10: Add coordinator-accumulated runtime-error records to the JSONL the runtime
+## wrote at persist time, when those records are MISSING from disk. Late records
+## (arriving after the initial persist but before clean stop) live only in
+## _runtime_error_dedup; without this flush they are lost. The on-disk record
+## always wins on dedup-key collision because the runtime sees every occurrence
+## (and maintains accurate repeatCount / lastSeenAt) while the coordinator only
+## sees the first occurrence (forwarded via RUNTIME_ERROR_MSG_RECORD on first
+## insert in scenegraph_runtime.gd:409). Conservative merge avoids regressing
+## already-persisted record fidelity.
+func _flush_late_runtime_error_records_if_any() -> void:
+	if _runtime_error_dedup.is_empty():
+		return
+	var output_dir := String(_active_request.get("outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY))
+	var abs_dir: String
+	if output_dir.begins_with("res://"):
+		var project_path := ProjectSettings.globalize_path("res://")
+		abs_dir = output_dir.replace("res://", project_path)
+	else:
+		abs_dir = output_dir
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var jsonl_path := abs_dir.path_join(InspectionConstants.DEFAULT_RUNTIME_ERROR_RECORDS_FILE)
+
+	# Read existing on-disk records first; on-disk entries are AUTHORITATIVE and
+	# never overwritten. Only coordinator records whose dedup key is absent from
+	# disk get appended.
+	var merged: Dictionary = {}
+	var on_disk_keys: Dictionary = {}
+	if FileAccess.file_exists(jsonl_path):
+		var rh := FileAccess.open(jsonl_path, FileAccess.READ)
+		if rh != null:
+			while not rh.eof_reached():
+				var raw := rh.get_line().strip_edges()
+				if raw.is_empty():
+					continue
+				var parsed = JSON.parse_string(raw)
+				if typeof(parsed) != TYPE_DICTIONARY:
+					continue
+				var rec: Dictionary = parsed
+				var k := "%s|%d|%s" % [
+					String(rec.get("scriptPath", "unknown")),
+					int(rec.get("line", -1)) if rec.get("line") != null else -1,
+					String(rec.get("severity", InspectionConstants.RUNTIME_ERROR_SEVERITY_ERROR)),
+				]
+				merged[k] = rec
+				on_disk_keys[k] = true
+			rh.close()
+	# Add coordinator records only when the dedup key is missing from disk —
+	# never overwrite authoritative runtime data with coordinator's first-occurrence
+	# snapshot (which would lose repeatCount, lastSeenAt, and any later fields).
+	var added_late_records := false
+	for k in _runtime_error_dedup.keys():
+		var key_str := String(k)
+		if on_disk_keys.has(key_str):
+			continue
+		merged[key_str] = _runtime_error_dedup[k]
+		added_late_records = true
+
+	# If everything coordinator saw was already on disk, nothing to do — the
+	# runtime's persist + on-exit flush handled it.
+	if not added_late_records:
+		return
+
+	if merged.is_empty():
+		return
+
+	var records: Array = merged.values().duplicate(true)
+	records.sort_custom(func(a, b): return int(a.get("ordinal", 0)) < int(b.get("ordinal", 0)))
+	var wh := FileAccess.open(jsonl_path, FileAccess.WRITE)
+	if wh == null:
+		return
+	for r in records:
+		wh.store_line(JSON.stringify(r))
+	wh.close()
+
+	var vn: Array = _last_validation.get("notes", []).duplicate(true)
+	if not "runtime_error_records: late_records_flushed" in vn:
+		vn.append("runtime_error_records: late_records_flushed")
+	_last_validation["notes"] = vn
 
 
 func _finish_blocked_run(blocked_reasons: Array) -> Dictionary:
@@ -798,10 +890,16 @@ func _resolve_request(config: Dictionary, request: Dictionary, capability: Dicti
 	var base_capture_policy: Dictionary = config.get("capturePolicy", {}).duplicate(true)
 	var base_stop_policy := {"stopAfterValidation": true}
 
+	# B8: scenarioId / runId must NOT fall back to config when the request omits
+	# them. The agent's request is authoritative; config is a defaults source for
+	# editor-button playtests with no broker request. Pre-fix, an inline -RequestJson
+	# without runId silently inherited inspection-run-config.json's runId, which made
+	# the manifest land at the wrong path and the orchestrator report a misleading
+	# "manifest not found" failure.
 	var resolved := {
 		"requestId": String(request.get("requestId", "request-%s" % str(Time.get_ticks_usec()))),
-		"scenarioId": String(request.get("scenarioId", config.get("scenarioId", InspectionConstants.DEFAULT_SCENARIO_ID))),
-		"runId": String(request.get("runId", config.get("runId", "run-%s" % str(Time.get_ticks_usec())))),
+		"scenarioId": String(request.get("scenarioId", InspectionConstants.DEFAULT_SCENARIO_ID)),
+		"runId": String(request.get("runId", request.get("requestId", "run-%s" % str(Time.get_ticks_usec())))),
 		"targetScene": _pick_scalar(overrides, request, default_overrides, config, "targetScene", ""),
 		"outputDirectory": _pick_scalar(overrides, request, default_overrides, config, "outputDirectory", InspectionConstants.DEFAULT_OUTPUT_DIRECTORY),
 		"artifactRoot": _pick_scalar(overrides, request, default_overrides, config, "artifactRoot", InspectionConstants.DEFAULT_MANIFEST_ARTIFACT_ROOT),

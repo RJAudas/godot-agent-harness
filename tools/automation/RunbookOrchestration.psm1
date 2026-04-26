@@ -270,6 +270,16 @@ function Resolve-RunbookPayload {
     $payload = $json | ConvertFrom-Json -Depth 20 -AsHashtable
     $payload['requestId'] = $RequestId
 
+    # B8 belt-and-braces: stamp a runId when the payload omits one. Without this,
+    # an inline -RequestJson without runId reaches the broker, and the broker's
+    # fallback (now fixed to NOT consult inspection-run-config.json) generates a
+    # synthetic "run-<usec>" that the orchestrator can't match against. Mirroring
+    # requestId here keeps the manifest's runId predictable from the orchestrator
+    # side regardless of whether the addon-side fix has landed.
+    if (-not $payload.ContainsKey('runId') -or [string]::IsNullOrWhiteSpace([string]$payload['runId'])) {
+        $payload['runId'] = $RequestId
+    }
+
     # Substitute $REQUEST_ID placeholders in outputDirectory so fixtures can declare
     # collision-free per-run output directories without each invoke script rewriting the
     # payload. Runs before schema validation so the substituted value is what gets
@@ -587,6 +597,118 @@ function Get-RunResultValidationDiagnostics {
     })
     return ,$kept
 }
+
+function Get-RunbookRuntimeErrorOutcome {
+    <#
+    .SYNOPSIS
+        Project a runtime-error-triage outcome triple (records path, latest error
+        summary, termination reason) from an evidence manifest.
+
+    .DESCRIPTION
+        B10's addon-side fix makes scenegraph_artifact_writer always emit a
+        runtime-error-records artifactRef in the manifest, even when the JSONL
+        is empty. This function consumes that contract: it walks the manifest
+        for the artifactRef, resolves it to an absolute path, reads the last
+        record (most recent error), and returns the three fields the envelope
+        carries on every runtime-error-triage call.
+
+        Returns a hashtable with keys:
+          - runtimeErrorRecordsPath: absolute path to the JSONL, or $null when
+            the manifest does not reference a runtime-error-records artifact.
+          - latestErrorSummary: hashtable of @{file, line, message} for the
+            most recent error record, or $null when the JSONL is empty / missing
+            / malformed.
+          - terminationReason: string from manifest.runtimeErrorReporting.termination,
+            defaulting to 'completed' when not present.
+
+        Throws on manifest parse failures so callers can convert to a
+        failureKind=internal envelope.
+
+    .PARAMETER ManifestPath
+        Absolute path to evidence-manifest.json. May be empty/$null/missing —
+        in that case all three fields default to $null/'completed'.
+
+    .PARAMETER ProjectRoot
+        Resolved absolute project root used to resolve manifest-relative
+        artifact paths via Resolve-RunbookEvidencePath.
+
+    .PARAMETER IncludeFullStack
+        When $true, latestErrorSummary.message includes the stackTrace field
+        appended after a newline.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [string]$ManifestPath,
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [switch]$IncludeFullStack
+    )
+
+    $outcome = @{
+        runtimeErrorRecordsPath = $null
+        latestErrorSummary      = $null
+        terminationReason       = 'completed'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ManifestPath) -or -not (Test-Path -LiteralPath $ManifestPath)) {
+        return $outcome
+    }
+
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -Depth 20
+
+    if ($null -ne $manifest.PSObject.Properties['runtimeErrorReporting'] -and `
+        $null -ne $manifest.runtimeErrorReporting -and `
+        $null -ne $manifest.runtimeErrorReporting.PSObject.Properties['termination'] -and `
+        -not [string]::IsNullOrWhiteSpace([string]$manifest.runtimeErrorReporting.termination)) {
+        $outcome.terminationReason = [string]$manifest.runtimeErrorReporting.termination
+    }
+
+    if ($null -eq $manifest.PSObject.Properties['artifactRefs'] -or $null -eq $manifest.artifactRefs) {
+        return $outcome
+    }
+
+    $errRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'runtime-error-records' } | Select-Object -First 1
+    if ($null -eq $errRef) {
+        return $outcome
+    }
+
+    $outcome.runtimeErrorRecordsPath = Resolve-RunbookEvidencePath -Path $errRef.path -ProjectRoot $ProjectRoot
+    if (-not (Test-Path -LiteralPath $outcome.runtimeErrorRecordsPath)) {
+        return $outcome
+    }
+
+    $lines = Get-Content -LiteralPath $outcome.runtimeErrorRecordsPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $lastLine = $lines | Select-Object -Last 1
+    if ([string]::IsNullOrWhiteSpace($lastLine)) {
+        return $outcome
+    }
+
+    # Defensive: a malformed JSONL row should produce a null summary, not throw.
+    # ConvertFrom-Json's -ErrorAction SilentlyContinue is unreliable for the underlying
+    # .NET JsonReaderException; wrap to guarantee a clean fallthrough.
+    $d = $null
+    try { $d = $lastLine | ConvertFrom-Json -Depth 10 } catch { $d = $null }
+    if ($null -eq $d) {
+        return $outcome
+    }
+
+    $msgText = if ($IncludeFullStack -and `
+        $null -ne $d.PSObject.Properties['stackTrace'] -and `
+        -not [string]::IsNullOrWhiteSpace([string]$d.stackTrace)) {
+        "$($d.message)`n$($d.stackTrace)"
+    } else {
+        [string]$d.message
+    }
+
+    $outcome.latestErrorSummary = @{
+        file    = [string]$d.scriptPath
+        line    = [int]$d.line
+        message = $msgText
+    }
+
+    return $outcome
+}
+
 
 function Write-RunbookEnvelope {
     <#
@@ -1567,6 +1689,7 @@ Export-ModuleMember -Function @(
     'Write-LifecycleEnvelope',
     'ConvertTo-EnvelopeFailureKind',
     'Get-RunResultValidationDiagnostics',
+    'Get-RunbookRuntimeErrorOutcome',
     'ConvertTo-FirstBuildDiagnostic',
     'Get-ProjectMainScene',
     'Test-RunbookManifest',

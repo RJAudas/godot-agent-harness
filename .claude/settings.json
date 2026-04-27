@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pwsh -NoProfile -NonInteractive -Command \"Invoke-Pester -Path tools/tests/InvokeRunbookScripts.Tests.ps1 -FullNameFilter '*B19*' -Output Detailed\")"
+      "Bash(pwsh -NoProfile -NonInteractive -Command \"Invoke-Pester -Path tools/tests/InvokeRunbookScripts.Tests.ps1 -FullNameFilter '*B19*' -Output Detailed\")",
+      "Bash(rm -f integration-testing/probe/scripts/*)",
+      "Bash(rmdir integration-testing/probe/scripts)"
     ]
   }
 }

@@ -353,6 +353,8 @@ Direct Godot properties (snake_case, read via `node.get(name)`):
 
 Properties not on this allowlist are rejected at request validation. The error message enumerates the allowed values, both at the JSON-schema layer (`tools/validate-json.ps1` enriches enum violations with allowed values + the offending value) and at the runtime validator layer (`addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`).
 
+The trace's `frame` field is the physics-tick counter (`Engine.get_physics_frames()`); `cadence`, `startFrameOffset`, and `frameCount` all count in physics frames. Fixed in issue #53 — pre-fix the field reported the unrelated render-frame counter and could miss single-physics-tick events under variable host load.
+
 ## First seeded scenario to implement
 
 Use a deterministic Pong fixture that asks for:

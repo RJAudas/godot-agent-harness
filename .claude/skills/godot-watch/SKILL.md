@@ -55,6 +55,8 @@ If you forget, the harness rejects the request with a diagnostic containing `inc
 
 Report `sampleCount` and the frame range; read `samplesPath` only if the user asks for specific values. **When `sampleCount=0`, report `outcome.warnings[]` verbatim** — zero samples almost always means the target node was missing from the running scene, not that the property never changed.
 
+The trace's `frame` field is the physics-tick counter (`Engine.get_physics_frames()`), so consecutive rows are guaranteed contiguous when `cadence: every_frame`. Single-physics-tick events (teleports via `PhysicsServer2D.body_set_state`, brief signal transients, one-tick state flips) are always captured. `cadence.everyNFrames` counts in physics ticks too. `startFrameOffset` and `frameCount` express the watch window in physics frames. (Fixed in issue #53; pre-fix the field was the render-frame counter and could miss single-tick events under variable host load.)
+
 ## Failure handling
 
 | `failureKind` | What it means | Next step |

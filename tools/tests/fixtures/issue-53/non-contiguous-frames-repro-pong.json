@@ -1,0 +1,28 @@
+{
+  "requestId": "issue-53-non-contiguous-frames-FIXTURE",
+  "scenarioId": "issue-53-non-contiguous-frames",
+  "runId": "issue-53-non-contiguous-frames-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "res://evidence/automation/$REQUEST_ID",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 60
+  },
+  "requestedBy": "issue-53-repro",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/Ball",
+        "properties": ["linear_velocity"]
+      }
+    ],
+    "frameCount": 60
+  }
+}

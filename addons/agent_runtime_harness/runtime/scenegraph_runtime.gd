@@ -458,7 +458,7 @@ class _RuntimeErrorLogger extends Logger:
 	var _runtime: WeakRef
 	func _init(runtime: Object) -> void:
 		_runtime = weakref(runtime)
-	func _log_error(function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _script_backtraces: Array) -> void:
+	func _log_error(function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, script_backtraces: Array) -> void:
 		var rt = _runtime.get_ref()
 		if rt == null:
 			return
@@ -473,12 +473,31 @@ class _RuntimeErrorLogger extends Logger:
 				msg = rationale
 			else:
 				msg = "%s: %s" % [code, rationale]
-		# The Logger callback DOES provide the source function name (e.g. the
-		# GDScript func where a SCRIPT ERROR fired). Empty when unavailable.
+		# Issue #52: prefer the user GDScript caller frame from
+		# script_backtraces over the Logger's `function`/`file`/`line`
+		# parameters. For push_warning and push_error, the Logger params point
+		# at the engine's C++ emission site (core/variant/variant_utility.cpp,
+		# function="push_warning"/"push_error"), which is *constant* for every
+		# call. Deduping on those values collapses every call site into one
+		# record. The first frame of the first GDScript backtrace is the user's
+		# actual call site — that's the location a developer needs to see.
+		# Fall back to the Logger params for engine-internal errors with no
+		# GDScript stack (e.g. shader-compile failures from main).
+		var caller_function := function
+		var caller_file := file
+		var caller_line := line
+		# Godot 4.6 ScriptBacktrace API uses get_frame_* (not get_function_*).
+		# Frame 0 of the first backtrace is the user's GDScript call site.
+		if not script_backtraces.is_empty():
+			var bt = script_backtraces[0]
+			if bt != null and bt.has_method("get_frame_count") and int(bt.get_frame_count()) > 0:
+				caller_function = String(bt.get_frame_function(0))
+				caller_file = String(bt.get_frame_file(0))
+				caller_line = int(bt.get_frame_line(0))
 		var record := {
-			"scriptPath": file if not file.is_empty() else "unknown",
-			"line": line if line > 0 else null,
-			"function": function if not function.is_empty() else null,
+			"scriptPath": caller_file if not caller_file.is_empty() else "unknown",
+			"line": caller_line if caller_line > 0 else null,
+			"function": caller_function if not caller_function.is_empty() else null,
 			"message": msg,
 			"severity": severity,
 		}

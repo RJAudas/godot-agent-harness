@@ -12,7 +12,7 @@
   },
   "stopPolicy": {
     "stopAfterValidation": true,
-    "minRuntimeFrames": 60
+    "minRuntimeFrames": 180
   },
   "requestedBy": "issue-53-repro",
   "createdAt": "2026-05-02T00:00:00Z",

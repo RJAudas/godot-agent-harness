@@ -38,7 +38,17 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-behavior-watch.ps1 `
 
 ## Lifetime requirement
 
-A behavior watch needs the playtest to live `startFrameOffset + frameCount` process frames. The post-validation stop is unconditional (B18 fix), so the only knob that grants more frames is `stopPolicy.minRuntimeFrames`. Set it to ≥ `startFrameOffset + frameCount`. If you forget, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` naming the required value.
+There is a **unit mismatch** between the watch window and the lifetime budget:
+
+- The watch window — `startFrameOffset` + `frameCount` (and `cadence.everyNFrames`) — counts **physics frames** (issue #53).
+- `stopPolicy.minRuntimeFrames` counts **process / render frames** (predates #53, shared with non-watch workflows).
+
+The post-validation stop is unconditional (B18 fix), so `minRuntimeFrames` is the only knob that grants more frames. Sizing rule:
+
+- At 60 FPS render = 60 Hz physics: set `minRuntimeFrames` ≥ `startFrameOffset + frameCount`.
+- On higher-FPS hosts (120 / 144 Hz vsync, render rate > physics rate): pad to roughly `(render_hz / 60) × (startFrameOffset + frameCount)`.
+
+The harness rejects below the basic floor with `incompatible_stop_policy`. The high-FPS pad is the author's responsibility — under-budgeting on a high-FPS host produces a successful run with fewer captured frames than requested.
 
 ## Frame-field semantics
 

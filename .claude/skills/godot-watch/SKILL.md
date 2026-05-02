@@ -36,11 +36,17 @@ pwsh ./tools/automation/invoke-behavior-watch.ps1 `
 
 ## Lifetime requirement
 
-A behavior watch needs the playtest to live `startFrameOffset + frameCount` process frames after launch. The B18 fix made the post-validation stop unconditional, so `stopAfterValidation: false` does **not** by itself buy you more frames. The only knob that does is `stopPolicy.minRuntimeFrames`:
+A behavior watch needs the playtest to live long enough to fill its window. There is a **unit mismatch** between the watch window and the lifetime budget that you have to account for on high-FPS hosts:
 
-- Set `stopPolicy.minRuntimeFrames` ≥ `startFrameOffset + frameCount` — this delays the validation-pass stop until the watch window has filled. The shipped fixtures use this shape.
+- The watch window — `startFrameOffset` + `frameCount` (and `cadence.everyNFrames`) — counts **physics frames** (issue #53).
+- `stopPolicy.minRuntimeFrames` counts **process / render frames** (it predates #53 and is shared with non-watch workflows).
 
-If you forget, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` that names the required value. The pre-existing silent-truncation behavior (request 30 frames, get 2 rows, status: success) was fixed in issue #46.
+The B18 fix made the post-validation stop unconditional, so `stopAfterValidation: false` does **not** by itself buy you more frames. `minRuntimeFrames` is the only knob that does. Sizing rule:
+
+- **At 60 FPS render = 60 Hz physics** (the common case): set `minRuntimeFrames` ≥ `startFrameOffset + frameCount`. The shipped fixtures use this shape.
+- **On higher-FPS hosts** (e.g. 120 / 144 Hz vsync) where render rate > physics rate: pad `minRuntimeFrames` to roughly `(render_hz / 60) × (startFrameOffset + frameCount)` so the playtest survives long enough for the physics window to complete.
+
+If `minRuntimeFrames` falls below the basic `startFrameOffset + frameCount` floor, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` that names the required value. The validator does **not** check the high-FPS pad — that's the author's responsibility. The pre-existing silent-truncation behavior (request 30 frames, get 2 rows, status: success) was fixed in issue #46.
 
 ## Envelope fields
 

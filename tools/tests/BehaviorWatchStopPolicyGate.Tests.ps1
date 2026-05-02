@@ -189,4 +189,22 @@ Describe 'issue #53: behavior-watch trace frame-counter is the physics-tick coun
         $last = $frames[-1]
         ($last - $first + 1) | Should -Be $frames.Count
     }
+
+    # The fixture-contiguity check above only fires if someone re-records the
+    # trace after a regression. This source-level check catches a regression
+    # immediately: assert the sampler-call line in scenegraph_runtime.gd uses
+    # Engine.get_physics_frames() (and only that). Together the two tests form
+    # belt-and-braces coverage of the issue-53 fix.
+    It 'scenegraph_runtime.gd invokes the sampler with Engine.get_physics_frames()' {
+        $sourcePath = Get-RepoPath -Path 'addons/agent_runtime_harness/runtime/scenegraph_runtime.gd'
+        Test-Path -LiteralPath $sourcePath | Should -BeTrue
+
+        $samplerCallLines = @(Get-Content -LiteralPath $sourcePath | Where-Object { $_ -match '_behavior_watch_sampler\.capture_frame\(' })
+        $samplerCallLines.Count | Should -BeGreaterOrEqual 1 -Because 'the sampler call site must exist'
+
+        foreach ($line in $samplerCallLines) {
+            $line | Should -Match 'Engine\.get_physics_frames\(\)' -Because 'issue #53: the sampler runs in _physics_process and must report the physics-tick counter'
+            $line | Should -Not -Match 'Engine\.get_process_frames\(\)' -Because 'issue #53: reporting the render-frame counter from inside _physics_process produces non-contiguous traces'
+        }
+    }
 }

@@ -353,6 +353,10 @@ Direct Godot properties (snake_case, read via `node.get(name)`):
 
 Properties not on this allowlist are rejected at request validation. The error message enumerates the allowed values, both at the JSON-schema layer (`tools/validate-json.ps1` enriches enum violations with allowed values + the offending value) and at the runtime validator layer (`addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`).
 
+The trace's `frame` field is the physics-tick counter (`Engine.get_physics_frames()`); `cadence`, `startFrameOffset`, and `frameCount` all count in physics frames. Fixed in issue #53 — pre-fix the field reported the unrelated render-frame counter and could miss single-physics-tick events under variable host load.
+
+Note the unit mismatch with the lifetime budget: `stopPolicy.minRuntimeFrames` is in process / render frames (it predates #53). At 60 FPS render = 60 Hz physics the two match; on high-FPS hosts (120 / 144 Hz vsync, render > physics) pad `minRuntimeFrames` to roughly `(render_hz / 60) × (startFrameOffset + frameCount)` so the playtest survives long enough to fill the physics window. The harness validator only enforces the basic floor (`minRuntimeFrames >= startFrameOffset + frameCount`); the high-FPS pad is the fixture author's responsibility.
+
 ## First seeded scenario to implement
 
 Use a deterministic Pong fixture that asks for:

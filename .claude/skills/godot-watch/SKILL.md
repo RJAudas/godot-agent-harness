@@ -36,11 +36,17 @@ pwsh ./tools/automation/invoke-behavior-watch.ps1 `
 
 ## Lifetime requirement
 
-A behavior watch needs the playtest to live `startFrameOffset + frameCount` process frames after launch. The B18 fix made the post-validation stop unconditional, so `stopAfterValidation: false` does **not** by itself buy you more frames. The only knob that does is `stopPolicy.minRuntimeFrames`:
+A behavior watch needs the playtest to live long enough to fill its window. There is a **unit mismatch** between the watch window and the lifetime budget that you have to account for on high-FPS hosts:
 
-- Set `stopPolicy.minRuntimeFrames` ≥ `startFrameOffset + frameCount` — this delays the validation-pass stop until the watch window has filled. The shipped fixtures use this shape.
+- The watch window — `startFrameOffset` + `frameCount` (and `cadence.everyNFrames`) — counts **physics frames** (issue #53).
+- `stopPolicy.minRuntimeFrames` counts **process / render frames** (it predates #53 and is shared with non-watch workflows).
 
-If you forget, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` that names the required value. The pre-existing silent-truncation behavior (request 30 frames, get 2 rows, status: success) was fixed in issue #46.
+The B18 fix made the post-validation stop unconditional, so `stopAfterValidation: false` does **not** by itself buy you more frames. `minRuntimeFrames` is the only knob that does. Sizing rule:
+
+- **At 60 FPS render = 60 Hz physics** (the common case): set `minRuntimeFrames` ≥ `startFrameOffset + frameCount`. The shipped fixtures use this shape.
+- **On higher-FPS hosts** (e.g. 120 / 144 Hz vsync) where render rate > physics rate: pad `minRuntimeFrames` to roughly `(render_hz / 60) × (startFrameOffset + frameCount)` so the playtest survives long enough for the physics window to complete.
+
+If `minRuntimeFrames` falls below the basic `startFrameOffset + frameCount` floor, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` that names the required value. The validator does **not** check the high-FPS pad — that's the author's responsibility. The pre-existing silent-truncation behavior (request 30 frames, get 2 rows, status: success) was fixed in issue #46.
 
 ## Envelope fields
 
@@ -54,6 +60,8 @@ If you forget, the harness rejects the request with a diagnostic containing `inc
 | `outcome.warnings[]` | Non-fatal warnings — populated when `sampleCount=0`, e.g. `"target node not found or never sampled: <path>"`. Always report these to the user. |
 
 Report `sampleCount` and the frame range; read `samplesPath` only if the user asks for specific values. **When `sampleCount=0`, report `outcome.warnings[]` verbatim** — zero samples almost always means the target node was missing from the running scene, not that the property never changed.
+
+The trace's `frame` field is the physics-tick counter (`Engine.get_physics_frames()`), so consecutive rows are guaranteed contiguous when `cadence: every_frame`. Single-physics-tick events (teleports via `PhysicsServer2D.body_set_state`, brief signal transients, one-tick state flips) are always captured. `cadence.everyNFrames` counts in physics ticks too. `startFrameOffset` and `frameCount` express the watch window in physics frames. (Fixed in issue #53; pre-fix the field was the render-frame counter and could miss single-tick events under variable host load.)
 
 ## Failure handling
 

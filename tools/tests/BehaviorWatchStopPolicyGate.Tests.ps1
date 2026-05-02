@@ -151,3 +151,60 @@ Describe 'issue #46: behavior-watch lifetime cross-field gate' {
         $offending | Should -BeNullOrEmpty -Because 'shipped behavior-watch fixtures must set minRuntimeFrames >= startFrameOffset + frameCount, otherwise the GDScript validator will reject them at runtime (incompatible_stop_policy) — see the corrected rule in behavior_watch_request_validator.gd'
     }
 }
+
+Describe 'issue #53: behavior-watch trace frame-counter is the physics-tick counter' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    }
+
+    # The fix at scenegraph_runtime.gd:271 changed the frame argument passed to
+    # BehaviorWatchSampler.capture_frame from Engine.get_process_frames() (the
+    # render-frame counter) to Engine.get_physics_frames() (the physics-tick
+    # counter). The trace's `frame` field is now guaranteed contiguous when
+    # cadence is every_frame, and single-physics-tick events are always
+    # captured. This test asserts that invariant on a checked-in trace fixture
+    # captured against D:/gameDev/pong post-fix.
+    #
+    # The fixture is real evidence — if a future regression re-introduces the
+    # render-frame-counter behavior, anyone re-recording the trace and checking
+    # it in will see this test fail. (We can't run a real Godot session in
+    # Pester, but the static check captures the invariant the fix enforces.)
+    It 'checked-in post-fix trace has fully contiguous frame numbers' {
+        $tracePath = Get-RepoPath -Path 'tools/tests/fixtures/issue-53/expected-after/contiguous-trace.jsonl'
+        Test-Path -LiteralPath $tracePath | Should -BeTrue
+
+        $frames = Get-Content -LiteralPath $tracePath | ForEach-Object {
+            $row = $_ | ConvertFrom-Json
+            [int]$row.frame
+        }
+
+        $frames.Count | Should -BeGreaterThan 30 -Because 'the fixture should have a meaningful number of rows'
+
+        for ($i = 1; $i -lt $frames.Count; $i++) {
+            $delta = $frames[$i] - $frames[$i - 1]
+            $delta | Should -Be 1 -Because "row $i transitions from frame $($frames[$i - 1]) to frame $($frames[$i]); contiguous physics-tick semantics require delta=1 (issue #53)"
+        }
+
+        $first = $frames[0]
+        $last = $frames[-1]
+        ($last - $first + 1) | Should -Be $frames.Count
+    }
+
+    # The fixture-contiguity check above only fires if someone re-records the
+    # trace after a regression. This source-level check catches a regression
+    # immediately: assert the sampler-call line in scenegraph_runtime.gd uses
+    # Engine.get_physics_frames() (and only that). Together the two tests form
+    # belt-and-braces coverage of the issue-53 fix.
+    It 'scenegraph_runtime.gd invokes the sampler with Engine.get_physics_frames()' {
+        $sourcePath = Get-RepoPath -Path 'addons/agent_runtime_harness/runtime/scenegraph_runtime.gd'
+        Test-Path -LiteralPath $sourcePath | Should -BeTrue
+
+        $samplerCallLines = @(Get-Content -LiteralPath $sourcePath | Where-Object { $_ -match '_behavior_watch_sampler\.capture_frame\(' })
+        $samplerCallLines.Count | Should -BeGreaterOrEqual 1 -Because 'the sampler call site must exist'
+
+        foreach ($line in $samplerCallLines) {
+            $line | Should -Match 'Engine\.get_physics_frames\(\)' -Because 'issue #53: the sampler runs in _physics_process and must report the physics-tick counter'
+            $line | Should -Not -Match 'Engine\.get_process_frames\(\)' -Because 'issue #53: reporting the render-frame counter from inside _physics_process produces non-contiguous traces'
+        }
+    }
+}

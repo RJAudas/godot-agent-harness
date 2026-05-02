@@ -268,7 +268,15 @@ func _capture_startup_if_enabled() -> void:
 func _physics_process(_delta: float) -> void:
 	if not _behavior_watch_sampler.is_enabled():
 		return
-	_behavior_watch_sampler.capture_frame(self, Engine.get_process_frames(), _elapsed_run_time_msec())
+	# Issue #53: report the physics-tick counter, NOT the render-frame counter.
+	# The sampler is intentionally driven from _physics_process so it fires
+	# every physics tick (deterministic per-tick coverage). Reading
+	# Engine.get_process_frames() here would label samples with the unrelated
+	# render-frame counter, producing non-contiguous traces (when render >
+	# physics) and dedup-collapsing multiple ticks that share a render frame
+	# (when render < physics). Both modes silently miss single-tick events
+	# like teleports. Do not "fix" this back.
+	_behavior_watch_sampler.capture_frame(self, Engine.get_physics_frames(), _elapsed_run_time_msec())
 
 
 func _resolve_root_node() -> Node:

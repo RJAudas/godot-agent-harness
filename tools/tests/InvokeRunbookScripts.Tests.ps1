@@ -137,6 +137,44 @@ Describe 'Resolve-RunbookPayload validate-then-rename (C1)' {
         Test-Path -LiteralPath $script:C1Tmp       | Should -BeFalse
     }
 
+    It 'C1: schema-failure diagnostic enumerates allowed values for enum violations (issue #47)' {
+        # Behavior-watch fixture with a deliberately bogus property name. The orchestrator's
+        # schema-validation diagnostic must now name the offending value AND list the allowed
+        # set so a fixture author can correct it without leaving the diagnostic.
+        $bad = @{
+            requestId       = 'will-be-overwritten'
+            scenarioId      = 'enrichment-test'
+            runId           = 'r'
+            targetScene     = 'res://scenes/main.tscn'
+            outputDirectory = 'res://evidence/automation/x'
+            artifactRoot    = ''
+            capturePolicy   = @{ startup = $true; manual = $true; failure = $true }
+            stopPolicy      = @{ stopAfterValidation = $true }
+            requestedBy     = 'enrichment-test'
+            createdAt       = '2026-05-02T00:00:00Z'
+            behaviorWatchRequest = @{
+                targets = @(@{ nodePath = '/root/Main/Foo'; properties = @('position_xyz') })
+                frameCount = 5
+            }
+        } | ConvertTo-Json -Depth 6
+
+        $err = $null
+        try {
+            Resolve-RunbookPayload `
+                -InlineJson $bad `
+                -RequestId 'runbook-c1-enum-enriched' `
+                -ProjectRoot $script:C1Root
+        }
+        catch {
+            $err = $_.Exception.Message
+        }
+
+        $err | Should -Not -BeNullOrEmpty
+        $err | Should -Match 'does not satisfy schema'
+        $err | Should -Match "has value 'position_xyz'"
+        $err | Should -Match 'allowed values:.*text.*linear_velocity'
+    }
+
     It 'C2 follow-up: Resolve-RunbookEvidencePath joins relative paths against ProjectRoot' {
         # Evidence paths from run-result/manifest are project-relative, not repo-relative.
         # Use TestDrive so the assertion holds on any OS (Windows / macOS / Linux),

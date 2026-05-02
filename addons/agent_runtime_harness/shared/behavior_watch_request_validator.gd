@@ -15,6 +15,13 @@ const SUPPORTED_PROPERTIES := [
 	"movementVector",
 	"speed",
 	"overlapFrames",
+	"text",
+	"linear_velocity",
+	"angular_velocity",
+	"modulate",
+	"visible",
+	"rotation",
+	"scale",
 ]
 const LATER_SLICE_KEYS := [
 	"triggers",
@@ -125,7 +132,7 @@ func _normalize_targets(targets_value: Variant, errors: Array) -> Array:
 					errors.append(_build_error(
 						"unsupported_property",
 						"targets[%d].properties" % index,
-						"Behavior watch property '%s' is not supported in slice 1 or slice 2." % property_name
+						"Behavior watch property '%s' is not in the supported allowlist. Allowed values: %s." % [property_name, ", ".join(SUPPORTED_PROPERTIES)]
 					))
 					continue
 				if seen_properties.has(property_name):

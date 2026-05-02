@@ -59,6 +59,39 @@
         "null"
       ],
       "minimum": 0
+    },
+    "text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "linear_velocity": {
+      "$ref": "#/$defs/vector2"
+    },
+    "angular_velocity": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "modulate": {
+      "$ref": "#/$defs/color"
+    },
+    "visible": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "rotation": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "scale": {
+      "$ref": "#/$defs/vector2"
     }
   },
   "$defs": {
@@ -72,6 +105,17 @@
       },
       "minItems": 2,
       "maxItems": 2
+    },
+    "color": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4
     }
   }
 }

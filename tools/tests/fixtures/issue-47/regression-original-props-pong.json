@@ -1,0 +1,27 @@
+{
+  "requestId": "issue-47-regression-FIXTURE",
+  "scenarioId": "issue-47-regression-original-props",
+  "runId": "issue-47-regression-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "res://evidence/automation/$REQUEST_ID",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "issue-47-regression",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/Ball",
+        "properties": ["position", "velocity", "collisionState", "lastCollider", "speed"]
+      }
+    ],
+    "frameCount": 30
+  }
+}

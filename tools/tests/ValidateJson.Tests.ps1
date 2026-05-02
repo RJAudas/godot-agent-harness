@@ -90,4 +90,75 @@ Describe 'tools/validate-json.ps1' {
         $result.valid | Should -BeFalse
         $result.error | Should -Not -BeNullOrEmpty
     }
+
+    Context 'enum-violation enrichment' {
+        BeforeAll {
+            $script:EnrichSchema = @'
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "props": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["a", "b", "c"] }
+    },
+    "ref": { "$ref": "#/$defs/refTarget" }
+  },
+  "$defs": {
+    "refTarget": { "type": "string", "enum": ["alpha", "beta"] }
+  }
+}
+'@
+        }
+
+        It 'appends offending value and allowed values when an enum is violated' {
+            $jsonPath = Join-Path $TestDrive 'enum-bad.json'
+            $schemaPath = Join-Path $TestDrive 'enum-schema.json'
+            Set-Content -LiteralPath $jsonPath -Value '{"props":["a","x","b"]}' -NoNewline
+            Set-Content -LiteralPath $schemaPath -Value $script:EnrichSchema -NoNewline
+
+            $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+                '-InputPath', $jsonPath,
+                '-SchemaPath', $schemaPath,
+                '-AllowInvalid'
+            )
+
+            $result.ParsedOutput.valid | Should -BeFalse
+            $result.ParsedOutput.error | Should -Match "Property at '/props/1' has value 'x'"
+            $result.ParsedOutput.error | Should -Match 'allowed values: a, b, c'
+        }
+
+        It 'walks $ref into $defs to find the enum' {
+            $jsonPath = Join-Path $TestDrive 'enum-ref-bad.json'
+            $schemaPath = Join-Path $TestDrive 'enum-ref-schema.json'
+            Set-Content -LiteralPath $jsonPath -Value '{"ref":"gamma"}' -NoNewline
+            Set-Content -LiteralPath $schemaPath -Value $script:EnrichSchema -NoNewline
+
+            $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+                '-InputPath', $jsonPath,
+                '-SchemaPath', $schemaPath,
+                '-AllowInvalid'
+            )
+
+            $result.ParsedOutput.valid | Should -BeFalse
+            $result.ParsedOutput.error | Should -Match "Property at '/ref' has value 'gamma'"
+            $result.ParsedOutput.error | Should -Match 'allowed values: alpha, beta'
+        }
+
+        It 'leaves non-enum failures unenriched' {
+            $jsonPath = Join-Path $TestDrive 'type-bad.json'
+            $schemaPath = Join-Path $TestDrive 'type-schema.json'
+            Set-Content -LiteralPath $jsonPath -Value '{"props":42}' -NoNewline
+            Set-Content -LiteralPath $schemaPath -Value $script:EnrichSchema -NoNewline
+
+            $result = Invoke-RepoJsonScript -ScriptPath 'tools/validate-json.ps1' -Arguments @(
+                '-InputPath', $jsonPath,
+                '-SchemaPath', $schemaPath,
+                '-AllowInvalid'
+            )
+
+            $result.ParsedOutput.valid | Should -BeFalse
+            $result.ParsedOutput.error | Should -Not -Match 'allowed values:'
+        }
+    }
 }

@@ -31,8 +31,16 @@ Or with inline JSON (when no fixture fits):
 ```powershell
 pwsh ./tools/automation/invoke-behavior-watch.ps1 `
   -ProjectRoot "<project-root>" `
-  -RequestJson '{"requestId":"placeholder","scenarioId":"runbook-behavior-watch","runId":"runbook-behavior-watch","targetScene":"<main scene>","outputDirectory":"res://evidence/automation/agent","artifactRoot":"evidence/automation/agent","capturePolicy":{"startup":true},"stopPolicy":{"stopAfterValidation":true},"requestedBy":"agent","createdAt":"<UTC ISO-8601>","behaviorWatchRequest":{"targets":[{"nodePath":"/root/Main/Paddle","properties":["position"]}],"frameCount":10}}'
+  -RequestJson '{"requestId":"placeholder","scenarioId":"runbook-behavior-watch","runId":"runbook-behavior-watch","targetScene":"<main scene>","outputDirectory":"res://evidence/automation/agent","artifactRoot":"evidence/automation/agent","capturePolicy":{"startup":true},"stopPolicy":{"stopAfterValidation":true,"minRuntimeFrames":10},"requestedBy":"agent","createdAt":"<UTC ISO-8601>","behaviorWatchRequest":{"targets":[{"nodePath":"/root/Main/Paddle","properties":["position"]}],"frameCount":10}}'
 ```
+
+## Lifetime requirement
+
+A behavior watch needs the playtest to live `startFrameOffset + frameCount` process frames after launch. The B18 fix made the post-validation stop unconditional, so `stopAfterValidation: false` does **not** by itself buy you more frames. The only knob that does is `stopPolicy.minRuntimeFrames`:
+
+- Set `stopPolicy.minRuntimeFrames` ≥ `startFrameOffset + frameCount` — this delays the validation-pass stop until the watch window has filled. The shipped fixtures use this shape.
+
+If you forget, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` that names the required value. The pre-existing silent-truncation behavior (request 30 frames, get 2 rows, status: success) was fixed in issue #46.
 
 ## Envelope fields
 

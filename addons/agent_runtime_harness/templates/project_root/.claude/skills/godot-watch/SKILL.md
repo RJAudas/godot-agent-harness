@@ -33,8 +33,12 @@ Or with inline JSON:
 ```powershell
 pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-behavior-watch.ps1 `
   -ProjectRoot "<project-root>" -EnsureEditor `
-  -RequestJson '{"requestId":"placeholder","scenarioId":"runbook-behavior-watch","runId":"runbook-behavior-watch","targetScene":"<main scene>","outputDirectory":"res://evidence/automation/agent","artifactRoot":"evidence/automation/agent","capturePolicy":{"startup":true},"stopPolicy":{"stopAfterValidation":true},"requestedBy":"agent","createdAt":"<UTC ISO-8601>","behaviorWatchRequest":{"targets":[{"nodePath":"/root/Main/Paddle","properties":["position"]}],"frameCount":10}}'
+  -RequestJson '{"requestId":"placeholder","scenarioId":"runbook-behavior-watch","runId":"runbook-behavior-watch","targetScene":"<main scene>","outputDirectory":"res://evidence/automation/agent","artifactRoot":"evidence/automation/agent","capturePolicy":{"startup":true},"stopPolicy":{"stopAfterValidation":true,"minRuntimeFrames":10},"requestedBy":"agent","createdAt":"<UTC ISO-8601>","behaviorWatchRequest":{"targets":[{"nodePath":"/root/Main/Paddle","properties":["position"]}],"frameCount":10}}'
 ```
+
+## Lifetime requirement
+
+A behavior watch needs the playtest to live `startFrameOffset + frameCount` process frames. The post-validation stop is unconditional (B18 fix), so the only knob that grants more frames is `stopPolicy.minRuntimeFrames`. Set it to ≥ `startFrameOffset + frameCount`. If you forget, the harness rejects the request with a diagnostic containing `incompatible_stop_policy` naming the required value.
 
 ## Envelope fields
 

@@ -1,0 +1,8 @@
+{
+  "_comment": "Captured 2026-05-02T21:40 against D:/gameDev/pong after applying issue #46 fix. The bad combination (frameCount:30 + stopAfterValidation:true + minRuntimeFrames:0) is now rejected with a diagnostic that names the constraint, the remediation, and the current values. failureKind=runtime because the validator rejection surfaces through the editor's runtime path, not the schema layer.",
+  "status": "failure",
+  "failureKind": "runtime",
+  "diagnostics": [
+    "Behavior watch rejection: incompatible_stop_policy [stopPolicy.minRuntimeFrames] behaviorWatchRequest needs the playtest to live at least 30 frame(s) (startFrameOffset=0 + frameCount=30). Set stopPolicy.minRuntimeFrames>=30 to delay the validation-pass stop until the watch window has filled. Current: minRuntimeFrames=0."
+  ]
+}

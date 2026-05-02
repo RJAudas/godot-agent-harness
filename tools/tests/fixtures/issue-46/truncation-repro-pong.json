@@ -1,7 +1,7 @@
 {
-  "requestId": "issue-47-linear-velocity-pong-FIXTURE",
-  "scenarioId": "issue-47-linear-velocity-watch",
-  "runId": "issue-47-linear-velocity-run",
+  "requestId": "issue-46-truncation-repro-FIXTURE",
+  "scenarioId": "issue-46-silent-truncation",
+  "runId": "issue-46-truncation-repro-run",
   "targetScene": "res://scenes/main.tscn",
   "outputDirectory": "res://evidence/automation/$REQUEST_ID",
   "artifactRoot": "res://evidence/automation/$REQUEST_ID",
@@ -11,10 +11,9 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": true,
-    "minRuntimeFrames": 30
+    "stopAfterValidation": true
   },
-  "requestedBy": "issue-47-repro",
+  "requestedBy": "issue-46-repro",
   "createdAt": "2026-05-02T00:00:00Z",
   "behaviorWatchRequest": {
     "targets": [

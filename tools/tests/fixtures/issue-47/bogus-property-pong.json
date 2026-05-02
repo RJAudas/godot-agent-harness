@@ -11,7 +11,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": true
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 5
   },
   "requestedBy": "issue-47-error-enrichment",
   "createdAt": "2026-05-02T00:00:00Z",

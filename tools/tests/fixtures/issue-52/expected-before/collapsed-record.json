@@ -1,5 +1,5 @@
 {
-  "_comment": "Captured 2026-05-02T23:15 against D:/gameDev/pong using harness commit 185d29c. Phase A reproduction of issue #52. Pong's match_controller.gd and hud_presenter.gd had 4 distinct push_warning calls inserted (DIAG-A and DIAG-B in MC._ready; one in MC._on_goal_right_entered which only fires on a goal; one in HudPresenter._refresh). The 30-frame fixture fired 3 of the 4 (the goal-handler one never fired in a 30-frame window). All 3 collapsed into ONE record showing the engine-side C++ emission point with repeatCount=3. Only the most recently captured message text survives (HudPresenter._refresh DIAG, the last one to fire); the two MC._ready messages are gone.",
+  "_comment": "Documentary record describing the pre-fix behavior of issue #52. Captured 2026-05-02 against D:/gameDev/pong using harness commit 185d29c. Pong's match_controller.gd and hud_presenter.gd had 4 distinct push_warning calls inserted (DIAG-A in MC._ready line 21, DIAG-B in MC._ready line 26, one in MC._on_goal_right_entered which only fires on a goal, one in HudPresenter._refresh line 19). The 30-frame issue-46 fixture (used as a convenient runner before the issue-52 request fixture existed; runId rewritten below to match the canonical issue-52 fixture) fired 3 of the 4. All 3 collapsed into ONE record showing the engine-side C++ emission point with repeatCount=3. Only the most recently captured message text survives (HudPresenter._refresh DIAG, the last one to fire); the two MC._ready messages are gone. Compare against expected-after/distinct-records.jsonl for the post-fix behavior.",
   "firstSeenAt": "2026-05-02T23:15:51Z",
   "function": "push_warning",
   "lastSeenAt": "2026-05-02T23:15:51Z",
@@ -7,7 +7,7 @@
   "message": "HudPresenter._refresh DIAG",
   "ordinal": 1,
   "repeatCount": 3,
-  "runId": "issue-46-full-window-min-runtime-run",
+  "runId": "issue-52-runtime-error-records-run",
   "scriptPath": "core/variant/variant_utility.cpp",
   "severity": "warning"
 }

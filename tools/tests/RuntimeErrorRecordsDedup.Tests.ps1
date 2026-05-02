@@ -12,16 +12,20 @@ Describe 'issue #52: runtime-error-records dedup uses user-script frame, not eng
     #
     # The user's actual GDScript caller frame is in the `script_backtraces`
     # parameter (Array[ScriptBacktrace]). The fix consults
-    # script_backtraces[0]'s frame 0 (get_function_name(0) /
-    # get_function_file(0) / get_function_line(0)) and uses those for the
-    # record's scriptPath/line/function. The dedup key formula is unchanged
-    # because it reads from the record's fields — keying on user-frame data
-    # automatically becomes per-call-site instead of per-engine-emission-site.
+    # script_backtraces[0]'s frame 0 — Godot 4.6's ScriptBacktrace API uses
+    # get_frame_count / get_frame_function(i) / get_frame_file(i) /
+    # get_frame_line(i) (not get_function_* — those names appear in some
+    # external docs but don't exist on the actual class). The fix uses those
+    # values for the record's scriptPath/line/function. The dedup key formula
+    # is unchanged because it reads from the record's fields — keying on
+    # user-frame data automatically becomes per-call-site instead of
+    # per-engine-emission-site.
     #
-    # This test statically verifies the source code consults script_backtraces.
-    # Without it, a regression that re-introduces the underscore-prefixed
-    # parameter (or stops calling get_function_*) would only surface in
-    # integration testing. The full integration verification is in
+    # This test statically verifies the source code consults script_backtraces
+    # and calls the correct get_frame_* methods. Without it, a regression that
+    # re-introduces the underscore-prefixed parameter (or swaps to a
+    # non-existent get_function_* call) would only surface in integration
+    # testing. The full integration verification is in
     # tools/tests/fixtures/issue-52/expected-after/distinct-records.jsonl.
     It 'scenegraph_runtime.gd Logger callback consults script_backtraces[0] frame 0' {
         $sourcePath = Get-RepoPath -Path 'addons/agent_runtime_harness/runtime/scenegraph_runtime.gd'

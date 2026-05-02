@@ -1,0 +1,28 @@
+{
+  "requestId": "issue-52-runtime-error-records-FIXTURE",
+  "scenarioId": "issue-52-runtime-error-records",
+  "runId": "issue-52-runtime-error-records-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "res://evidence/automation/$REQUEST_ID",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 30
+  },
+  "requestedBy": "issue-52-repro",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/Ball",
+        "properties": ["linear_velocity"]
+      }
+    ],
+    "frameCount": 30
+  }
+}

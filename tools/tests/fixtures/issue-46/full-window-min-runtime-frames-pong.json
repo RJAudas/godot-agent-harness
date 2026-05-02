@@ -1,7 +1,7 @@
 {
-  "requestId": "issue-47-linear-velocity-pong-FIXTURE",
-  "scenarioId": "issue-47-linear-velocity-watch",
-  "runId": "issue-47-linear-velocity-run",
+  "requestId": "issue-46-full-window-min-runtime-FIXTURE",
+  "scenarioId": "issue-46-full-window-min-runtime",
+  "runId": "issue-46-full-window-min-runtime-run",
   "targetScene": "res://scenes/main.tscn",
   "outputDirectory": "res://evidence/automation/$REQUEST_ID",
   "artifactRoot": "res://evidence/automation/$REQUEST_ID",
@@ -14,7 +14,7 @@
     "stopAfterValidation": true,
     "minRuntimeFrames": 30
   },
-  "requestedBy": "issue-47-repro",
+  "requestedBy": "issue-46-verify",
   "createdAt": "2026-05-02T00:00:00Z",
   "behaviorWatchRequest": {
     "targets": [

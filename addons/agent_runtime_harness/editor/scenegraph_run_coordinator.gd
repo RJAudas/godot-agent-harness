@@ -941,7 +941,11 @@ func _resolve_request(config: Dictionary, request: Dictionary, capability: Dicti
 
 	var behavior_watch_request := _resolve_behavior_watch_request(default_overrides, request, overrides)
 	if not behavior_watch_request.is_empty():
-		var watch_validation := _watch_request_validator.normalize_request(behavior_watch_request, String(resolved.get("runId", "")))
+		var watch_validation := _watch_request_validator.normalize_request(
+			behavior_watch_request,
+			String(resolved.get("runId", "")),
+			resolved.get("stopPolicy", {})
+		)
 		resolved["behaviorWatchValidation"] = watch_validation
 		if bool(watch_validation.get("accepted", false)):
 			resolved["behaviorWatchRequest"] = watch_validation.get("request", {}).duplicate(true)

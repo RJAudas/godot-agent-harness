@@ -11,7 +11,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": true
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 30
   },
   "requestedBy": "issue-47-repro",
   "createdAt": "2026-05-02T00:00:00Z",

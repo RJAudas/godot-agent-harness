@@ -14,7 +14,8 @@
     "failure": true
   },
   "stopPolicy": {
-    "stopAfterValidation": true
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 26
   },
   "requestedBy": "behavior-watch-fixture",
   "createdAt": "2026-04-14T00:11:00Z",

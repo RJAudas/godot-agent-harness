@@ -33,7 +33,7 @@ const LATER_SLICE_KEYS := [
 ]
 
 
-func normalize_request(request_value: Variant, run_id: String) -> Dictionary:
+func normalize_request(request_value: Variant, run_id: String, stop_policy: Dictionary = {}) -> Dictionary:
 	if typeof(request_value) != TYPE_DICTIONARY:
 		return _build_rejection([
 			_build_error("invalid_request", "behaviorWatchRequest", "Behavior watch request must be an object."),
@@ -59,6 +59,20 @@ func normalize_request(request_value: Variant, run_id: String) -> Dictionary:
 		"Behavior watch frameCount must be a positive integer.",
 		errors
 	)
+
+	if frame_count > 0:
+		# B18 made the post-validation stop unconditional regardless of
+		# stopAfterValidation, so minRuntimeFrames is the only knob that
+		# actually grants the playtest enough frames to fill the watch window.
+		# The constraint is therefore independent of stopAfterValidation.
+		var min_runtime_frames := int(stop_policy.get("minRuntimeFrames", 0))
+		var required_frames := start_frame_offset + frame_count
+		if min_runtime_frames < required_frames:
+			errors.append(_build_error(
+				"incompatible_stop_policy",
+				"stopPolicy.minRuntimeFrames",
+				"behaviorWatchRequest needs the playtest to live at least %d frame(s) (startFrameOffset=%d + frameCount=%d). Set stopPolicy.minRuntimeFrames>=%d to delay the validation-pass stop until the watch window has filled. Current: minRuntimeFrames=%d." % [required_frames, start_frame_offset, frame_count, required_frames, min_runtime_frames]
+			))
 
 	if not errors.is_empty():
 		return _build_rejection(errors)

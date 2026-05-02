@@ -1,0 +1,27 @@
+{
+  "requestId": "runbook-behavior-watch-label-text-FIXTURE",
+  "scenarioId": "runbook-behavior-watch-label-text",
+  "runId": "runbook-behavior-watch-label-text-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "tools/tests/fixtures/runbook/behavior-watch/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/HUD/ScoreLeftLabel",
+        "properties": ["text", "visible"]
+      }
+    ],
+    "frameCount": 10
+  }
+}

@@ -326,6 +326,33 @@ If the goal is to debug Pong-like bounce failures quickly with minimal overhead,
 Slice 5 should be added when the game uses custom script-driven motion and the sampled node state is not enough to explain the bug.
 Slice 7 should remain optional until the persisted evidence workflow is proven.
 
+## Watchable properties
+
+Behavior-watch fixtures may name any of the following properties on a target node. The list mixes harness-computed pseudo-properties (camelCase) with direct Godot property reads (snake_case, matching Godot's own naming):
+
+Harness-computed (camelCase):
+
+- `position` — `Node2D.position` serialized as `[x, y]`
+- `velocity` — `CharacterBody2D.velocity` (Vector2 only) serialized as `[x, y]`
+- `intendedVelocity` — `intended_velocity` exported on user scripts (Vector2 only)
+- `movementVector` — `movement_vector` exported on user scripts; falls back to `velocity` if absent
+- `speed` — magnitude of `velocity`
+- `collisionState` — `"contact"` or `"none"` based on `get_slide_collision_count()` (CharacterBody2D)
+- `lastCollider` — node path of the last collider, or `null`
+- `overlapFrames` — frames the same collider has remained in contact
+
+Direct Godot properties (snake_case, read via `node.get(name)`):
+
+- `text` — `Label.text` (and any other `text` property; serialized as a string)
+- `linear_velocity` — `RigidBody2D.linear_velocity` serialized as `[x, y]`
+- `angular_velocity` — `RigidBody2D.angular_velocity` (number)
+- `modulate` — `CanvasItem.modulate` serialized as `[r, g, b, a]`
+- `visible` — `CanvasItem.visible` (boolean)
+- `rotation` — `Node2D.rotation` (number)
+- `scale` — `Node2D.scale` serialized as `[x, y]`
+
+Properties not on this allowlist are rejected at request validation. The error message enumerates the allowed values, both at the JSON-schema layer (`tools/validate-json.ps1` enriches enum violations with allowed values + the offending value) and at the runtime validator layer (`addons/agent_runtime_harness/shared/behavior_watch_request_validator.gd`).
+
 ## First seeded scenario to implement
 
 Use a deterministic Pong fixture that asks for:

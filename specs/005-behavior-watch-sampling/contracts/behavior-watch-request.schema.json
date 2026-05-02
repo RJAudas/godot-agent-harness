@@ -56,7 +56,14 @@
               "lastCollider",
               "movementVector",
               "speed",
-              "overlapFrames"
+              "overlapFrames",
+              "text",
+              "linear_velocity",
+              "angular_velocity",
+              "modulate",
+              "visible",
+              "rotation",
+              "scale"
             ]
           }
         }

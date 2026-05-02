@@ -1,0 +1,8 @@
+{
+  "_comment": "Captured 2026-05-02T21:01 against D:/gameDev/pong after applying issue #47 fix. Diagnostic now names the offending value AND enumerates all 15 allowed values inline.",
+  "status": "failure",
+  "failureKind": "request-invalid",
+  "diagnostics": [
+    "Run request does not satisfy schema 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json': The JSON is not valid with the schema: Value should match one of the values specified by the enum at '/behaviorWatchRequest/targets/0/properties/0'\nProperty at '/behaviorWatchRequest/targets/0/properties/0' has value 'position_xyz'; allowed values: position, velocity, intendedVelocity, collisionState, lastCollider, movementVector, speed, overlapFrames, text, linear_velocity, angular_velocity, modulate, visible, rotation, scale."
+  ]
+}

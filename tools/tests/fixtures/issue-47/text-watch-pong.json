@@ -1,0 +1,27 @@
+{
+  "requestId": "issue-47-text-watch-pong-FIXTURE",
+  "scenarioId": "issue-47-text-watch",
+  "runId": "issue-47-text-watch-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "res://evidence/automation/$REQUEST_ID",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true
+  },
+  "requestedBy": "issue-47-repro",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/HUD/ScoreLeftLabel",
+        "properties": ["text"]
+      }
+    ],
+    "frameCount": 30
+  }
+}

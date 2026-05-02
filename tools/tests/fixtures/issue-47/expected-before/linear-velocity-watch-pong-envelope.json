@@ -1,0 +1,8 @@
+{
+  "_comment": "Captured 2026-05-02T20:27 against D:/gameDev/pong using harness commit 62b76aa. Phase A reproduction of issue #47.",
+  "status": "failure",
+  "failureKind": "request-invalid",
+  "diagnostics": [
+    "Run request does not satisfy schema 'specs/003-editor-evidence-loop/contracts/automation-run-request.schema.json': The JSON is not valid with the schema: Value should match one of the values specified by the enum at '/behaviorWatchRequest/targets/0/properties/0'"
+  ]
+}

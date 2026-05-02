@@ -134,6 +134,15 @@ func _build_row_for_target(node: Node, target: Dictionary, frame: int, timestamp
 					collision.get("overlapFrames", null),
 					overlap_available
 				)
+			_:
+				var generic := _extract_generic_property(node, property_name)
+				_assign_sampled_property(
+					row,
+					node_path,
+					property_name,
+					generic.get("value", null),
+					bool(generic.get("available", false))
+				)
 
 	return row
 
@@ -212,6 +221,28 @@ func _has_property(target: Object, property_name: String) -> bool:
 		if String(property_info.get("name", "")) == property_name:
 			return true
 	return false
+
+
+func _extract_generic_property(node: Object, property_name: String) -> Dictionary:
+	if not _has_property(node, property_name):
+		return {"value": null, "available": false}
+	var raw_value = node.get(property_name)
+	match typeof(raw_value):
+		TYPE_BOOL:
+			return {"value": bool(raw_value), "available": true}
+		TYPE_INT:
+			return {"value": int(raw_value), "available": true}
+		TYPE_FLOAT:
+			return {"value": float(raw_value), "available": true}
+		TYPE_STRING, TYPE_STRING_NAME:
+			return {"value": String(raw_value), "available": true}
+		TYPE_VECTOR2:
+			return {"value": [raw_value.x, raw_value.y], "available": true}
+		TYPE_VECTOR2I:
+			return {"value": [raw_value.x, raw_value.y], "available": true}
+		TYPE_COLOR:
+			return {"value": [raw_value.r, raw_value.g, raw_value.b, raw_value.a], "available": true}
+	return {"value": null, "available": false}
 
 
 func _vector_length(vector_value: Variant) -> Variant:

@@ -31,6 +31,7 @@ Key identifiers in `inputDispatchScript` are bare Godot logical names (`ENTER`, 
 - **Do not read prior-run artifacts** (`lifecycle-status.json`, previous run artifacts, or files under `evidence/` not produced by the current run). They describe the past, not what you need to do now.
 - **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the protocol. The prompt file has everything.
 - **Do not vary capture or stop policies speculatively.** Fixture defaults are correct for the common case.
+- **Do not stop and restart the editor speculatively.** `capability.json` reflects current state, and stale editor state is rarely the cause of failures. Read `harness/automation/results/capability.json`, `run-result.json`, or `lifecycle-status.json` first. Restart only when you've confirmed the issue is editor-cached, not config-driven (or when running a CLI tool that needs exclusive project access, e.g. `godot --headless --import`).
 
 ## Routing
 

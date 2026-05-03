@@ -730,7 +730,11 @@ function Get-BlockedReasonDiagnostics {
         Array of reason strings from run-result.json blockedReasons.
 
     .PARAMETER TargetScene
-        The targetScene value to interpolate into target_scene_missing hints.
+        The targetScene value to interpolate into target_scene_file_not_found
+        hints (the only code whose hint mentions the path directly). Issue
+        #44 split the older target_scene_missing into target_scene_unspecified
+        + target_scene_file_not_found; the latter is the one that needs the
+        path interpolation.
 
     .OUTPUTS
         [string[]] one hint per reason; falls back to generic text for unmapped reasons.
@@ -742,16 +746,20 @@ function Get-BlockedReasonDiagnostics {
         [string]$TargetScene = ''
     )
 
+    # Issue #44: split target_scene_missing into two precise codes; the old
+    # name remains as a backward-compat alias mapped to the SAME hint as
+    # target_scene_unspecified so out-of-tree emitters still receive identical
+    # remediation guidance (Copilot PR #59 review — keep the user message
+    # identical, not "deprecated alias…").
+    $unspecifiedHint = "No targetScene configured. Set ``targetScene`` in ``harness/inspection-run-config.json`` or ``application/run/main_scene`` in ``project.godot``."
+
     $hints = @{
-        'scene_already_running'      = "A previous playtest is still running. Restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
-        # Issue #44: split target_scene_missing into two precise codes.
-        # The old name remains as a backward-compat alias so any out-of-tree
-        # consumer that still emits it gets a sensible hint.
-        'target_scene_unspecified'   = "No targetScene configured. Set ``targetScene`` in ``harness/inspection-run-config.json`` or ``application/run/main_scene`` in ``project.godot``."
+        'scene_already_running'       = "A previous playtest is still running. Restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+        'target_scene_unspecified'    = $unspecifiedHint
         'target_scene_file_not_found' = "The configured scene '$TargetScene' does not exist on disk. Check the path or correct any project rename."
-        'target_scene_missing'       = "Deprecated alias for target_scene_unspecified — set ``targetScene`` in ``harness/inspection-run-config.json`` or ``application/run/main_scene`` in ``project.godot``."
-        'harness_autoload_missing'   = "The agent_runtime_harness autoload is not registered. Enable the plugin in Project Settings → Plugins, or add the autoload manually."
-        'run_in_progress'            = "Another harness run is still in flight. Wait for it to complete, or restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+        'target_scene_missing'        = $unspecifiedHint
+        'harness_autoload_missing'    = "The agent_runtime_harness autoload is not registered. Enable the plugin in Project Settings → Plugins, or add the autoload manually."
+        'run_in_progress'             = "Another harness run is still in flight. Wait for it to complete, or restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
     }
 
     $result = [System.Collections.Generic.List[string]]::new()
@@ -788,8 +796,9 @@ function Get-BlockedRunDiagnostics {
 
     .PARAMETER TargetScene
         Optional targetScene string forwarded to Get-BlockedReasonDiagnostics
-        for the target_scene_missing hint. Empty string is fine when the
-        invoke script does not bind TargetScene as a parameter.
+        for the target_scene_file_not_found hint (the one that interpolates
+        the path). Empty string is fine when the invoke script does not bind
+        TargetScene as a parameter.
     #>
     [CmdletBinding()]
     [OutputType([string])]

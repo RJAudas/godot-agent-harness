@@ -1,0 +1,28 @@
+{
+  "requestId": "issue-45-missing-target-FIXTURE",
+  "scenarioId": "issue-45-missing-target",
+  "runId": "issue-45-missing-target-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "res://evidence/automation/$REQUEST_ID",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 30
+  },
+  "requestedBy": "issue-45-negative",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/DoesNotExist",
+        "properties": ["position"]
+      }
+    ],
+    "frameCount": 30
+  }
+}

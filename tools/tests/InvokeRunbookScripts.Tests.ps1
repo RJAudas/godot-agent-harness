@@ -1058,6 +1058,56 @@ Describe 'B15: invoke-behavior-watch.ps1 emits a flat warnings array' {
     }
 }
 
+Describe 'issue #45: invoke-behavior-watch envelope agrees with manifest appliedWatch.outcomes' {
+    # Issue #45 root cause: the orchestrator filtered manifest.artifactRefs
+    # for kind in ('behavior-samples', 'behavior-trace'), but the runtime
+    # emits kind='trace' (per InspectionConstants.ARTIFACT_KIND_TRACE). The
+    # filter never matched, sampleCount stayed at 0, and a misleading
+    # "target node not found or never sampled: <nodePath>" warning was
+    # synthesized from the REQUEST payload — making the envelope
+    # consistently contradict the manifest's appliedWatch.outcomes.
+    #
+    # Fix: source warnings + sampleCount from manifest.appliedWatch.outcomes
+    # (the runtime's source of truth) and use 'trace' as the artifact-kind
+    # filter for the samplesPath / frameRangeCovered derivation.
+    #
+    # These tests statically verify the orchestrator now consults the
+    # manifest outcomes block and uses the correct artifact kind. The full
+    # behavioral verification is via the live editor against D:/gameDev/pong
+    # (Phase C of the plan).
+    BeforeAll {
+        $script:WatchScriptText = Get-Content -Raw -LiteralPath (Join-Path $script:RepoRootPath 'tools/automation/invoke-behavior-watch.ps1')
+    }
+
+    It 'orchestrator filters artifactRefs on kind="trace" (the actual emitted kind)' {
+        $script:WatchScriptText | Should -Match "kind\s*-eq\s*'trace'" -Because 'issue #45: the runtime emits kind="trace" (InspectionConstants.ARTIFACT_KIND_TRACE); the filter must match that exact string'
+        # Anchor the dead-alias check on the actual pipeline expression
+        # (artifactRefs | Where-Object …) so commented-out examples in
+        # explanatory text don't make the test flaky. (Copilot PR #60 review.)
+        $script:WatchScriptText | Should -Not -Match "artifactRefs\s*\|\s*Where-Object[^\r\n]*'behavior-samples'" -Because 'issue #45: behavior-samples never appeared in the runtime; do not re-introduce as a Where-Object filter on artifactRefs'
+        $script:WatchScriptText | Should -Not -Match "artifactRefs\s*\|\s*Where-Object[^\r\n]*'behavior-trace'" -Because 'issue #45: behavior-trace never appeared in the runtime; do not re-introduce as a Where-Object filter on artifactRefs'
+    }
+
+    It 'orchestrator sources sampleCount + warnings from manifest.appliedWatch.outcomes' {
+        # The fix moves the truth from the request-payload-derived synthesis
+        # (which was wrong even when the run succeeded) to the manifest's
+        # outcomes block. These regex assertions catch a regression that
+        # re-introduces the request-payload synthesis path.
+        $script:WatchScriptText | Should -Match 'appliedWatch\.outcomes' -Because 'issue #45: outcome must be sourced from the manifest, not the request payload'
+        $script:WatchScriptText | Should -Match 'watchOutcomes\.missingTargets' -Because 'issue #45: warnings come from missingTargets in the manifest'
+        $script:WatchScriptText | Should -Match 'watchOutcomes\.sampleCount' -Because 'issue #45: sampleCount is the manifest field, not a disk row count'
+    }
+
+    It 'orchestrator no longer synthesizes warnings from the request payload nodePath' {
+        # The pre-fix code iterated $bwr['targets'] from $materialized.Payload
+        # to build warnings — that's what produced the false positives.
+        # Removing this path entirely is the actual fix; keeping it would
+        # silently re-introduce the bug even with the manifest-sourced
+        # warnings in place.
+        $script:WatchScriptText | Should -Not -Match '\$bwr\[''targets''\]' -Because 'issue #45: the request-payload warning synthesis is the source of the false positive; it must not exist'
+    }
+}
+
 Describe 'B16: Get-RunResultValidationDiagnostics surfaces validationResult.notes' {
     # When run-result reports failureKind=validation, validationResult.notes
     # carries the authoritative explanation. The helper extracts those notes

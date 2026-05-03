@@ -234,7 +234,27 @@ if (-not $manifestCheck.Ok) {
     Exit-Failure $kind $manifestCheck.Diagnostic
 }
 
-# Step 9: Build outcome
+# Step 9: Build outcome from the manifest's appliedWatch.outcomes block.
+#
+# Issue #45: previously this script counted rows on disk and synthesized
+# warnings from the request payload's nodePath when the row count was zero.
+# Two compounding bugs made the envelope contradict the manifest:
+#  1. The artifact-kind filter used 'behavior-samples' / 'behavior-trace',
+#     but the runtime emits kind="trace" (per InspectionConstants.
+#     ARTIFACT_KIND_TRACE). The filter never matched, so the row-count
+#     read was skipped and sampleCount always stayed at 0.
+#  2. The zero-row fallback synthesized "target node not found or never
+#     sampled: <nodePath>" from the REQUEST payload — a string that's not
+#     informed by what actually happened at runtime. The watch could have
+#     succeeded fully (manifest's missingTargets: []) and still get a false
+#     missing-target warning.
+#
+# Fix: trust the manifest. appliedWatch.outcomes already has sampleCount,
+# missingTargets, missingProperties, and noSamples — populated by the
+# runtime in scenegraph_artifact_writer.gd:72-79. Source warnings from
+# THERE, not from the request payload. Use the trace file only for
+# frameRangeCovered (which the manifest doesn't carry) and for surfacing
+# the resolved samplesPath.
 $samplesPath       = $null
 $sampleCount       = 0
 $frameRangeCovered = $null
@@ -242,56 +262,96 @@ $warnings          = [System.Collections.Generic.List[string]]::new()
 
 try {
     $manifest = Get-Content -LiteralPath $absManifest -Raw | ConvertFrom-Json -Depth 20
-    $samplesRef = $manifest.artifactRefs | Where-Object { $_.kind -in @('behavior-samples', 'behavior-trace') } | Select-Object -First 1
+
+    # Source-of-truth: appliedWatch.outcomes block (issue #45).
+    $watchOutcomes = $null
+    if ($manifest.PSObject.Properties.Name -contains 'appliedWatch' -and $null -ne $manifest.appliedWatch) {
+        if ($manifest.appliedWatch.PSObject.Properties.Name -contains 'outcomes') {
+            $watchOutcomes = $manifest.appliedWatch.outcomes
+        }
+    }
+    if ($null -ne $watchOutcomes) {
+        if ($watchOutcomes.PSObject.Properties.Name -contains 'sampleCount') {
+            $sampleCount = [int]$watchOutcomes.sampleCount
+        }
+        if ($watchOutcomes.PSObject.Properties.Name -contains 'missingTargets') {
+            foreach ($mt in @($watchOutcomes.missingTargets)) {
+                if (-not [string]::IsNullOrWhiteSpace($mt)) {
+                    $warnings.Add("target node not found or never sampled: $mt")
+                }
+            }
+        }
+        if ($watchOutcomes.PSObject.Properties.Name -contains 'missingProperties') {
+            foreach ($mp in @($watchOutcomes.missingProperties)) {
+                if ($null -eq $mp) { continue }
+                $mpNode = if ($mp.PSObject.Properties.Name -contains 'nodePath') { [string]$mp.nodePath } else { '' }
+                if ([string]::IsNullOrWhiteSpace($mpNode)) { continue }
+                $mpProps = @()
+                if ($mp.PSObject.Properties.Name -contains 'properties') {
+                    $mpProps = @($mp.properties | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                }
+                # Skip the warning when the filtered properties list is empty
+                # (Copilot PR #60 review). An empty list would emit
+                # "... never observed: " with nothing actionable; the
+                # missingTargets warning above already covers that case.
+                if ($mpProps.Count -eq 0) { continue }
+                $propsList = ($mpProps -join ', ')
+                $warnings.Add("target node '$mpNode' sampled but properties never observed: $propsList")
+            }
+        }
+        $noSamples = $false
+        if ($watchOutcomes.PSObject.Properties.Name -contains 'noSamples') {
+            $noSamples = [bool]$watchOutcomes.noSamples
+        }
+        if ($noSamples -and $warnings.Count -eq 0) {
+            $warnings.Add("no samples produced for the configured frame window")
+        }
+    }
+
+    # Trace artifact: surface samplesPath and derive frameRangeCovered.
+    # Issue #45 fix: filter on the actual emitted kind ('trace'), not the
+    # ghost names that never existed in the runtime.
+    $samplesRef = $manifest.artifactRefs | Where-Object { $_.kind -eq 'trace' } | Select-Object -First 1
     if ($null -ne $samplesRef) {
         $samplesPath = Resolve-RunbookEvidencePath -Path $samplesRef.path -ProjectRoot $resolvedRoot
         if (-not (Test-Path -LiteralPath $samplesPath)) {
-            Exit-Failure 'internal' "behavior samples artifact missing on disk at '$samplesPath'"
+            # Manifest references a trace that's not on disk. If the manifest
+            # also claimed samples, that's a real inconsistency worth surfacing
+            # — don't silently zero it out (which was the pre-fix failure mode).
+            if ($sampleCount -gt 0) {
+                $warnings.Add("manifest claims $sampleCount samples but trace file missing at '$samplesPath'")
+            }
+            $samplesPath = $null
         }
-        $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
-                Where-Object { $null -ne $_ }
-        $sampleCount = @($rows).Count
-        if ($sampleCount -gt 0) {
-            $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
-            $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
+        else {
+            # Stream once and track min/max — avoids materializing $rows and
+            # an O(N log N) sort just to pick first/last (Copilot PR #60).
+            # Note: use the `foreach` statement (parent scope) rather than the
+            # ForEach-Object cmdlet — the latter runs each iteration in a
+            # child scope, so the $minFrame / $maxFrame / $haveAny assignments
+            # would not propagate.
+            $minFrame = [int]::MaxValue
+            $maxFrame = [int]::MinValue
+            $haveAny  = $false
+            foreach ($line in [System.IO.File]::ReadLines($samplesPath)) {
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                $row = $null
+                try { $row = $line | ConvertFrom-Json -Depth 10 -ErrorAction Stop } catch { continue }
+                if ($null -eq $row) { continue }
+                if (-not ($row.PSObject.Properties.Name -contains 'frame')) { continue }
+                $frame = [int]$row.frame
+                if ($frame -lt $minFrame) { $minFrame = $frame }
+                if ($frame -gt $maxFrame) { $maxFrame = $frame }
+                $haveAny = $true
+            }
+            if ($haveAny) {
+                $frameRangeCovered = @{ first = $minFrame; last = $maxFrame }
+            }
         }
     }
 }
 catch {
     Exit-Failure 'internal' "Failed to assemble behavior-watch outcome from manifest: $($_.Exception.Message)"
-}
-
-# B3: zero samples almost always means the target node was not present in the
-# scene at sample time. Surface the watched nodePath(s) from the already-parsed
-# request payload so the user has something actionable to investigate.
-# Reuse $materialized.Payload (a hashtable produced by Resolve-RunbookPayload)
-# instead of re-reading the fixture file -- the file may already have been
-# consumed by the broker, and re-reading via $RequestFixturePath also skips
-# the repo-relative-to-absolute resolution that Resolve-RunbookPayload does.
-if ($sampleCount -eq 0) {
-    try {
-        $payload = $materialized.Payload
-        if ($null -ne $payload -and $payload.ContainsKey('behaviorWatchRequest')) {
-            $bwr = $payload['behaviorWatchRequest']
-            if ($null -ne $bwr -and $bwr -is [hashtable] -and $bwr.ContainsKey('targets')) {
-                foreach ($t in @($bwr['targets'])) {
-                    if ($null -ne $t -and $t -is [hashtable] -and $t.ContainsKey('nodePath')) {
-                        $np = [string]$t['nodePath']
-                        if (-not [string]::IsNullOrWhiteSpace($np)) {
-                            $warnings.Add("target node not found or never sampled: $np")
-                        }
-                    }
-                }
-            }
-        }
-        if ($warnings.Count -eq 0) {
-            $warnings.Add("zero samples captured; check that the watched node exists in the running scene at sample time")
-        }
-    }
-    catch {
-        $warnings.Add("zero samples captured; could not inspect request payload to identify target node ($($_.Exception.Message))")
-    }
 }
 
 # Steps 10-12

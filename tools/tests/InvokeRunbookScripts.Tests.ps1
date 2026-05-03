@@ -1081,12 +1081,11 @@ Describe 'issue #45: invoke-behavior-watch envelope agrees with manifest applied
 
     It 'orchestrator filters artifactRefs on kind="trace" (the actual emitted kind)' {
         $script:WatchScriptText | Should -Match "kind\s*-eq\s*'trace'" -Because 'issue #45: the runtime emits kind="trace" (InspectionConstants.ARTIFACT_KIND_TRACE); the filter must match that exact string'
-        # Make sure the dead aliases don't appear inside any active
-        # Where-Object filter expression. (They may still be referenced in a
-        # historical comment for context — that's fine; the regex only matches
-        # filter syntax, not free-form comment text.)
-        $script:WatchScriptText | Should -Not -Match "Where-Object[^|]*'behavior-samples'" -Because 'issue #45: behavior-samples never appeared in the runtime; do not re-introduce as a Where-Object filter'
-        $script:WatchScriptText | Should -Not -Match "Where-Object[^|]*'behavior-trace'" -Because 'issue #45: behavior-trace never appeared in the runtime; do not re-introduce as a Where-Object filter'
+        # Anchor the dead-alias check on the actual pipeline expression
+        # (artifactRefs | Where-Object …) so commented-out examples in
+        # explanatory text don't make the test flaky. (Copilot PR #60 review.)
+        $script:WatchScriptText | Should -Not -Match "artifactRefs\s*\|\s*Where-Object[^\r\n]*'behavior-samples'" -Because 'issue #45: behavior-samples never appeared in the runtime; do not re-introduce as a Where-Object filter on artifactRefs'
+        $script:WatchScriptText | Should -Not -Match "artifactRefs\s*\|\s*Where-Object[^\r\n]*'behavior-trace'" -Because 'issue #45: behavior-trace never appeared in the runtime; do not re-introduce as a Where-Object filter on artifactRefs'
     }
 
     It 'orchestrator sources sampleCount + warnings from manifest.appliedWatch.outcomes' {

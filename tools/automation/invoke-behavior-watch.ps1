@@ -290,6 +290,11 @@ try {
                 if ($mp.PSObject.Properties.Name -contains 'properties') {
                     $mpProps = @($mp.properties | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                 }
+                # Skip the warning when the filtered properties list is empty
+                # (Copilot PR #60 review). An empty list would emit
+                # "... never observed: " with nothing actionable; the
+                # missingTargets warning above already covers that case.
+                if ($mpProps.Count -eq 0) { continue }
                 $propsList = ($mpProps -join ', ')
                 $warnings.Add("target node '$mpNode' sampled but properties never observed: $propsList")
             }
@@ -319,12 +324,28 @@ try {
             $samplesPath = $null
         }
         else {
-            $rows = Get-Content -LiteralPath $samplesPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                    ForEach-Object { $_ | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue } |
-                    Where-Object { $null -ne $_ }
-            if (@($rows).Count -gt 0) {
-                $frames = @($rows | ForEach-Object { [int]$_.frame } | Sort-Object)
-                $frameRangeCovered = @{ first = $frames[0]; last = $frames[-1] }
+            # Stream once and track min/max — avoids materializing $rows and
+            # an O(N log N) sort just to pick first/last (Copilot PR #60).
+            # Note: use the `foreach` statement (parent scope) rather than the
+            # ForEach-Object cmdlet — the latter runs each iteration in a
+            # child scope, so the $minFrame / $maxFrame / $haveAny assignments
+            # would not propagate.
+            $minFrame = [int]::MaxValue
+            $maxFrame = [int]::MinValue
+            $haveAny  = $false
+            foreach ($line in [System.IO.File]::ReadLines($samplesPath)) {
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                $row = $null
+                try { $row = $line | ConvertFrom-Json -Depth 10 -ErrorAction Stop } catch { continue }
+                if ($null -eq $row) { continue }
+                if (-not ($row.PSObject.Properties.Name -contains 'frame')) { continue }
+                $frame = [int]$row.frame
+                if ($frame -lt $minFrame) { $minFrame = $frame }
+                if ($frame -gt $maxFrame) { $maxFrame = $frame }
+                $haveAny = $true
+            }
+            if ($haveAny) {
+                $frameRangeCovered = @{ first = $minFrame; last = $maxFrame }
             }
         }
     }

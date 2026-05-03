@@ -102,6 +102,7 @@ Describe 'issue #46: behavior-watch lifetime cross-field gate' {
         $fixtureRoots = @(
             (Join-Path $repoRoot 'tools/tests/fixtures/runbook/behavior-watch'),
             (Join-Path $repoRoot 'tools/tests/fixtures/pong-testbed/harness/automation/requests'),
+            (Join-Path $repoRoot 'tools/tests/fixtures/issue-45'),
             (Join-Path $repoRoot 'tools/tests/fixtures/issue-46'),
             (Join-Path $repoRoot 'tools/tests/fixtures/issue-47')
         )

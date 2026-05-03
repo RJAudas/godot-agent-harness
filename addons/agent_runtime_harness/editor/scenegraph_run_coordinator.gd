@@ -881,8 +881,16 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 	# application/run/main_scene falls in when the request is empty. Without
 	# this, capability evaluation could pass (broker uses the fallback) while
 	# run-start re-fails on the same input — they must agree.
-	if ScenegraphAutomationBroker.resolve_target_scene(_active_request).is_empty():
-		blocked.append("target_scene_missing")
+	# Issue #44: split into target_scene_unspecified vs
+	# target_scene_file_not_found so the diagnostic identifies which kind of
+	# misconfiguration to fix. Must mirror the broker's evaluate_capability
+	# logic exactly so capability and run-start emit the same blocked-reason
+	# for the same input.
+	var resolved_target_scene := ScenegraphAutomationBroker.resolve_target_scene(_active_request)
+	if resolved_target_scene.is_empty():
+		blocked.append("target_scene_unspecified")
+	elif not FileAccess.file_exists(resolved_target_scene):
+		blocked.append("target_scene_file_not_found")
 	if _is_playing_scene():
 		# Per Copilot review on PR #42: do NOT reap-on-block here. An
 		# is_playing_scene() hit can also represent a manually-launched F5

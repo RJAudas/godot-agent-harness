@@ -743,10 +743,15 @@ function Get-BlockedReasonDiagnostics {
     )
 
     $hints = @{
-        'scene_already_running'    = "A previous playtest is still running. Restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
-        'target_scene_missing'     = "Check that targetScene '$TargetScene' exists in the project."
-        'harness_autoload_missing' = "The agent_runtime_harness autoload is not registered. Enable the plugin in Project Settings → Plugins, or add the autoload manually."
-        'run_in_progress'          = "Another harness run is still in flight. Wait for it to complete, or restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+        'scene_already_running'      = "A previous playtest is still running. Restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
+        # Issue #44: split target_scene_missing into two precise codes.
+        # The old name remains as a backward-compat alias so any out-of-tree
+        # consumer that still emits it gets a sensible hint.
+        'target_scene_unspecified'   = "No targetScene configured. Set ``targetScene`` in ``harness/inspection-run-config.json`` or ``application/run/main_scene`` in ``project.godot``."
+        'target_scene_file_not_found' = "The configured scene '$TargetScene' does not exist on disk. Check the path or correct any project rename."
+        'target_scene_missing'       = "Deprecated alias for target_scene_unspecified — set ``targetScene`` in ``harness/inspection-run-config.json`` or ``application/run/main_scene`` in ``project.godot``."
+        'harness_autoload_missing'   = "The agent_runtime_harness autoload is not registered. Enable the plugin in Project Settings → Plugins, or add the autoload manually."
+        'run_in_progress'            = "Another harness run is still in flight. Wait for it to complete, or restart the editor: invoke-stop-editor.ps1 then invoke-launch-editor.ps1."
     }
 
     $result = [System.Collections.Generic.List[string]]::new()

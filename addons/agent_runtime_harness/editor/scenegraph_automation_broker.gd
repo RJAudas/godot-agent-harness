@@ -304,7 +304,12 @@ func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -
 
 
 func _collect_build_failure_payload(request: Dictionary, build_failure_phase: String) -> Dictionary:
-	var target_scene := String(request.get("targetScene", ""))
+	# Issue #43: same fallback as evaluate_capability — when targetScene is
+	# empty, fall back to project.godot's main_scene. Without this, a request
+	# that omits targetScene would skip build-diagnostic collection on a
+	# compile/load failure even though we know which scene the harness will
+	# actually launch.
+	var target_scene := resolve_target_scene(request)
 	if target_scene.is_empty():
 		return {}
 

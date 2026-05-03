@@ -929,6 +929,12 @@ func _resolve_request(config: Dictionary, request: Dictionary, capability: Dicti
 		"stopPolicy": base_stop_policy,
 		"requestedBy": String(request.get("requestedBy", "scenegraph_automation_broker")),
 	}
+	# Issue #43: bake the project main_scene fallback into the resolved
+	# targetScene so every downstream consumer (play_custom_scene at line ~110,
+	# the blocked-reasons check, manifest fields) sees the same resolved path.
+	# Without this the capability check passed (broker uses the helper) but
+	# the launch silently passed an empty string to play_custom_scene.
+	resolved["targetScene"] = ScenegraphAutomationBroker.resolve_target_scene(resolved)
 
 	# Arrays and nested dicts still merge layer-by-layer (config -> default_overrides -> request -> overrides).
 	_apply_array_override(resolved, default_overrides, "expectationFiles")

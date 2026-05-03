@@ -52,4 +52,36 @@ Describe 'issue #43: targetScene falls back to project.godot application/run/mai
         # run-start re-fails (raw check) on the same input.
         $source | Should -Match 'ScenegraphAutomationBroker\.resolve_target_scene\(_active_request\)' -Because 'issue #43: coordinator and broker must use the same fallback path'
     }
+
+    # Copilot PR #58 review caught two additional sites that the initial fix
+    # missed: play_custom_scene (which reads from _active_request and would
+    # have launched with an empty string), and _collect_build_failure_payload
+    # (which would have skipped diagnostic collection for fallback-resolved
+    # requests). The first is fixed by baking the resolution into
+    # _resolve_request so _active_request carries the resolved path; the
+    # second by calling resolve_target_scene directly. These tests guard
+    # against either site reverting to a raw String() extraction.
+    It 'coordinator._resolve_request bakes the fallback into the resolved targetScene' {
+        $coordinatorPath = Get-RepoPath -Path 'addons/agent_runtime_harness/editor/scenegraph_run_coordinator.gd'
+        $source = Get-Content -Raw -LiteralPath $coordinatorPath
+
+        # The resolved dict's targetScene must be normalized through the
+        # helper after the _pick_scalar merge, so play_custom_scene and any
+        # other consumer that reads _active_request.targetScene see the
+        # fallback-resolved value. Without this, capability passes (broker
+        # uses the helper) but the launch passes an empty string.
+        $source | Should -Match 'resolved\["targetScene"\]\s*=\s*ScenegraphAutomationBroker\.resolve_target_scene\(resolved\)' -Because 'issue #43: _resolve_request must bake the fallback into _active_request so play_custom_scene gets the resolved path'
+    }
+
+    It 'broker._collect_build_failure_payload calls resolve_target_scene' {
+        $brokerPath = Get-RepoPath -Path 'addons/agent_runtime_harness/editor/scenegraph_automation_broker.gd'
+        $source = Get-Content -Raw -LiteralPath $brokerPath
+
+        # The build-failure collector takes a request dict directly; without
+        # the fallback, a request that omits targetScene and relies on
+        # application/run/main_scene would skip diagnostic collection on a
+        # compile/load failure, degrading a real build error into a generic
+        # attachment timeout.
+        $source | Should -Match 'func _collect_build_failure_payload\([^)]+\) -> Dictionary:[\s\S]{0,600}var target_scene := resolve_target_scene\(request\)' -Because 'issue #43: _collect_build_failure_payload must use the helper so build diagnostics are collected for fallback-resolved scenes'
+    }
 }

@@ -32,7 +32,7 @@ Key identifiers: bare Godot names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOW
 
 ## Scene inspection
 
-`invoke-scene-inspection.ps1` captures the running tree, including nodes added at runtime and resolved post-`_ready` properties. For statically-authored scenes you can also read the `.tscn` directly, but only this call shows the live state — runtime-instantiated nodes (pooled enemies, spawned projectiles, runtime-loaded levels), resolved `script_class` on attached scripts, and tree state at a specific moment.
+`invoke-scene-inspection.ps1` captures the running tree, including nodes added at runtime and resolved post-`_ready` properties. For statically-authored scenes you can also read the `.tscn` directly, but only this call shows the live state — runtime-instantiated nodes (pooled enemies, spawned projectiles, runtime-loaded levels), live `processing_state` and group membership, and tree state at a specific moment.
 
 ## Build errors
 

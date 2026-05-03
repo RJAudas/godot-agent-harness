@@ -1187,9 +1187,25 @@ Describe 'Get-BlockedReasonDiagnostics (F2)' {
         ($hints -join ' ') | Should -Not -Match 'Check that targetScene'
     }
 
-    It 'target_scene_missing maps to targetScene hint with the supplied scene path' {
+    # Issue #44: target_scene_missing was overloaded across "no scene
+    # configured" and "scene file does not exist" — split into two codes.
+    # The old name remains as a backward-compat alias mapping to the
+    # unspecified hint.
+    It 'target_scene_unspecified maps to a hint pointing at the config field' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('target_scene_unspecified') -TargetScene ''
+        ($hints -join ' ') | Should -Match 'inspection-run-config'
+        ($hints -join ' ') | Should -Match 'application/run/main_scene'
+    }
+
+    It 'target_scene_file_not_found includes the offending scene path' {
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('target_scene_file_not_found') -TargetScene 'res://scenes/missing.tscn'
+        ($hints -join ' ') | Should -Match 'res://scenes/missing.tscn'
+        ($hints -join ' ') | Should -Match 'does not exist'
+    }
+
+    It 'target_scene_missing (deprecated alias) still maps to a usable hint' {
         $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('target_scene_missing') -TargetScene 'res://scenes/main.tscn'
-        ($hints -join ' ') | Should -Match 'res://scenes/main.tscn'
+        ($hints -join ' ') | Should -Match 'inspection-run-config'
         ($hints -join ' ') | Should -Not -Match 'invoke-stop-editor'
     }
 
@@ -1220,7 +1236,7 @@ Describe 'Get-BlockedReasonDiagnostics (F2)' {
     }
 
     It 'multiple reasons produce one hint each' {
-        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('scene_already_running', 'target_scene_missing') -TargetScene 'res://x.tscn'
+        $hints = Get-BlockedReasonDiagnostics -BlockedReasons @('scene_already_running', 'target_scene_file_not_found') -TargetScene 'res://x.tscn'
         @($hints).Count | Should -Be 2
         ($hints[0]) | Should -Match 'invoke-stop-editor'
         ($hints[1]) | Should -Match 'res://x.tscn'
@@ -1273,12 +1289,16 @@ Describe 'Get-BlockedRunDiagnostics (B19)' {
 
     It 'returns the diagnostic string for blocked + multi-element blockedReasons' {
         Set-StrictMode -Version Latest
+        # Issue #44: target_scene_missing was split into two precise codes;
+        # use target_scene_file_not_found for the assertion that depends on
+        # the scene path appearing in the hint (the unspecified code points
+        # at the config field, not at the path).
         $rr = [pscustomobject]@{
             finalStatus    = 'blocked'
-            blockedReasons = @('scene_already_running', 'target_scene_missing')
+            blockedReasons = @('scene_already_running', 'target_scene_file_not_found')
         }
         $msg = Get-BlockedRunDiagnostics -RunResult $rr -TargetScene 'res://main.tscn'
-        $msg | Should -Match 'scene_already_running, target_scene_missing'
+        $msg | Should -Match 'scene_already_running, target_scene_file_not_found'
         $msg | Should -Match 'res://main.tscn'
     }
 

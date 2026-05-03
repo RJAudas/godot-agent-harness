@@ -113,8 +113,21 @@ func evaluate_capability(config: Dictionary) -> Dictionary:
 	var validation_available := persistence_available
 	var shutdown_control_available := true
 
+	# Issue #44: split the overloaded `target_scene_missing` into two distinct
+	# codes so the diagnostic tells the agent which kind of misconfiguration
+	# to fix:
+	#   target_scene_unspecified — neither config.targetScene nor
+	#       application/run/main_scene was set
+	#   target_scene_file_not_found — a path is configured but the file does
+	#       not exist on disk (typo / project-rename / fixture error)
+	# Mode 3 from the issue (file exists but failed to load — e.g. attached
+	# script has a parse error) is already cleanly surfaced as
+	# `failureKind="build"` with the actual diagnostic in buildDiagnostics[],
+	# so it does NOT need a separate blocked-reason here.
 	if target_scene.is_empty():
-		blocked_reasons.append("target_scene_missing")
+		blocked_reasons.append("target_scene_unspecified")
+	elif not FileAccess.file_exists(target_scene):
+		blocked_reasons.append("target_scene_file_not_found")
 	if harness_autoload.is_empty():
 		blocked_reasons.append("harness_autoload_missing")
 	if _run_coordinator.is_active():

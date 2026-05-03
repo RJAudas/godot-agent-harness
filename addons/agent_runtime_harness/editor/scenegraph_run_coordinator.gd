@@ -870,8 +870,17 @@ func _build_session_context() -> Dictionary:
 
 func _collect_blocked_reasons(capability: Dictionary) -> Array:
 	var blocked: Array = []
+	# Capability is computed from the *config* and may carry stale
+	# target_scene_* reasons (Copilot PR #59 review). Strip any
+	# scene-related reason from the capability-derived list so the
+	# request-side check below is the single source of truth — a request
+	# that overrides targetScene must not be blocked by a stale capability
+	# code computed before the override was applied.
 	for blocked_reason in capability.get("blockedReasons", []):
-		blocked.append(String(blocked_reason))
+		var reason_str := String(blocked_reason)
+		if reason_str == "target_scene_unspecified" or reason_str == "target_scene_file_not_found" or reason_str == "target_scene_missing":
+			continue
+		blocked.append(reason_str)
 
 	if String(_active_request.get("requestId", "")).is_empty():
 		blocked.append("request_id_missing")
@@ -881,8 +890,17 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 	# application/run/main_scene falls in when the request is empty. Without
 	# this, capability evaluation could pass (broker uses the fallback) while
 	# run-start re-fails on the same input — they must agree.
-	if ScenegraphAutomationBroker.resolve_target_scene(_active_request).is_empty():
-		blocked.append("target_scene_missing")
+	# Issue #44: split into target_scene_unspecified vs
+	# target_scene_file_not_found so the diagnostic identifies which kind of
+	# misconfiguration to fix. Must mirror the broker's evaluate_capability
+	# logic exactly so capability and run-start emit the same blocked-reason
+	# for the same input. The capability-derived reasons above are filtered
+	# so this re-check on the resolved request is authoritative.
+	var resolved_target_scene := ScenegraphAutomationBroker.resolve_target_scene(_active_request)
+	if resolved_target_scene.is_empty():
+		blocked.append("target_scene_unspecified")
+	elif not FileAccess.file_exists(resolved_target_scene):
+		blocked.append("target_scene_file_not_found")
 	if _is_playing_scene():
 		# Per Copilot review on PR #42: do NOT reap-on-block here. An
 		# is_playing_scene() hit can also represent a manually-launched F5

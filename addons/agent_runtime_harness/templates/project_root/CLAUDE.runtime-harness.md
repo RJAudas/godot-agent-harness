@@ -30,6 +30,16 @@ Parse stdout JSON: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outc
 
 Key identifiers: bare Godot names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — not `KEY_ENTER`. InputMap actions: `{ "kind": "action", "identifier": "ui_accept", ... }`.
 
+## Build errors
+
+For build errors, try the CLI first (run from the project root, or pass `--path <project>`):
+
+- `godot --check-only` — GDScript parse errors
+- `godot --import` — asset import / `.tres` / scene-load errors
+- `godot --headless --quit-after 1` — autoload `_ready` failures
+
+Use `{{HARNESS_REPO_ROOT}}/tools/automation/invoke-build-error-triage.ps1` as a fallback when the CLI doesn't reproduce the error or doesn't surface enough detail (engine crashes, multi-file dependency error threading, structured JSON output for downstream consumption). If you find yourself reaching for it routinely, file an issue describing what the CLI missed.
+
 ## Do not
 
 - **Do not hand-author `run-request.json`** — the invoke scripts own the broker loop.

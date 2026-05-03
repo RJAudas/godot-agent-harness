@@ -54,4 +54,17 @@ Key identifiers in `inputDispatchScript` are bare Godot logical names (`ENTER`, 
 | `runtime` | Runtime error captured | Read `outcome.latestErrorSummary` or `outcome.firstFailureSummary` |
 | `timeout` | Run did not complete | Broker only runs while game is in play mode |
 
+## Common failure modes
+
+The diagnostics are usually self-explanatory; this table is for recognising the recurring ones on sight.
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| `target_scene_unspecified` blocked-reason | Neither `targetScene` (in `inspection-run-config.json`) nor `application/run/main_scene` (in `project.godot`) is set | Set one of them to a `res://` path |
+| `target_scene_file_not_found` blocked-reason | The configured path doesn't exist on disk | Fix the path; the diagnostic names the offending file |
+| `failureKind: "build"` instead of a scene-load failure | The target scene exists but its scripts have parse errors | Report `diagnostics[0]` verbatim; the build phase didn't complete |
+| `incompatible_stop_policy` validation rejection | `behaviorWatchRequest` paired with `stopAfterValidation: true` — validation passes before the frame window fills | The diagnostic spells out the exact `stopPolicy.minRuntimeFrames` value to set |
+| Schema rejection: "Behavior watch property '…' is not in the supported allowlist" | Property name not in the watch allowlist | The diagnostic enumerates allowed values inline; pick one or expand the schema if you have a real need |
+| Invoke-script stdout warnings with `status: pass` in the manifest | Manifest's `outcomes` is the source of truth; the warnings flag a non-fatal disconnect (e.g., trace artifact missing) | Trust the manifest |
+
 Report harness bugs or automation-contract defects at <https://github.com/RJAudas/godot-agent-harness/issues>.

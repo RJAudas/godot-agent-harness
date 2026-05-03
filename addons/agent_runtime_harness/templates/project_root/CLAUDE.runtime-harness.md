@@ -26,7 +26,7 @@ pwsh {{HARNESS_REPO_ROOT}}/tools/automation/invoke-stop-editor.ps1 `
   -ProjectRoot "<absolute path to this project>"
 ```
 
-Parse stdout JSON: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`. On success read `manifestPath`, then the one artifact the manifest references.
+Parse stdout JSON: `status`, `failureKind`, `manifestPath`, `diagnostics`, `outcome`. On success read `manifestPath`, then the one artifact the manifest references. On failure, read `diagnostics[0]` first; see **Common failure modes** below for symptom-to-fix mappings on the recurring ones.
 
 Key identifiers: bare Godot names (`ENTER`, `SPACE`, `LEFT`, `RIGHT`, `UP`, `DOWN`, `ESCAPE`) — not `KEY_ENTER`. InputMap actions: `{ "kind": "action", "identifier": "ui_accept", ... }`.
 
@@ -43,6 +43,19 @@ For build errors, try the CLI first (run from the project root, or pass `--path 
 - `godot --headless --quit-after 1` — autoload `_ready` failures
 
 Use `{{HARNESS_REPO_ROOT}}/tools/automation/invoke-build-error-triage.ps1` as a fallback when the CLI doesn't reproduce the error or doesn't surface enough detail (engine crashes, multi-file dependency error threading, structured JSON output for downstream consumption). If you find yourself reaching for it routinely, file an issue describing what the CLI missed.
+
+## Common failure modes
+
+The diagnostics are usually self-explanatory; this table is for recognising the recurring ones on sight.
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| `target_scene_unspecified` blocked-reason | Neither `targetScene` (in `inspection-run-config.json`) nor `application/run/main_scene` (in `project.godot`) is set | Set one of them to a `res://` path |
+| `target_scene_file_not_found` blocked-reason | The configured path doesn't exist on disk | Fix the path; the diagnostic names the offending file |
+| `failureKind: "build"` instead of a scene-load failure | The target scene exists but its scripts have parse errors | See **Build errors** above |
+| `incompatible_stop_policy` validation rejection | `behaviorWatchRequest` paired with `stopAfterValidation: true` — validation passes before the frame window fills | The diagnostic spells out the exact `stopPolicy.minRuntimeFrames` value to set |
+| Schema rejection: "Behavior watch property '…' is not in the supported allowlist" | Property name not in the watch allowlist | The diagnostic enumerates allowed values inline; pick one or expand the schema if you have a real need |
+| Invoke-script stdout warnings with `status: pass` in the manifest | Manifest's `outcomes` is the source of truth; the warnings flag a non-fatal disconnect (e.g., trace artifact missing) | Trust the manifest |
 
 ## Do not
 

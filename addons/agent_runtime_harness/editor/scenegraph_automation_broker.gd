@@ -87,9 +87,24 @@ func _on_poll_timer_timeout() -> void:
 	_run_coordinator.start_run(config, request, capability, _config_path)
 
 
+## Issue #43: resolve `targetScene` with fallback to the project's
+## `application/run/main_scene` setting when the source dictionary has an
+## empty `targetScene`. Matches Godot's own launch semantics — whatever scene
+## F5 would launch is what the harness uses by default. Both
+## `evaluate_capability` and the coordinator's run-start blocked-reasons
+## check call this so the fallback is applied uniformly. Only emit
+## `target_scene_missing` when BOTH sources are empty (which is a real
+## misconfiguration worth blocking on).
+static func resolve_target_scene(source: Dictionary) -> String:
+	var target := String(source.get("targetScene", "")).strip_edges()
+	if not target.is_empty():
+		return target
+	return String(ProjectSettings.get_setting("application/run/main_scene", "")).strip_edges()
+
+
 func evaluate_capability(config: Dictionary) -> Dictionary:
 	var blocked_reasons: Array = []
-	var target_scene := String(config.get("targetScene", ""))
+	var target_scene := resolve_target_scene(config)
 	var harness_autoload := String(ProjectSettings.get_setting("autoload/ScenegraphHarness", ""))
 	var launch_control_available := not target_scene.is_empty()
 	var runtime_bridge_available := _bridge != null and not harness_autoload.is_empty()
@@ -289,7 +304,12 @@ func _publish_capability_if_needed(config: Dictionary, capability: Dictionary) -
 
 
 func _collect_build_failure_payload(request: Dictionary, build_failure_phase: String) -> Dictionary:
-	var target_scene := String(request.get("targetScene", ""))
+	# Issue #43: same fallback as evaluate_capability — when targetScene is
+	# empty, fall back to project.godot's main_scene. Without this, a request
+	# that omits targetScene would skip build-diagnostic collection on a
+	# compile/load failure even though we know which scene the harness will
+	# actually launch.
+	var target_scene := resolve_target_scene(request)
 	if target_scene.is_empty():
 		return {}
 

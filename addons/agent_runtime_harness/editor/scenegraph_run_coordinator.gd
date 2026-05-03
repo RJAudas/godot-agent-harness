@@ -877,7 +877,11 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 		blocked.append("request_id_missing")
 	if String(_active_request.get("runId", "")).is_empty():
 		blocked.append("run_id_missing")
-	if String(_active_request.get("targetScene", "")).is_empty():
+	# Issue #43: consult the broker's helper so the project's
+	# application/run/main_scene falls in when the request is empty. Without
+	# this, capability evaluation could pass (broker uses the fallback) while
+	# run-start re-fails on the same input — they must agree.
+	if ScenegraphAutomationBroker.resolve_target_scene(_active_request).is_empty():
 		blocked.append("target_scene_missing")
 	if _is_playing_scene():
 		# Per Copilot review on PR #42: do NOT reap-on-block here. An
@@ -925,6 +929,12 @@ func _resolve_request(config: Dictionary, request: Dictionary, capability: Dicti
 		"stopPolicy": base_stop_policy,
 		"requestedBy": String(request.get("requestedBy", "scenegraph_automation_broker")),
 	}
+	# Issue #43: bake the project main_scene fallback into the resolved
+	# targetScene so every downstream consumer (play_custom_scene at line ~110,
+	# the blocked-reasons check, manifest fields) sees the same resolved path.
+	# Without this the capability check passed (broker uses the helper) but
+	# the launch silently passed an empty string to play_custom_scene.
+	resolved["targetScene"] = ScenegraphAutomationBroker.resolve_target_scene(resolved)
 
 	# Arrays and nested dicts still merge layer-by-layer (config -> default_overrides -> request -> overrides).
 	_apply_array_override(resolved, default_overrides, "expectationFiles")

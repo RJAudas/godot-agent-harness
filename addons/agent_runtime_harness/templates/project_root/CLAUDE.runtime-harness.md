@@ -51,6 +51,7 @@ Use `{{HARNESS_REPO_ROOT}}/tools/automation/invoke-build-error-triage.ps1` as a 
 - **Do not read prior-run artifacts** to plan a new run — the transient zone is wiped before every invocation.
 - **Do not read addon source** (`addons/agent_runtime_harness/`).
 - **Do not vary capture or stop policies speculatively** — fixture defaults are correct.
+- **Do not stop and restart the editor speculatively.** `capability.json` reflects current state; stale editor state is rarely the cause of failures. Read `harness/automation/results/{capability,run-result,lifecycle-status}.json` first. Restart only when you've confirmed the issue is editor-cached, not config-driven (or when running a CLI tool that needs exclusive project access, e.g. `godot --headless --import`).
 
 ## Subagents
 

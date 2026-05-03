@@ -1,0 +1,28 @@
+{
+  "requestId": "runbook-behavior-watch-probe-label-FIXTURE",
+  "scenarioId": "runbook-behavior-watch-probe-label",
+  "runId": "runbook-behavior-watch-probe-label-run",
+  "targetScene": "res://scenes/main.tscn",
+  "outputDirectory": "res://evidence/automation/$REQUEST_ID",
+  "artifactRoot": "tools/tests/fixtures/runbook/behavior-watch/evidence",
+  "capturePolicy": {
+    "startup": true,
+    "manual": true,
+    "failure": true
+  },
+  "stopPolicy": {
+    "stopAfterValidation": true,
+    "minRuntimeFrames": 10
+  },
+  "requestedBy": "runbook-fixture",
+  "createdAt": "2026-05-03T00:00:00Z",
+  "behaviorWatchRequest": {
+    "targets": [
+      {
+        "nodePath": "/root/Main/Label",
+        "properties": ["text", "visible"]
+      }
+    ],
+    "frameCount": 10
+  }
+}

@@ -45,7 +45,8 @@ Tool-call counts below are the **minimum** path a fresh agent would take, exclud
 | 1 | Editor launch | — | probe | | | |
 | 2 | Scene inspection | `/godot-inspect` | probe | | | |
 | 3 | Input dispatch | `/godot-press` | probe | | | |
-| 4 | Behavior watch | `/godot-watch` | probe | | | |
+| 4a | Behavior watch (success path) | `/godot-watch` | probe | | | |
+| 4b | Behavior watch (missing target) | `/godot-watch` | probe | | | |
 | 5a | Build-error triage (clean) | `/godot-debug-build` | probe | | | |
 | 5b | Build-error triage (compile error) | `/godot-debug-build` | probe + injected | | | |
 | 6a | Runtime-error triage (clean) | `/godot-debug-runtime` | probe | | | |
@@ -130,6 +131,15 @@ When a test injects a runtime or compile error, **revert the sandbox** before th
 
 ---
 
+### Cross-cutting regression checks
+
+These apply to **every runtime-launching row** (3, 4a/4b, 5b, 6a–c). Don't add a dedicated row for them — verify opportunistically while running those rows, and note any failure under the relevant row's Notes column.
+
+- **#58 regression — `targetScene` fallback**: a request that *omits* `targetScene` must fall back to the project's `application/run/main_scene` and run cleanly. To exercise: synthesize an inline payload with no `targetScene` field and confirm the run targets the project's default scene.
+- **#59 regression — split target-scene failure codes**: omitting `targetScene` in a project that has no `application/run/main_scene` configured must produce `failureKind=target_scene_unspecified`. A request pointing to a nonexistent `.tscn` must produce `failureKind=target_scene_file_not_found`. The legacy generic `target_scene_missing` must never appear.
+
+---
+
 ### 1. Editor launch
 
 **Sandbox**: probe
@@ -210,9 +220,39 @@ pwsh ./tools/automation/invoke-input-dispatch.ps1 `
 
 ---
 
-### 4. Behavior watch
+### 4a. Behavior watch — success path
 
-**Sandbox**: probe (will produce sampleCount=0 because Paddle doesn't exist — *use this to check that case*); or scaffold a sandbox with the watched node for the success path.
+**Sandbox**: probe (the default Control + Label scene contains the watched node at `/root/Main/Label`).
+**Fixture**: `tools/tests/fixtures/runbook/behavior-watch/probe-label-window.json` (watches probe's Label `text`/`visible` — paired with the probe scaffold so the matrix has a real success path, not just a missing-target case). Note: `label-text-window.json` exists in the same directory but targets a Pong-style `/root/Main/HUD/ScoreLeftLabel` and is not appropriate for probe.
+
+**Command**:
+```powershell
+pwsh ./tools/automation/invoke-behavior-watch.ps1 `
+    -ProjectRoot ./integration-testing/probe `
+    -RequestFixturePath ./tools/tests/fixtures/runbook/behavior-watch/probe-label-window.json
+```
+
+**Expected envelope**:
+```json
+{ "status": "success",
+  "outcome": { "samplesPath": "<path>", "sampleCount": >=1, "warnings": [] } }
+```
+
+The trace JSONL referenced by `samplesPath` should contain at least one row per requested property, with a monotonic `frame` field.
+
+**Bugs to watch for**:
+- **#54 regression**: requesting an allowlisted property on a real node returns `sampleCount > 0`. Requesting a *disallowed* property returns an enriched enum error that names the bad property and lists valid ones — not a generic "validation failed".
+- **#55 regression**: a request whose `windowFrames` exceeds `stopPolicy.minRuntimeFrames` must be rejected at validation, not silently truncated. Force this case with an inline payload that violates the gate.
+- **#56 regression**: trace rows' `frame` field is the physics-tick counter (`Engine.get_physics_frames()`), not the idle-process frame counter. Verify samples grow at physics cadence (60Hz default), not idle cadence.
+- **#60 regression**: `samplesPath`, warnings, and the missing-target/property notes in the envelope come from the **manifest**, not the request payload. Cross-check by reading the manifest's `behaviorWatch` section and confirming envelope fields match byte-for-byte.
+
+**Tool-call expectation**: 2 (skill + invoke).
+
+---
+
+### 4b. Behavior watch — missing-target path
+
+**Sandbox**: probe (will produce sampleCount=0 because Paddle doesn't exist — *use this to check that case*).
 **Fixture**: `tools/tests/fixtures/runbook/behavior-watch/single-property-window.json` (watches `/root/Main/Paddle`).
 
 **Command**:
@@ -225,12 +265,15 @@ pwsh ./tools/automation/invoke-behavior-watch.ps1 `
 **Expected envelope (target node missing)**:
 ```json
 { "status": "failure" or "success",
-  "outcome": { "samplesPath": null, "sampleCount": 0 } }
+  "outcome": { "samplesPath": "<path>", "sampleCount": 0,
+               "warnings": [ "target node not found...", "target node sampled but properties never observed..." ] } }
 ```
 
-If `status: success` with `sampleCount: 0` and no diagnostic, that's B3 — silent partial failure.
+Pre-#60 the envelope had `samplesPath: null` and warnings synthesized from the request payload. Post-#60, `samplesPath` is non-null (points at the empty trace artifact) and warnings come from the manifest's `missingTargets[]` / `missingProperties[]`.
 
-**Bugs to watch for**: B3, B1.
+If `status: success` with `sampleCount: 0` and no diagnostic / empty warnings, that's B3 — silent partial failure.
+
+**Bugs to watch for**: B3, B1, **#60 regression** (envelope diverging from manifest — see 4a).
 
 **Tool-call expectation**: 2 (skill + invoke). Often 3 because the SKILL.md doesn't enumerate fixtures.
 
@@ -381,7 +424,9 @@ pwsh ./tools/automation/invoke-runtime-error-triage.ps1 `
 
 **Cleanup**: delete `scripts/error_main.gd`, remove `scripts/` dir if empty, restore `scenes/main.tscn`.
 
-**Bugs to watch for**: B10 (the load-bearing one), B1.
+**Bugs to watch for**:
+- B10 (the load-bearing one), B1.
+- **#57 regression**: the captured record's `function`/`scriptPath`/`line` must point at the *user* GDScript frame (`_ready` in `error_main.gd:4`), not the engine-side C++ emission point. Two distinct user call sites of the same engine error must appear as two records, not deduped into one.
 
 **Tool-call expectation**: 3–4 minimum.
 

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(pwsh -NoProfile -NonInteractive -Command \"Invoke-Pester -Path tools/tests/InvokeRunbookScripts.Tests.ps1 -FullNameFilter '*B19*' -Output Detailed\")",
       "Bash(rm -f integration-testing/probe/scripts/*)",
-      "Bash(rmdir integration-testing/probe/scripts)"
+      "Bash(rmdir integration-testing/probe/scripts)",
+      "PowerShell(pwsh -NoLogo -NoProfile -File \"d:\\\\dev\\\\godot-agent-harness\\\\tools\\\\deploy-game-harness.ps1\" -GameRoot \"D:/gameDev/pong\" -AddonOnly 2>&1 | Select-Object -Last 12)"
     ]
   }
 }

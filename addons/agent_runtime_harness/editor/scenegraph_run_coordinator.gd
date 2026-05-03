@@ -877,7 +877,11 @@ func _collect_blocked_reasons(capability: Dictionary) -> Array:
 		blocked.append("request_id_missing")
 	if String(_active_request.get("runId", "")).is_empty():
 		blocked.append("run_id_missing")
-	if String(_active_request.get("targetScene", "")).is_empty():
+	# Issue #43: consult the broker's helper so the project's
+	# application/run/main_scene falls in when the request is empty. Without
+	# this, capability evaluation could pass (broker uses the fallback) while
+	# run-start re-fails on the same input — they must agree.
+	if ScenegraphAutomationBroker.resolve_target_scene(_active_request).is_empty():
 		blocked.append("target_scene_missing")
 	if _is_playing_scene():
 		# Per Copilot review on PR #42: do NOT reap-on-block here. An

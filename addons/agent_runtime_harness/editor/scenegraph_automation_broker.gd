@@ -87,9 +87,24 @@ func _on_poll_timer_timeout() -> void:
 	_run_coordinator.start_run(config, request, capability, _config_path)
 
 
+## Issue #43: resolve `targetScene` with fallback to the project's
+## `application/run/main_scene` setting when the source dictionary has an
+## empty `targetScene`. Matches Godot's own launch semantics — whatever scene
+## F5 would launch is what the harness uses by default. Both
+## `evaluate_capability` and the coordinator's run-start blocked-reasons
+## check call this so the fallback is applied uniformly. Only emit
+## `target_scene_missing` when BOTH sources are empty (which is a real
+## misconfiguration worth blocking on).
+static func resolve_target_scene(source: Dictionary) -> String:
+	var target := String(source.get("targetScene", "")).strip_edges()
+	if not target.is_empty():
+		return target
+	return String(ProjectSettings.get_setting("application/run/main_scene", "")).strip_edges()
+
+
 func evaluate_capability(config: Dictionary) -> Dictionary:
 	var blocked_reasons: Array = []
-	var target_scene := String(config.get("targetScene", ""))
+	var target_scene := resolve_target_scene(config)
 	var harness_autoload := String(ProjectSettings.get_setting("autoload/ScenegraphHarness", ""))
 	var launch_control_available := not target_scene.is_empty()
 	var runtime_bridge_available := _bridge != null and not harness_autoload.is_empty()

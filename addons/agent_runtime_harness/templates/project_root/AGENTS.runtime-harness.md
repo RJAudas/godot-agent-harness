@@ -24,6 +24,8 @@ Match verification depth to how much of the fix's correctness is provable from t
 
 When runtime *is* the right tool, run the **smallest reproduction that yields the evidence you need** — a single scene inspection, one keypress, a short watch window. A full-level playthrough or a perfectly-timed input sequence is the wrong tool when a focused observation would settle the question.
 
+If the user explicitly asks to run the game, dispatch input, or verify at runtime, follow that — this default governs the agent's *own* verification choices after a fix, not user-directed runtime work.
+
 This default is calibrated for current model strength. As model capability and harness features evolve, the static/runtime threshold may move; keeping the rule visible here lets it be retuned without rewriting the template.
 
 ## Fast path — one invoke script call

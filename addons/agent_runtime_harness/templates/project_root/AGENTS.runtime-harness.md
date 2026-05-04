@@ -2,6 +2,32 @@
 
 This project has the `agent_runtime_harness` addon installed. When the user asks to run the game, press keys, verify at runtime, inspect the scene, or watch for errors, use the Scenegraph Harness. The full prompt is at [`.github/prompts/godot-runtime-verification.prompt.md`](.github/prompts/godot-runtime-verification.prompt.md); the matching subagent for Claude Code is at [`.claude/agents/godot-runtime-verification.md`](.claude/agents/godot-runtime-verification.md).
 
+## Static-first verification
+
+Match verification depth to how much of the fix's correctness is provable from the diff alone, not to the fact that it's a fix. Default to static; reach for runtime tools only when static is insufficient.
+
+**Static reading is sufficient when:**
+
+- Every claim the fix makes is visible in the change itself.
+- A **known-good sibling** in the same file shows what "right" looks like — e.g. four platforms with `collision_layer = 1` make the fifth's `0 → 1` self-evident. The working siblings *are* the verification.
+- The change is structural (rename, refactor) with no behavioral effect.
+- An experienced engineer would approve the PR without running it.
+
+**Runtime verification is appropriate when** the fix's correctness depends on emergent behavior the diff cannot prove:
+
+- **Timing** — frame ordering, signal cascades, race conditions.
+- **Async** — callback ordering, awaited operations, concurrent state.
+- **Physics tuning** — feel parameters whose right value can only be felt by playing.
+- **Integration glue** — cross-system behavior (pause + animation, save + state).
+- **Visual / performance** — anything where "does it look right" or "does it run fast enough" is the criterion.
+- The first fix attempt didn't land and observation is needed to redirect.
+
+When runtime *is* the right tool, run the **smallest reproduction that yields the evidence you need** — a single scene inspection, one keypress, a short watch window. A full-level playthrough or a perfectly-timed input sequence is the wrong tool when a focused observation would settle the question.
+
+If the user explicitly asks to run the game, dispatch input, or verify at runtime, follow that — this default governs the agent's *own* verification choices after a fix, not user-directed runtime work.
+
+This default is calibrated for current model strength. As model capability and harness features evolve, the static/runtime threshold may move; keeping the rule visible here lets it be retuned without rewriting the template.
+
 ## Fast path — one invoke script call
 
 Use a harness invoke script — it handles capability check, request authoring, polling, and manifest lookup automatically and emits a single JSON envelope to stdout. `-ProjectRoot` is the absolute path to this game project.
@@ -43,6 +69,8 @@ Key identifiers in `inputDispatchScript` are bare Godot logical names — `ENTER
 - **Do not read prior-run artifacts to plan a new run.** The transient zone is wiped before each invocation; any file you read there belongs to the current run or is stale.
 - **Do not read addon source** (`addons/agent_runtime_harness/`) to understand the protocol. Everything you need is in this file and the runtime-verification prompt.
 - **Do not vary `capturePolicy` or `stopPolicy` speculatively.** Fixture defaults are correct for the common case.
+- **Do not invoke runtime tools to confirm a fix you already have high static confidence in.** When the diff alone settles the question — or when a known-good sibling in the same file shows what "right" looks like — declare done. See **Static-first verification** above.
+- **Do not orchestrate elaborate runtime scenarios** (full-level playthroughs, perfectly-timed jump sequences) **when a focused observation would settle the question.** Run the smallest reproduction that yields the evidence you need.
 
 ## Routing
 

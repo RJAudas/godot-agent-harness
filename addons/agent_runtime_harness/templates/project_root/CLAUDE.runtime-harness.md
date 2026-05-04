@@ -2,6 +2,32 @@
 
 This project has the `agent_runtime_harness` addon installed. When the user asks to run the game, press keys, verify at runtime, inspect the scene, or watch for errors, delegate to the `godot-runtime-verification` subagent (`.claude/agents/godot-runtime-verification.md`) or follow the fast path below directly.
 
+## Static-first verification
+
+Match verification depth to how much of the fix's correctness is provable from the diff alone, not to the fact that it's a fix. Default to static; reach for runtime tools only when static is insufficient.
+
+**Static reading is sufficient when:**
+
+- Every claim the fix makes is visible in the change itself.
+- A **known-good sibling** in the same file shows what "right" looks like — e.g. four platforms with `collision_layer = 1` make the fifth's `0 → 1` self-evident. The working siblings *are* the verification.
+- The change is structural (rename, refactor) with no behavioral effect.
+- An experienced engineer would approve the PR without running it.
+
+**Runtime verification is appropriate when** the fix's correctness depends on emergent behavior the diff cannot prove:
+
+- **Timing** — frame ordering, signal cascades, race conditions.
+- **Async** — callback ordering, awaited operations, concurrent state.
+- **Physics tuning** — feel parameters whose right value can only be felt by playing.
+- **Integration glue** — cross-system behavior (pause + animation, save + state).
+- **Visual / performance** — anything where "does it look right" or "does it run fast enough" is the criterion.
+- The first fix attempt didn't land and observation is needed to redirect.
+
+When runtime *is* the right tool, run the **smallest reproduction that yields the evidence you need** — a single scene inspection, one keypress, a short watch window. A full-level playthrough or a perfectly-timed input sequence is the wrong tool when a focused observation would settle the question.
+
+If the user explicitly asks to run the game, dispatch input, or verify at runtime, follow that — this default governs the agent's *own* verification choices after a fix, not user-directed runtime work.
+
+This default is calibrated for current model strength. As model capability and harness features evolve, the static/runtime threshold may move; keeping the rule visible here lets it be retuned without rewriting the template.
+
 ## Fast path — one invoke script, one envelope
 
 The runtime invokers all assume a Godot editor is running against the project. Pass `-EnsureEditor` to have them auto-launch one (idempotent: reuses an existing editor when capability.json is fresh).
@@ -65,6 +91,8 @@ The diagnostics are usually self-explanatory; this table is for recognising the 
 - **Do not read addon source** (`addons/agent_runtime_harness/`).
 - **Do not vary capture or stop policies speculatively** — fixture defaults are correct.
 - **Do not stop and restart the editor speculatively** — `capability.json` reflects current state, and stale editor state is rarely the cause of failures. Read `harness/automation/results/capability.json`, `run-result.json`, or `lifecycle-status.json` first. Restart only when you've confirmed the issue is editor-cached, not config-driven (or when running a CLI tool that needs exclusive project access, e.g. `godot --headless --import`).
+- **Do not invoke runtime tools to confirm a fix you already have high static confidence in.** Re-reading the diff is the verification when every claim it makes is visible there or when a known-good sibling in the same file proves the target shape. See **Static-first verification** above.
+- **Do not orchestrate elaborate runtime scenarios** (full-level playthroughs, perfectly-timed jump sequences) **when a focused observation would settle the question.** Run the smallest reproduction that yields the evidence you need.
 
 ## Subagents
 
